@@ -16,6 +16,8 @@ message(STATUS "CHECK: SDL3 Lib Path is: ${SDL3_LIB_DIR}")
 
 add_executable(rfd_game 
     src/main.cpp
+    src/core/Engine.cpp
+    src/ecs/World.cpp
 )
 
 target_include_directories(rfd_game PRIVATE 

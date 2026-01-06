@@ -32,6 +32,7 @@ bool Engine::initialize(const char* title, int width, int height) {
     time_.reset();
 
     initialized_ = true;
+    SDL_Log("Engine initialized successfully");
     return true;
 }
 
@@ -53,6 +54,7 @@ void Engine::shutdown() noexcept {
     SDL_Quit();
 
     initialized_ = false;
+    SDL_Log("Engine shutdown complete");
 }
 
 void Engine::run() {
@@ -64,6 +66,8 @@ void Engine::run() {
     running_ = true;
     accumulator_ = 0.0;
     time_.reset();
+
+    SDL_Log("Entering main loop...");
 
     // Main game loop with fixed timestep
     while (running_) {
@@ -97,13 +101,15 @@ void Engine::run() {
 void Engine::process_events() {
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
-        if (event.type == SDL_EVENT_QUIT) {
-            quit();
-        }
-        else if (event.type == SDL_EVENT_KEY_DOWN) {
-            if (event.key.key == SDLK_ESCAPE) {
+        switch (event.type) {
+            case SDL_EVENT_QUIT:
                 quit();
-            }
+                break;
+            case SDL_EVENT_KEY_DOWN:
+                if (event.key.scancode == SDL_SCANCODE_ESCAPE) {
+                    quit();
+                }
+                break;
         }
     }
 }
@@ -114,14 +120,15 @@ void Engine::fixed_update(float dt) {
 }
 
 void Engine::render(double alpha) {
-    // For now, just clear to a dark blue background
-    // Rendering system will be implemented later
+    // Interpolation factor for smooth rendering between fixed updates
+    // alpha ranges from 0.0 to 1.0
+    (void)alpha; // Suppress unused parameter warning for now
+
+    // Rendering will be implemented when we add the Renderer class
+    // For now, we just need to keep the window responsive
     
-    // Note: SDL3 doesn't have SDL_Renderer in the same way as SDL2
-    // We'll need to use SDL3's GPU API or software rendering
-    // For this minimal implementation, we'll just keep the window alive
-    
-    // The actual rendering will be implemented when we add the Renderer class
+    // Small delay to prevent CPU spinning
+    SDL_Delay(1);
 }
 
 } // namespace core
