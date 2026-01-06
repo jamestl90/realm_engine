@@ -9,11 +9,10 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(SDL3_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/external/include")
 set(SDL3_LIB_DIR "${CMAKE_SOURCE_DIR}/external/lib/SDL3/x64")
 
-add_executable(rfd_game 
-    src/main.cpp
-    src/core/Engine.cpp
-    src/ecs/World.cpp
-)
+# Automatically find all .cpp files in src directory
+file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS "src/*.cpp")
+
+add_executable(rfd_game ${SOURCES})
 
 target_include_directories(rfd_game PRIVATE 
     ${CMAKE_SOURCE_DIR}/include
