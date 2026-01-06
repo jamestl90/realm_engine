@@ -7,18 +7,12 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 # SDL3 paths
 set(SDL3_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/external/include")
-set(SDL3_LIB_DIR "${CMAKE_SOURCE_DIR}/external/lib/SDL3")
+set(SDL3_LIB_DIR "${CMAKE_SOURCE_DIR}/external/lib/SDL3/x64")
 
 # Debug path information
 message(STATUS "CHECK: Project Source Dir is: ${CMAKE_SOURCE_DIR}")
 message(STATUS "CHECK: SDL3 Include Path is: ${SDL3_INCLUDE_DIR}")
-
-# Convert to native path for Windows compatibility
-file(TO_NATIVE_PATH "${SDL3_INCLUDE_DIR}" NATIVE_SDL3_INCLUDE_PATH)
-file(TO_NATIVE_PATH "${SDL3_LIB_DIR}" NATIVE_SDL3_LIB_PATH)
-
-message(STATUS "CHECK: Native SDL3 Include Path is: ${NATIVE_SDL3_INCLUDE_PATH}")
-message(STATUS "CHECK: Native SDL3 Lib Path is: ${NATIVE_SDL3_LIB_PATH}")
+message(STATUS "CHECK: SDL3 Lib Path is: ${SDL3_LIB_DIR}")
 
 add_executable(rfd_game 
     src/main.cpp
@@ -26,15 +20,15 @@ add_executable(rfd_game
 
 target_include_directories(rfd_game PRIVATE 
     ${CMAKE_SOURCE_DIR}/include
-    ${NATIVE_SDL3_INCLUDE_PATH}
+    ${SDL3_INCLUDE_DIR}
 )
 
-target_link_directories(rfd_game PRIVATE ${NATIVE_SDL3_LIB_PATH})
+target_link_directories(rfd_game PRIVATE ${SDL3_LIB_DIR})
 target_link_libraries(rfd_game PRIVATE SDL3)
 
 # Copy SDL3.dll to output
 add_custom_command(TARGET rfd_game POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${NATIVE_SDL3_LIB_PATH}/SDL3.dll"
+        "${SDL3_LIB_DIR}/SDL3.dll"
         $<TARGET_FILE_DIR:rfd_game>
 )
