@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <limits>
+#include <hash_map>
 
 namespace ecs {
 
