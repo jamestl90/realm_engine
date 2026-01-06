@@ -6,8 +6,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 # SDL3 paths
-set(SDL3_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/external/SDL3/include")
-set(SDL3_LIB_DIR "${CMAKE_SOURCE_DIR}/external/SDL3/lib/x64")
+set(SDL3_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/external/include")
+set(SDL3_LIB_DIR "${CMAKE_SOURCE_DIR}/external/lib/SDL3")
 
 add_executable(rfd_game 
     src/main.cpp
