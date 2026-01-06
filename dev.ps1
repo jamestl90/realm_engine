@@ -10,7 +10,8 @@ cd $projectPath
 # --model: The high-level architect (Opus)
 # --editor-model: The one that writes the files (Sonnet is excellent and cheaper for this)
 aider `
-  --model openrouter/anthropic/claude-3-opus `
+  --model openrouter/anthropic/claude-opus-4.5 `
+  --editor-model openrouter/anthropic/claude-3.5-sonnet `
   --read ai/.aider.instructions.md `
   --read ai/.aider.conventions.md `
   --read build.ps1 `
