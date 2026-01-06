@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <vector>
 #include <concepts>
+#include <unordered_map>
 
 namespace ecs {
 
