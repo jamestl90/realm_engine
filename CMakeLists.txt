@@ -9,11 +9,6 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(SDL3_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/external/include")
 set(SDL3_LIB_DIR "${CMAKE_SOURCE_DIR}/external/lib/SDL3/x64")
 
-# Debug path information
-message(STATUS "CHECK: Project Source Dir is: ${CMAKE_SOURCE_DIR}")
-message(STATUS "CHECK: SDL3 Include Path is: ${SDL3_INCLUDE_DIR}")
-message(STATUS "CHECK: SDL3 Lib Path is: ${SDL3_LIB_DIR}")
-
 add_executable(rfd_game 
     src/main.cpp
     src/core/Engine.cpp
