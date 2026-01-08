@@ -16,6 +16,11 @@ concept Component = std::is_trivially_copyable_v<T> && std::is_standard_layout_v
 // Component type ID - unique per component type
 using ComponentTypeID = std::uint32_t;
 
+// Forward declare for World
+struct IComponentArray {
+    virtual ~IComponentArray() = default;
+};
+
 namespace detail {
     // Generate unique component type IDs
     inline ComponentTypeID next_component_type_id() noexcept {
@@ -32,7 +37,7 @@ namespace detail {
 
 // Structure-of-Arrays storage for a single component type
 template<Component T>
-class ComponentArray {
+class ComponentArray : public IComponentArray {
 public:
     ComponentArray() = default;
 

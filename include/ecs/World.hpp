@@ -7,8 +7,11 @@
 #include <vector>
 #include <unordered_map>
 #include <algorithm>
+#include <typeindex>
+#include <functional>
 
 namespace ecs {
+
 
 // ECS World - coordinates entities, components, and systems
 class World {
@@ -95,6 +98,36 @@ public:
     // Clear all entities and components
     void clear();
 
+    // Resource management
+    template<typename T>
+    void set_resource(T* resource) {
+        resources_[std::type_index(typeid(T))] = {
+            resource,
+            [](void*) { /* Don't delete - resource is owned elsewhere */ }
+        };
+    }
+
+    template<typename T>
+    void remove_resource() {
+        resources_.erase(std::type_index(typeid(T)));
+    }
+
+    template<typename T>
+    [[nodiscard]] T* get_resource() noexcept {
+        auto it = resources_.find(std::type_index(typeid(T)));
+        return it != resources_.end() 
+            ? static_cast<T*>(it->second.get()) 
+            : nullptr;
+    }
+
+    template<typename T>
+    [[nodiscard]] const T* get_resource() const noexcept {
+        auto it = resources_.find(std::type_index(typeid(T)));
+        return it != resources_.end() 
+            ? static_cast<const T*>(it->second.get()) 
+            : nullptr;
+    }
+
 private:
     template<Component T>
     ComponentArray<T>& get_or_create_component_array() {
@@ -106,7 +139,7 @@ private:
             component_arrays_[type_id] = std::move(array);
             return *ptr;
         }
-        return *static_cast<ComponentArray<T>*>(it->second.get());
+        return dynamic_cast<ComponentArray<T>&>(*it->second);
     }
 
     void sort_systems();
@@ -116,20 +149,13 @@ private:
     std::vector<std::uint32_t> generations_;
     std::uint32_t entity_count_{0};
 
-    // Component storage (type-erased)
-    struct IComponentArray {
-        virtual ~IComponentArray() = default;
-    };
-
-    template<Component T>
-    struct ComponentArrayWrapper : IComponentArray {
-        ComponentArray<T> array;
-    };
-
     std::unordered_map<ComponentTypeID, std::unique_ptr<IComponentArray>> component_arrays_;
 
     // System storage
     std::vector<std::unique_ptr<ISystem>> systems_;
+
+    // Resource storage (type-erased)
+    std::unordered_map<std::type_index, std::unique_ptr<void, std::function<void(void*)>>> resources_;
 };
 
 } // namespace ecs

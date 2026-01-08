@@ -2,16 +2,20 @@
 
 #include "Sprite.hpp"
 #include "Texture.hpp"
+#include "TextureManager.hpp"
 #include "../ecs/World.hpp"
 #include <SDL3/SDL.h>
 #include <vector>
 
 namespace rendering {
 
+// Forward declarations
+class GPUDevice;
+
 // Batch rendering with SDL3 GPU API
 class Renderer {
 public:
-    explicit Renderer(SDL_Renderer* renderer);
+    explicit Renderer(GPUDevice* device);
     ~Renderer();
 
     // Non-copyable, movable
@@ -56,7 +60,20 @@ private:
     void sort_render_commands();
     void execute_render_commands(const TextureManager& texture_manager);
 
-    SDL_Renderer* renderer_{nullptr};
+    GPUDevice* device_{nullptr};
+    SDL_GPUCommandBuffer* command_buffer_{nullptr};
+    
+    // GPU resources
+    SDL_GPUBuffer* vertex_buffer_{nullptr};
+    SDL_GPUBuffer* index_buffer_{nullptr};
+    SDL_GPURenderPass* current_pass_{nullptr}; 
+    SDL_GPUTexture* current_texture_{nullptr};
+    std::vector<SpriteVertex> vertex_data_;
+    std::vector<std::uint16_t> index_data_;
+    
+    static constexpr size_t MAX_SPRITES = 10000;
+    static constexpr size_t VERTEX_BUFFER_SIZE = MAX_SPRITES * 4 * sizeof(SpriteVertex);
+    static constexpr size_t INDEX_BUFFER_SIZE = MAX_SPRITES * 6 * sizeof(std::uint16_t);
     std::vector<RenderCommand> render_commands_;
     
     float camera_x_{0.0f};

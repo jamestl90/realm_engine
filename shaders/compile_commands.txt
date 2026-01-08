@@ -1,0 +1,2 @@
+dxc -T ps_6_0 -E main sprite.frag.hlsl -Fo pixel.frag.spv -spirv -O3
+dxc -T vs_6_0 -E main sprite.vert.hlsl -Fo sprite.vert.spv -spirv -O3

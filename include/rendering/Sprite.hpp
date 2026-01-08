@@ -21,6 +21,15 @@ inline SpriteFlip operator&(SpriteFlip a, SpriteFlip b) noexcept {
     return static_cast<SpriteFlip>(static_cast<std::uint8_t>(a) & static_cast<std::uint8_t>(b));
 }
 
+// GPU vertex format for sprites
+#pragma pack(push, 1) 
+struct SpriteVertex {
+    float x, y;              // Position
+    float u, v;              // Texture coordinates
+    std::uint8_t r, g, b, a; // RGBA colour
+};
+#pragma pack(pop)
+
 // Sprite component - pure data for SoA storage
 struct Sprite {
     TextureID texture_id{INVALID_TEXTURE_ID};
@@ -31,6 +40,9 @@ struct Sprite {
     float scale_x{1.0f};
     float scale_y{1.0f};
     std::uint8_t r{255}, g{255}, b{255}, a{255}; // Tint color
+
+    // Generate vertices for this sprite
+    void generate_vertices(SpriteVertex* vertices, const TextureRegion* region = nullptr) const noexcept;
 };
 
 // Transform component - position in world space

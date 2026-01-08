@@ -1,4 +1,8 @@
+#define SDL_DISABLE_OLD_NAMES
+
 #include "core/Engine.hpp"
+#include "game/RogueFarmGame.hpp"
+#include <memory>
 
 int main(int argc, char* argv[]) {
     (void)argc;
@@ -9,6 +13,9 @@ int main(int argc, char* argv[]) {
     if (!engine.initialize("Rogue Farm Game", 1280, 720)) {
         return 1;
     }
+
+    // Set up the game
+    engine.set_game(std::make_unique<game::RogueFarmGame>());
 
     engine.run();
 

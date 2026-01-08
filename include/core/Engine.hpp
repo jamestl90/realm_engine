@@ -1,7 +1,11 @@
 #pragma once
 
 #include "Time.hpp"
+#include "Game.hpp"
 #include "../ecs/World.hpp"
+#include "../rendering/Renderer.hpp"
+#include "../rendering/TextureManager.hpp"
+#include "../assets/AssetManager.hpp"
 #include <memory>
 #include <SDL3/SDL.h>
 
@@ -25,6 +29,9 @@ public:
     // Shutdown engine
     void shutdown() noexcept;
 
+    // Set the game instance (must be called before run())
+    void set_game(std::unique_ptr<Game> game) noexcept;
+
     // Main game loop
     void run();
 
@@ -37,15 +44,37 @@ public:
     [[nodiscard]] Time& time() noexcept { return time_; }
     [[nodiscard]] const Time& time() const noexcept { return time_; }
     [[nodiscard]] SDL_Window* window() noexcept { return window_; }
+    [[nodiscard]] rendering::Renderer* renderer() noexcept { return renderer_.get(); }
+    [[nodiscard]] const rendering::Renderer* renderer() const noexcept { return renderer_.get(); }
+    
+    [[nodiscard]] rendering::TextureManager* texture_manager() noexcept { return texture_manager_.get(); }
+    [[nodiscard]] const rendering::TextureManager* texture_manager() const noexcept { return texture_manager_.get(); }
+    
+    [[nodiscard]] assets::AssetManager* asset_manager() noexcept { return asset_manager_.get(); }
+    [[nodiscard]] const assets::AssetManager* asset_manager() const noexcept { return asset_manager_.get(); }
 
 private:
     void process_events();
     void fixed_update(float dt);
+    void update(double dt);
     void render(double alpha);
 
     SDL_Window* window_{nullptr};
+    std::unique_ptr<rendering::GPUDevice> gpu_device_;
+    
+    // Core subsystems
     ecs::World world_;
     Time time_;
+    
+    // Rendering
+    std::unique_ptr<rendering::Renderer> renderer_;
+    std::unique_ptr<rendering::TextureManager> texture_manager_;
+    
+    // Assets
+    std::unique_ptr<assets::AssetManager> asset_manager_;
+    
+    // Game instance
+    std::unique_ptr<Game> game_;
     
     bool running_{false};
     bool initialized_{false};

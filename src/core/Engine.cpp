@@ -1,4 +1,5 @@
-#include "core/Engine.hpp"
+#include "../../include/core/Engine.hpp"
+#include "../../include/rendering/GPUDevice.hpp"
 #include <SDL3/SDL.h>
 
 namespace core {
@@ -14,24 +15,46 @@ bool Engine::initialize(const char* title, int width, int height) {
         return true;
     }
 
-    // Initialize SDL3
-    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS)) {
-        SDL_Log("Failed to initialize SDL: %s", SDL_GetError());
+    // Initialize SDL
+    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO)) {
+        SDL_Log("SDL_Init failed: %s", SDL_GetError());
+        return false;
+    }
+
+    // Create GPU device
+    gpu_device_ = std::make_unique<rendering::GPUDevice>();
+    if (!gpu_device_) {
+        SDL_Log("Failed to create GPU device");
+        window_ = nullptr;
+        SDL_Quit();
         return false;
     }
 
     // Create window
     window_ = SDL_CreateWindow(title, width, height, SDL_WINDOW_RESIZABLE);
     if (!window_) {
-        SDL_Log("Failed to create window: %s", SDL_GetError());
+        SDL_Log("SDL_CreateWindow failed: %s", SDL_GetError());
         SDL_Quit();
         return false;
     }
 
-    // Initialize time system
-    time_.reset();
+    if (!SDL_ClaimWindowForGPUDevice(gpu_device_->handle(), window_))
+	{
+		SDL_Log("GPUClaimWindow failed");
+		return false;
+	}
 
+    // Create subsystems
+    renderer_ = std::make_unique<rendering::Renderer>(gpu_device_.get());
+    texture_manager_ = std::make_unique<rendering::TextureManager>(gpu_device_.get());
+    asset_manager_ = std::make_unique<assets::AssetManager>(texture_manager_.get(), nullptr);
+
+    // Register texture manager as a world resource for the renderer
+    world_.set_resource(texture_manager_.get());
+
+    time_.reset();
     initialized_ = true;
+    
     SDL_Log("Engine initialized successfully");
     return true;
 }
@@ -41,26 +64,63 @@ void Engine::shutdown() noexcept {
         return;
     }
 
-    // Clear ECS world
-    world_.clear();
+    // Notify game of shutdown
+    if (game_) {
+        game_->on_shutdown(*this);
+        game_.reset();
+    }
+    SDL_Log("Game Shutdown");
 
-    // Destroy window
+    // Remove texture manager from world resources
+    world_.remove_resource<rendering::TextureManager>();
+    
+    // Clear world before destroying subsystems
+    world_.clear();
+    SDL_Log("World Clear");
+
+    // Destroy subsystems in reverse order
+    if (asset_manager_) {
+        asset_manager_->clear();
+        asset_manager_.reset();
+        SDL_Log("Asset Manager Reset");
+    }
+
+    if (texture_manager_) {
+        texture_manager_->clear();
+        texture_manager_.reset();
+        SDL_Log("Texture Manager Reset");
+    }
+    
+    renderer_.reset();
+    SDL_Log("Renderer Reset");
+
+    SDL_Log("Reset Renderer");
+
     if (window_) {
         SDL_DestroyWindow(window_);
+        SDL_Log("Destroy window");
         window_ = nullptr;
     }
 
-    // Shutdown SDL
     SDL_Quit();
-
     initialized_ = false;
+    
     SDL_Log("Engine shutdown complete");
+}
+
+void Engine::set_game(std::unique_ptr<Game> game) noexcept {
+    game_ = std::move(game);
 }
 
 void Engine::run() {
     if (!initialized_) {
-        SDL_Log("Engine not initialized. Call initialize() first.");
+        SDL_Log("Engine not initialized");
         return;
+    }
+
+    // Call game startup hook
+    if (game_) {
+        game_->on_startup(*this);
     }
 
     running_ = true;
@@ -69,16 +129,18 @@ void Engine::run() {
 
     SDL_Log("Entering main loop...");
 
-    // Main game loop with fixed timestep
     while (running_) {
         time_.tick();
+        
+        // Cap frame time to prevent spiral of death
+        double frame_time = time_.unscaled_delta_time();
+        if (frame_time > max_frame_time_) {
+            frame_time = max_frame_time_;
+        }
 
-        const double frame_time = time_.unscaled_delta_time();
-        const double clamped_frame_time = frame_time < max_frame_time_ ? frame_time : max_frame_time_;
+        accumulator_ += frame_time;
 
-        accumulator_ += clamped_frame_time;
-
-        // Process input events
+        // Process input
         process_events();
 
         // Fixed timestep updates
@@ -90,11 +152,17 @@ void Engine::run() {
             accumulator_ -= fixed_dt;
         }
 
-        // Calculate interpolation alpha
-        const double alpha = accumulator_ / fixed_dt;
+        // Variable timestep update
+        update(time_.delta_time());
 
         // Render with interpolation
+        const double alpha = accumulator_ / fixed_dt;
         render(alpha);
+
+        // Check if we need to shutdown
+        if (!running_) {
+            shutdown();
+        }
     }
 }
 
@@ -110,6 +178,8 @@ void Engine::process_events() {
                     quit();
                 }
                 break;
+            default:
+                break;
         }
     }
 }
@@ -119,16 +189,25 @@ void Engine::fixed_update(float dt) {
     world_.update(dt);
 }
 
-void Engine::render(double alpha) {
-    // Interpolation factor for smooth rendering between fixed updates
-    // alpha ranges from 0.0 to 1.0
-    (void)alpha; // Suppress unused parameter warning for now
+void Engine::update(double dt) {
+    // Call game update hook
+    if (game_) {
+        game_->on_update(*this, dt);
+    }
+}
 
-    // Rendering will be implemented when we add the Renderer class
-    // For now, we just need to keep the window responsive
-    
-    // Small delay to prevent CPU spinning
-    SDL_Delay(1);
+void Engine::render(double alpha) {
+    renderer_->clear(0, 0, 51, 255);
+
+    // Call game render hook (for custom rendering like UI)
+    if (game_) {
+        game_->on_render(*this, alpha);
+    }
+
+    // Render ECS world sprites
+    renderer_->render(world_, alpha);
+
+    renderer_->present();
 }
 
 } // namespace core

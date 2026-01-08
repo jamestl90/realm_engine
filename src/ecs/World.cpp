@@ -78,6 +78,7 @@ void World::update(float dt) {
 void World::clear() {
     systems_.clear();
     component_arrays_.clear();
+    // Don't clear resources - they are owned by Engine
     free_indices_.clear();
     generations_.clear();
     entity_count_ = 0;
