@@ -6,6 +6,7 @@
 #include <SDL3/SDL.h>
 #include <algorithm>
 #include <cassert>
+#include <iostream>
 
 namespace rendering {
 
@@ -81,7 +82,6 @@ bool Renderer::begin_frame() {
         SDL_Log("Failed to acquire command buffer: %s", SDL_GetError());
         return false;
     }
-
     // Acquire swapchain texture
     if (!SDL_AcquireGPUSwapchainTexture(command_buffer_, window_, &swapchain_texture_, &swapchain_width_, &swapchain_height_)) {
         SDL_Log("Failed to acquire swapchain texture: %s", SDL_GetError());
@@ -93,9 +93,9 @@ bool Renderer::begin_frame() {
         // Cancel the command buffer since we can't render
         SDL_CancelGPUCommandBuffer(command_buffer_);
         command_buffer_ = nullptr;
-        return false;
+        return true;
     }
-
+    SDL_Log(SDL_GetError());
     return true;
 }
 
@@ -116,6 +116,7 @@ void Renderer::clear(std::uint8_t r, std::uint8_t g, std::uint8_t b, std::uint8_
     colorTarget.store_op = SDL_GPU_STOREOP_STORE;
 
     current_pass_ = SDL_BeginGPURenderPass(command_buffer_, &colorTarget, 1, nullptr);
+    SDL_Log(SDL_GetError());
 }
 
 void Renderer::present() {
@@ -123,27 +124,22 @@ void Renderer::present() {
         SDL_EndGPURenderPass(current_pass_);
         current_pass_ = nullptr;
     }
-    
     if (command_buffer_) {
         SDL_SubmitGPUCommandBuffer(command_buffer_);
         command_buffer_ = nullptr;
     }
-
     // Reset swapchain texture for next frame
     swapchain_texture_ = nullptr;
 }
 
 void Renderer::render(ecs::World& world, double alpha) {
     render_commands_.clear();
-
     collect_render_commands(world, alpha);
     sort_render_commands();
-
     const auto* texture_manager = world.get_resource<TextureManager>();
     if (!texture_manager) {
         return;
     }
-
     execute_render_commands(*texture_manager);
 }
 

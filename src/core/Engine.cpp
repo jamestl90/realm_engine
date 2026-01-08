@@ -7,7 +7,8 @@ namespace core {
 Engine::Engine() = default;
 
 Engine::~Engine() {
-    shutdown();
+    if (!shutdown_)
+        shutdown();
 }
 
 bool Engine::initialize(const char* title, int width, int height) {
@@ -45,7 +46,7 @@ bool Engine::initialize(const char* title, int width, int height) {
 	}
 
     // Create subsystems
-    renderer_ = std::make_unique<rendering::Renderer>(gpu_device_.get());
+    renderer_ = std::make_unique<rendering::Renderer>(gpu_device_.get(), window_);
     texture_manager_ = std::make_unique<rendering::TextureManager>(gpu_device_.get());
     asset_manager_ = std::make_unique<assets::AssetManager>(texture_manager_.get(), nullptr);
 
@@ -94,8 +95,6 @@ void Engine::shutdown() noexcept {
     renderer_.reset();
     SDL_Log("Renderer Reset");
 
-    SDL_Log("Reset Renderer");
-
     if (window_) {
         SDL_DestroyWindow(window_);
         SDL_Log("Destroy window");
@@ -106,6 +105,7 @@ void Engine::shutdown() noexcept {
     initialized_ = false;
     
     SDL_Log("Engine shutdown complete");
+    shutdown_ = true;
 }
 
 void Engine::set_game(std::unique_ptr<Game> game) noexcept {
@@ -197,6 +197,10 @@ void Engine::update(double dt) {
 }
 
 void Engine::render(double alpha) {
+    if (!renderer_->begin_frame()) {
+        quit();
+    }
+
     renderer_->clear(0, 0, 51, 255);
 
     // Call game render hook (for custom rendering like UI)

@@ -75,6 +75,8 @@ private:
     
     // Game instance
     std::unique_ptr<Game> game_;
+
+    bool shutdown_ = false;
     
     bool running_{false};
     bool initialized_{false};
