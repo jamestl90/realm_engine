@@ -7,12 +7,10 @@ cd $projectPath
 . "$venvPath\Scripts\Activate.ps1"
 
 aider `
-  --model openrouter/anthropic/claude-opus-4.5 `
-  --editor-model openrouter/anthropic/claude-3.5-sonnet `
+  --model openrouter/anthropic/claude-3.5-sonnet `
+  --editor-model openrouter/openai/gpt-4o-mini `
+  --weak-model openrouter/openai/gpt-4o-mini `
   --read ai/.aider.instructions.md `
-  --read ai/.aider.conventions.md `
-  --read build.ps1 `
-  --test-cmd "powershell -File build.ps1" `
   --cache-prompts `
-  --no-auto-commits `
-  --yes
+  --map-tokens 1024 `
+  --no-auto-commits 
