@@ -16,6 +16,7 @@ class GPUDevice;
 class Renderer {
 public:
     explicit Renderer(GPUDevice* device);
+    explicit Renderer(GPUDevice* device, SDL_Window* window);
     ~Renderer();
 
     // Non-copyable, movable
@@ -23,6 +24,12 @@ public:
     Renderer& operator=(const Renderer&) = delete;
     Renderer(Renderer&&) noexcept;
     Renderer& operator=(Renderer&&) noexcept;
+
+    // Set window (required before begin_frame if using single-arg constructor)
+    void set_window(SDL_Window* window) noexcept { window_ = window; }
+
+    // Begin frame - acquires swapchain texture
+    [[nodiscard]] bool begin_frame();
 
     // Render all sprites with interpolation
     void render(ecs::World& world, double alpha);
@@ -61,6 +68,7 @@ private:
     void execute_render_commands(const TextureManager& texture_manager);
 
     GPUDevice* device_{nullptr};
+    SDL_Window* window_{nullptr};
     SDL_GPUCommandBuffer* command_buffer_{nullptr};
     
     // GPU resources
@@ -68,6 +76,9 @@ private:
     SDL_GPUBuffer* index_buffer_{nullptr};
     SDL_GPURenderPass* current_pass_{nullptr}; 
     SDL_GPUTexture* current_texture_{nullptr};
+    SDL_GPUTexture* swapchain_texture_{nullptr};
+    Uint32 swapchain_width_{0};
+    Uint32 swapchain_height_{0};
     std::vector<SpriteVertex> vertex_data_;
     std::vector<std::uint16_t> index_data_;
     

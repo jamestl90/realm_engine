@@ -10,10 +10,19 @@ if(MSVC)
     add_compile_options(/FS)
 endif()
 
+# Fetch RapidJSON
+include(FetchContent)
+FetchContent_Declare(
+    rapidjson
+    GIT_REPOSITORY https://github.com/Tencent/rapidjson.git
+    GIT_TAG        v1.1.0
+    GIT_SHALLOW    TRUE
+)
+FetchContent_MakeAvailable(rapidjson)
+
 # External dependencies
 set(SDL3_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/external/include")
 set(SDL3_LIB_DIR "${CMAKE_SOURCE_DIR}/external/lib/SDL3/x64")
-set(RAPIDJSON_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/external/include")
 
 # Automatically find all .cpp files in src directory
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS "src/*.cpp")
@@ -23,7 +32,7 @@ add_executable(rfd_game ${SOURCES})
 target_include_directories(rfd_game PRIVATE 
     ${CMAKE_SOURCE_DIR}/include
     ${SDL3_INCLUDE_DIR}
-    ${RAPIDJSON_INCLUDE_DIR}
+    ${rapidjson_SOURCE_DIR}/include
 )
 
 target_link_directories(rfd_game PRIVATE ${SDL3_LIB_DIR})

@@ -10,9 +10,20 @@
 namespace rendering {
 
 Renderer::Renderer(GPUDevice* device)
-    : device_(device) {
+    : device_(device)
+    , window_(nullptr) {
     assert(device_ && "GPU device cannot be null");
-    command_buffer_ = SDL_AcquireGPUCommandBuffer(device_->handle());
+
+    vertex_data_.reserve(MAX_SPRITES * 4);
+    index_data_.reserve(MAX_SPRITES * 6);
+    render_commands_.reserve(1000);
+}
+
+Renderer::Renderer(GPUDevice* device, SDL_Window* window)
+    : device_(device)
+    , window_(window) {
+    assert(device_ && "GPU device cannot be null");
+    assert(window_ && "Window cannot be null");
 
     vertex_data_.reserve(MAX_SPRITES * 4);
     index_data_.reserve(MAX_SPRITES * 6);
@@ -23,6 +34,11 @@ Renderer::~Renderer() = default;
 
 Renderer::Renderer(Renderer&& other) noexcept
     : device_(other.device_)
+    , window_(other.window_)
+    , command_buffer_(other.command_buffer_)
+    , swapchain_texture_(other.swapchain_texture_)
+    , swapchain_width_(other.swapchain_width_)
+    , swapchain_height_(other.swapchain_height_)
     , vertex_data_(std::move(other.vertex_data_))
     , index_data_(std::move(other.index_data_))
     , render_commands_(std::move(other.render_commands_))
@@ -30,11 +46,19 @@ Renderer::Renderer(Renderer&& other) noexcept
     , camera_y_(other.camera_y_)
     , camera_zoom_(other.camera_zoom_) {
     other.device_ = nullptr;
+    other.window_ = nullptr;
+    other.command_buffer_ = nullptr;
+    other.swapchain_texture_ = nullptr;
 }
 
 Renderer& Renderer::operator=(Renderer&& other) noexcept {
     if (this != &other) {
         device_ = other.device_;
+        window_ = other.window_;
+        command_buffer_ = other.command_buffer_;
+        swapchain_texture_ = other.swapchain_texture_;
+        swapchain_width_ = other.swapchain_width_;
+        swapchain_height_ = other.swapchain_height_;
         vertex_data_ = std::move(other.vertex_data_);
         index_data_ = std::move(other.index_data_);
         render_commands_ = std::move(other.render_commands_);
@@ -43,14 +67,45 @@ Renderer& Renderer::operator=(Renderer&& other) noexcept {
         camera_zoom_ = other.camera_zoom_;
 
         other.device_ = nullptr;
+        other.window_ = nullptr;
+        other.command_buffer_ = nullptr;
+        other.swapchain_texture_ = nullptr;
     }
     return *this;
 }
 
+bool Renderer::begin_frame() {
+    // Acquire command buffer for this frame
+    command_buffer_ = SDL_AcquireGPUCommandBuffer(device_->handle());
+    if (!command_buffer_) {
+        SDL_Log("Failed to acquire command buffer: %s", SDL_GetError());
+        return false;
+    }
+
+    // Acquire swapchain texture
+    if (!SDL_AcquireGPUSwapchainTexture(command_buffer_, window_, &swapchain_texture_, &swapchain_width_, &swapchain_height_)) {
+        SDL_Log("Failed to acquire swapchain texture: %s", SDL_GetError());
+        return false;
+    }
+
+    // Swapchain texture can be null if window is minimised or occluded
+    if (!swapchain_texture_) {
+        // Cancel the command buffer since we can't render
+        SDL_CancelGPUCommandBuffer(command_buffer_);
+        command_buffer_ = nullptr;
+        return false;
+    }
+
+    return true;
+}
+
 void Renderer::clear(std::uint8_t r, std::uint8_t g, std::uint8_t b, std::uint8_t a) {
-    if (!command_buffer_) return;
+    if (!command_buffer_ || !swapchain_texture_) {
+        return;
+    }
 
     SDL_GPUColorTargetInfo colorTarget = {};
+    colorTarget.texture = swapchain_texture_;
     colorTarget.clear_color = {
         r / 255.0f,
         g / 255.0f, 
@@ -71,8 +126,11 @@ void Renderer::present() {
     
     if (command_buffer_) {
         SDL_SubmitGPUCommandBuffer(command_buffer_);
-        command_buffer_ = SDL_AcquireGPUCommandBuffer(device_->handle());
+        command_buffer_ = nullptr;
     }
+
+    // Reset swapchain texture for next frame
+    swapchain_texture_ = nullptr;
 }
 
 void Renderer::render(ecs::World& world, double alpha) {
@@ -131,6 +189,10 @@ void Renderer::sort_render_commands() {
 }
 
 void Renderer::execute_render_commands(const TextureManager& texture_manager) {
+    if (!current_pass_) {
+        return;
+    }
+
     SDL_FRect dst_rect;
     SDL_FRect src_rect;
     
@@ -163,36 +225,35 @@ void Renderer::execute_render_commands(const TextureManager& texture_manager) {
         dst_rect.x -= dst_rect.w * 0.5f;
         dst_rect.y -= dst_rect.h * 0.5f;
 
-        // Set color modulation
-        SDL_FColor color = {
-            cmd.sprite->r / 255.0f,
-            cmd.sprite->g / 255.0f,
-            cmd.sprite->b / 255.0f,
-            cmd.sprite->a / 255.0f
-        };
-        SDL_SetGPUBlendConstants(current_pass_, color);
-
-        // Calculate rotation center
-        float center_x = dst_rect.x + dst_rect.w/2;
-        float center_y = dst_rect.y + dst_rect.h/2;
+        // End current render pass before blitting
+        if (current_pass_) {
+            SDL_EndGPURenderPass(current_pass_);
+            current_pass_ = nullptr;
+        }
 
         // Create blit info
         SDL_GPUBlitInfo blit_info = {};
         blit_info.source.texture = texture->gpu_texture;
-        blit_info.source.x = src_rect.x;
-        blit_info.source.y = src_rect.y;
-        blit_info.source.w = src_rect.w;
-        blit_info.source.h = src_rect.h;
-        blit_info.destination.texture = nullptr; // Will be set to render target
-        blit_info.destination.x = dst_rect.x;
-        blit_info.destination.y = dst_rect.y;
-        blit_info.destination.w = dst_rect.w;
-        blit_info.destination.h = dst_rect.h;
+        blit_info.source.mip_level = 0;
+        blit_info.source.layer_or_depth_plane = 0;
+        blit_info.source.x = static_cast<Uint32>(src_rect.x);
+        blit_info.source.y = static_cast<Uint32>(src_rect.y);
+        blit_info.source.w = static_cast<Uint32>(src_rect.w);
+        blit_info.source.h = static_cast<Uint32>(src_rect.h);
+        blit_info.destination.texture = swapchain_texture_;
+        blit_info.destination.mip_level = 0;
+        blit_info.destination.layer_or_depth_plane = 0;
+        blit_info.destination.x = static_cast<Uint32>(dst_rect.x);
+        blit_info.destination.y = static_cast<Uint32>(dst_rect.y);
+        blit_info.destination.w = static_cast<Uint32>(dst_rect.w);
+        blit_info.destination.h = static_cast<Uint32>(dst_rect.h);
+        blit_info.load_op = SDL_GPU_LOADOP_LOAD;
+        blit_info.clear_color = {0.0f, 0.0f, 0.0f, 0.0f};
         blit_info.flip_mode = static_cast<SDL_FlipMode>(cmd.sprite->flip);
         blit_info.filter = SDL_GPU_FILTER_LINEAR;
         blit_info.cycle = false;
 
-        // Draw the texture
+        // Blit the texture
         SDL_BlitGPUTexture(command_buffer_, &blit_info);
     }
 }
