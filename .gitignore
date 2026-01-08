@@ -17,3 +17,4 @@ ai/prompts/
 *.user
 
 .env
+/external/include/rapidjson
