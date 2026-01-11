@@ -68,6 +68,10 @@ void World::remove_system(ISystem* system) {
 }
 
 void World::update(float dt) {
+    // TODO: Collision - Process collision detection/response systems here.
+    // Collision checks should occur after movement systems but before rendering.
+    // Consider spatial partitioning (grid, quadtree) for broad-phase culling.
+
     for (auto& system : systems_) {
         if (system->is_enabled()) {
             system->update(*this, dt);

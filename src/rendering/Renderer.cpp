@@ -95,7 +95,6 @@ bool Renderer::begin_frame() {
         command_buffer_ = nullptr;
         return true;
     }
-    SDL_Log(SDL_GetError());
     return true;
 }
 
@@ -116,7 +115,6 @@ void Renderer::clear(std::uint8_t r, std::uint8_t g, std::uint8_t b, std::uint8_
     colorTarget.store_op = SDL_GPU_STOREOP_STORE;
 
     current_pass_ = SDL_BeginGPURenderPass(command_buffer_, &colorTarget, 1, nullptr);
-    SDL_Log(SDL_GetError());
 }
 
 void Renderer::present() {
@@ -141,6 +139,9 @@ void Renderer::render(ecs::World& world, double alpha) {
         return;
     }
     execute_render_commands(*texture_manager);
+
+    // TODO: UI rendering - Render UI elements after world sprites, in screen-space coordinates.
+    // UI should be rendered last to appear on top of all game content.
 }
 
 void Renderer::collect_render_commands(ecs::World& world, double alpha) {
@@ -154,6 +155,9 @@ void Renderer::collect_render_commands(ecs::World& world, double alpha) {
 
     const auto& entities = sprite_array->entity_data();
     const auto entity_count = entities.size();
+
+    // TODO: Culling - Perform frustum/viewport culling here before adding to render_commands_.
+    // Skip entities whose bounding boxes are entirely outside the camera view to reduce draw calls.
 
     for (std::size_t i = 0; i < entity_count; ++i) {
         const auto entity_id = entities[i];

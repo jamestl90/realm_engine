@@ -18,3 +18,5 @@ ai/prompts/
 
 .env
 /external/include/rapidjson
+/external/include/SDL3_ttf
+/external/lib/SDL3_ttf
