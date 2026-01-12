@@ -29,6 +29,9 @@ GPUDevice::GPUDevice() {
 }
 
 GPUDevice::~GPUDevice() {
+    if (pipeline_manager_) {
+        pipeline_manager_.reset();
+    }
     if (gpu_device_) {
         SDL_DestroyGPUDevice(gpu_device_);
         gpu_device_ = nullptr;
@@ -63,38 +66,6 @@ bool GPUDevice::supports_feature(uint32_t flags) const noexcept {
     
     uint32_t device_flags = SDL_GetGPUDeviceProperties(gpu_device_);
     return (device_flags & flags) != 0;
-}
-
-SDL_GPUDevice* GPUDevice::begin_render() {
-    if (!gpu_device_) return nullptr;
-
-    // Clear render target with transparent black
-    SDL_GPUColorTargetInfo colorTarget = {};
-    colorTarget.clear_color = {0, 0, 0, 0};
-    colorTarget.load_op = SDL_GPU_LOADOP_CLEAR;
-    colorTarget.store_op = SDL_GPU_STOREOP_STORE;
-
-    current_pass_ = SDL_BeginGPURenderPass(command_buffer_, &colorTarget, 1, nullptr);
-    
-    return gpu_device_;
-}
-
-void GPUDevice::end_render() {
-    // Nothing to do here in SDL3's immediate mode rendering
-}
-
-void GPUDevice::present() {
-    if (gpu_device_) {
-        if (current_pass_) {
-            SDL_EndGPURenderPass(current_pass_);
-            current_pass_ = nullptr;
-        }
-    
-        if (command_buffer_) {
-            SDL_SubmitGPUCommandBuffer(command_buffer_);
-            command_buffer_ = SDL_AcquireGPUCommandBuffer(gpu_device_);
-        }
-    }
 }
 
 SDL_GPUTexture* GPUDevice::create_texture(Uint32 format, int access, int w, int h) const {

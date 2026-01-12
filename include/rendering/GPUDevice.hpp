@@ -27,11 +27,6 @@ public:
     [[nodiscard]] const char* get_device_name() const noexcept;
     [[nodiscard]] bool supports_feature(uint32_t flags) const noexcept;
 
-    // Renderer management
-    [[nodiscard]] SDL_GPUDevice* begin_render();
-    void end_render();
-    void present();
-
     // Resource creation helpers
     [[nodiscard]] SDL_GPUTexture* create_texture(Uint32 format, int access, int w, int h) const;
 

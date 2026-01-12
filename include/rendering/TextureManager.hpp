@@ -50,7 +50,13 @@ public:
     // Get atlas region
     [[nodiscard]] const TextureRegion* get_region(TextureID texture_id, const std::string& name) const noexcept;
 
+    TextureID default_white_texture();
+
 private:
+    void create_default_1x1_white();
+
+    TextureID default_white_texture_ = INVALID_TEXTURE_ID;
+
     GPUDevice* device_{nullptr};
     std::unordered_map<TextureID, std::unique_ptr<Texture>> textures_{};
     std::unordered_map<std::string, TextureID> path_to_id_{};

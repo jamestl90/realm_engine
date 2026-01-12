@@ -211,16 +211,6 @@ project/
 └── CMakeLists.txt
 ```
 
-## Next Steps
-1. Implement header skeletons with interface definitions
-2. Create CMake build system
-3. Implement core ECS foundation
-4. Build rendering pipeline with SDL3 GPU
-5. Add subsystems incrementally
-6. Profile and optimize hot paths
-
----
-
 ## Asset Management System Design
 
 ### Overview

@@ -5,6 +5,8 @@
 #include "../ecs/World.hpp"
 #include "../rendering/Renderer.hpp"
 #include "../rendering/TextureManager.hpp"
+#include "../rendering/FontManager.hpp"
+#include "../rendering/UIRenderer.hpp"
 #include "../assets/AssetManager.hpp"
 #include <memory>
 #include <SDL3/SDL.h>
@@ -53,6 +55,12 @@ public:
     [[nodiscard]] assets::AssetManager* asset_manager() noexcept { return asset_manager_.get(); }
     [[nodiscard]] const assets::AssetManager* asset_manager() const noexcept { return asset_manager_.get(); }
 
+    [[nodiscard]] rendering::UIRenderer* ui_renderer() noexcept { return ui_renderer_.get(); }
+    [[nodiscard]] const rendering::UIRenderer* ui_renderer() const noexcept { return ui_renderer_.get(); }
+
+    [[nodiscard]] rendering::FontManager* font_manager() noexcept { return font_manager_.get(); }
+    [[nodiscard]] const rendering::FontManager* font_manager() const noexcept { return font_manager_.get(); }
+
 private:
     void process_events();
     void fixed_update(float dt);
@@ -69,6 +77,8 @@ private:
     // Rendering
     std::unique_ptr<rendering::Renderer> renderer_;
     std::unique_ptr<rendering::TextureManager> texture_manager_;
+    std::unique_ptr<rendering::FontManager> font_manager_;
+    std::unique_ptr<rendering::UIRenderer> ui_renderer_;
     
     // Assets
     std::unique_ptr<assets::AssetManager> asset_manager_;

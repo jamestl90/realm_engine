@@ -6,15 +6,18 @@
 #include "../ui/TextBox.hpp"
 #include "Sprite.hpp"
 #include "Texture.hpp"
+#include "FontManager.hpp"
 #include <SDL3/SDL.h>
 #include <vector>
 #include <string>
+#include <unordered_map>
 
 namespace rendering {
 
 // Forward declarations
 class GPUDevice;
 class TextureManager;
+class FontManager;
 
 // UI render command types
 enum class UICommandType : std::uint8_t {
@@ -43,6 +46,7 @@ struct UIRenderCommand {
     // For text
     std::string text;
     float fontSize{14.0f};
+    FontID fontId{INVALID_FONT_ID};
 
     // Border
     float borderThickness{0.0f};
@@ -69,10 +73,19 @@ public:
     // Set texture manager for textured elements
     void setTextureManager(TextureManager* manager) noexcept { m_textureManager = manager; }
 
-    // Render UI tree
+    // Set font manager for text rendering
+    void setFontManager(FontManager* manager) noexcept { m_fontManager = manager; }
+
+    // Load a font and return its ID (convenience method)
+    [[nodiscard]] FontID loadFont(const char* path, float pointSize);
+
+    // Set the default font to use for UI text
+    void setDefaultFont(FontID fontId) noexcept { m_defaultFont = fontId; }
+
+    // Render UI tree (manages its own render pass)
     void render(
         SDL_GPUCommandBuffer* commandBuffer,
-        SDL_GPURenderPass* renderPass,
+        SDL_GPUTexture* swapchainTexture,
         ui::UIElement* root,
         float screenWidth,
         float screenHeight
@@ -92,10 +105,10 @@ private:
     void collectTextBlockCommands(ui::TextBlock* text);
     void collectImageCommands(ui::Image* image);
 
-    // Execute render commands
+    // Execute render commands (handles copy pass + render pass internally)
     void executeCommands(
         SDL_GPUCommandBuffer* commandBuffer,
-        SDL_GPURenderPass* renderPass,
+        SDL_GPUTexture* swapchainTexture,
         float screenWidth,
         float screenHeight
     );
@@ -108,9 +121,47 @@ private:
         float screenHeight
     ) const;
 
+    // Get or create cached text texture
+    TextureID getOrCreateTextTexture(
+        const std::string& text,
+        FontID fontId,
+        std::uint8_t r, std::uint8_t g, std::uint8_t b, std::uint8_t a,
+        int* outWidth, int* outHeight
+    );
+
     GPUDevice* m_device{nullptr};
     TextureManager* m_textureManager{nullptr};
+    FontManager* m_fontManager{nullptr};
+    FontID m_defaultFont{INVALID_FONT_ID};
     std::vector<UIRenderCommand> m_commands;
+
+    // Simple text texture cache (text+font+color -> textureId)
+    struct TextCacheKey {
+        std::string text;
+        FontID fontId;
+        std::uint32_t color;  // packed RGBA
+
+        bool operator==(const TextCacheKey& other) const {
+            return text == other.text && fontId == other.fontId && color == other.color;
+        }
+    };
+
+    struct TextCacheKeyHash {
+        std::size_t operator()(const TextCacheKey& key) const {
+            std::size_t h1 = std::hash<std::string>{}(key.text);
+            std::size_t h2 = std::hash<FontID>{}(key.fontId);
+            std::size_t h3 = std::hash<std::uint32_t>{}(key.color);
+            return h1 ^ (h2 << 1) ^ (h3 << 2);
+        }
+    };
+
+    struct TextCacheEntry {
+        TextureID textureId{INVALID_TEXTURE_ID};
+        int width{0};
+        int height{0};
+    };
+
+    std::unordered_map<TextCacheKey, TextCacheEntry, TextCacheKeyHash> m_textCache;
 
     // Vertex/index buffers for UI rendering
     std::vector<SpriteVertex> m_vertices;
@@ -121,6 +172,9 @@ private:
     SDL_GPUBuffer* m_indexBuffer{nullptr};
     std::size_t m_vertexBufferSize{0};
     std::size_t m_indexBufferSize{0};
+
+    // Sampler for texture sampling
+    SDL_GPUSampler* m_sampler{nullptr};
 
     // White texture for solid colour rendering
     TextureID m_whiteTexture{INVALID_TEXTURE_ID};

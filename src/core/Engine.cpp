@@ -48,6 +48,10 @@ bool Engine::initialize(const char* title, int width, int height) {
     // Create subsystems
     renderer_ = std::make_unique<rendering::Renderer>(gpu_device_.get(), window_);
     texture_manager_ = std::make_unique<rendering::TextureManager>(gpu_device_.get());
+    font_manager_ = std::make_unique<rendering::FontManager>(gpu_device_.get(), texture_manager_.get());
+    ui_renderer_ = std::make_unique<rendering::UIRenderer>(gpu_device_.get());
+    ui_renderer_->setTextureManager(texture_manager_.get());
+    ui_renderer_->setFontManager(font_manager_.get());
     asset_manager_ = std::make_unique<assets::AssetManager>(texture_manager_.get(), nullptr);
 
     // Register texture manager as a world resource for the renderer
@@ -86,14 +90,27 @@ void Engine::shutdown() noexcept {
         SDL_Log("Asset Manager Reset");
     }
 
+    if (font_manager_) {
+        font_manager_->clear();
+        font_manager_.reset();
+        SDL_Log("Font Manager Reset");
+    }
+
     if (texture_manager_) {
         texture_manager_->clear();
         texture_manager_.reset();
         SDL_Log("Texture Manager Reset");
     }
-    
+
+    ui_renderer_.reset();
+    SDL_Log("UI Renderer Reset");
+
     renderer_.reset();
     SDL_Log("Renderer Reset");
+
+    if (gpu_device_) {
+        gpu_device_.reset();
+    }
 
     if (window_) {
         SDL_DestroyWindow(window_);
@@ -203,13 +220,14 @@ void Engine::render(double alpha) {
 
     renderer_->clear(0, 0, 51, 255);
 
-    // Call game render hook (for custom rendering like UI)
+    // Render ECS world sprites first
+    renderer_->render(world_, alpha);
+
+    // Call game render hook for custom rendering (UI, overlays, etc.)
+    // UI should render on top of sprites
     if (game_) {
         game_->on_render(*this, alpha);
     }
-
-    // Render ECS world sprites
-    renderer_->render(world_, alpha);
 
     renderer_->present();
 }

@@ -1,8 +1,10 @@
 #include "../../include/rendering/UIRenderer.hpp"
 #include "../../include/rendering/GPUDevice.hpp"
 #include "../../include/rendering/TextureManager.hpp"
+#include "../../include/rendering/UniformBuffers.hpp"
 #include <algorithm>
 #include <cstring>
+#include <rendering/PipelineManager.hpp>
 
 namespace rendering {
 
@@ -16,6 +18,9 @@ UIRenderer::UIRenderer(GPUDevice* device)
 UIRenderer::~UIRenderer() {
     if (m_device && m_device->is_valid()) {
         SDL_GPUDevice* gpu = m_device->handle();
+        if (m_sampler) {
+            SDL_ReleaseGPUSampler(gpu, m_sampler);
+        }
         if (m_vertexBuffer) {
             SDL_ReleaseGPUBuffer(gpu, m_vertexBuffer);
         }
@@ -28,24 +33,33 @@ UIRenderer::~UIRenderer() {
 UIRenderer::UIRenderer(UIRenderer&& other) noexcept
     : m_device(other.m_device)
     , m_textureManager(other.m_textureManager)
+    , m_fontManager(other.m_fontManager)
+    , m_defaultFont(other.m_defaultFont)
     , m_commands(std::move(other.m_commands))
+    , m_textCache(std::move(other.m_textCache))
     , m_vertices(std::move(other.m_vertices))
     , m_indices(std::move(other.m_indices))
     , m_vertexBuffer(other.m_vertexBuffer)
     , m_indexBuffer(other.m_indexBuffer)
     , m_vertexBufferSize(other.m_vertexBufferSize)
     , m_indexBufferSize(other.m_indexBufferSize)
+    , m_sampler(other.m_sampler)
     , m_whiteTexture(other.m_whiteTexture) {
     other.m_device = nullptr;
     other.m_textureManager = nullptr;
+    other.m_fontManager = nullptr;
     other.m_vertexBuffer = nullptr;
     other.m_indexBuffer = nullptr;
+    other.m_sampler = nullptr;
 }
 
 UIRenderer& UIRenderer::operator=(UIRenderer&& other) noexcept {
     if (this != &other) {
         if (m_device && m_device->is_valid()) {
             SDL_GPUDevice* gpu = m_device->handle();
+            if (m_sampler) {
+                SDL_ReleaseGPUSampler(gpu, m_sampler);
+            }
             if (m_vertexBuffer) {
                 SDL_ReleaseGPUBuffer(gpu, m_vertexBuffer);
             }
@@ -56,31 +70,96 @@ UIRenderer& UIRenderer::operator=(UIRenderer&& other) noexcept {
 
         m_device = other.m_device;
         m_textureManager = other.m_textureManager;
+        m_fontManager = other.m_fontManager;
+        m_defaultFont = other.m_defaultFont;
         m_commands = std::move(other.m_commands);
+        m_textCache = std::move(other.m_textCache);
         m_vertices = std::move(other.m_vertices);
         m_indices = std::move(other.m_indices);
         m_vertexBuffer = other.m_vertexBuffer;
         m_indexBuffer = other.m_indexBuffer;
         m_vertexBufferSize = other.m_vertexBufferSize;
         m_indexBufferSize = other.m_indexBufferSize;
+        m_sampler = other.m_sampler;
         m_whiteTexture = other.m_whiteTexture;
 
         other.m_device = nullptr;
         other.m_textureManager = nullptr;
+        other.m_fontManager = nullptr;
         other.m_vertexBuffer = nullptr;
         other.m_indexBuffer = nullptr;
+        other.m_sampler = nullptr;
     }
     return *this;
 }
 
+FontID UIRenderer::loadFont(const char* path, float pointSize) {
+    if (!m_fontManager) {
+        SDL_LogError(SDL_LOG_CATEGORY_RENDER, "UIRenderer: No FontManager set");
+        return INVALID_FONT_ID;
+    }
+    return m_fontManager->load(path, pointSize);
+}
+
+TextureID UIRenderer::getOrCreateTextTexture(
+    const std::string& text,
+    FontID fontId,
+    std::uint8_t r, std::uint8_t g, std::uint8_t b, std::uint8_t a,
+    int* outWidth, int* outHeight
+) {
+    if (!m_fontManager || !m_textureManager) {
+        return INVALID_TEXTURE_ID;
+    }
+
+    // Use default font if none specified
+    FontID actualFont = (fontId != INVALID_FONT_ID) ? fontId : m_defaultFont;
+    if (actualFont == INVALID_FONT_ID) {
+        return INVALID_TEXTURE_ID;
+    }
+
+    // Create cache key
+    std::uint32_t packedColor = (static_cast<std::uint32_t>(r) << 24) |
+                                 (static_cast<std::uint32_t>(g) << 16) |
+                                 (static_cast<std::uint32_t>(b) << 8) |
+                                 static_cast<std::uint32_t>(a);
+
+    TextCacheKey key{text, actualFont, packedColor};
+
+    // Check cache
+    auto it = m_textCache.find(key);
+    if (it != m_textCache.end()) {
+        if (outWidth) *outWidth = it->second.width;
+        if (outHeight) *outHeight = it->second.height;
+        return it->second.textureId;
+    }
+
+    // Render text to texture
+    RenderedText result = m_fontManager->renderText(actualFont, text.c_str(), r, g, b, a);
+    if (result.textureId == INVALID_TEXTURE_ID) {
+        return INVALID_TEXTURE_ID;
+    }
+
+    // Cache the result
+    TextCacheEntry entry;
+    entry.textureId = result.textureId;
+    entry.width = result.width;
+    entry.height = result.height;
+    m_textCache[key] = entry;
+
+    if (outWidth) *outWidth = result.width;
+    if (outHeight) *outHeight = result.height;
+
+    return result.textureId;
+}
+
 void UIRenderer::render(
     SDL_GPUCommandBuffer* commandBuffer,
-    SDL_GPURenderPass* renderPass,
+    SDL_GPUTexture* swapchainTexture,
     ui::UIElement* root,
     float screenWidth,
     float screenHeight
 ) {
-    if (!root || !commandBuffer || !renderPass) {
+    if (!root || !commandBuffer || !swapchainTexture) {
         return;
     }
 
@@ -92,8 +171,8 @@ void UIRenderer::render(
         return;
     }
 
-    // Execute commands
-    executeCommands(commandBuffer, renderPass, screenWidth, screenHeight);
+    // Execute commands (handles copy pass + render pass internally)
+    executeCommands(commandBuffer, swapchainTexture, screenWidth, screenHeight);
 }
 
 void UIRenderer::collectCommands(ui::UIElement* element) {
@@ -369,7 +448,7 @@ void UIRenderer::collectImageCommands(ui::Image* image) {
 
 void UIRenderer::executeCommands(
     SDL_GPUCommandBuffer* commandBuffer,
-    SDL_GPURenderPass* renderPass,
+    SDL_GPUTexture* swapchainTexture,
     float screenWidth,
     float screenHeight
 ) {
@@ -383,45 +462,130 @@ void UIRenderer::executeCommands(
 
     std::uint16_t vertexOffset = 0;
 
+    // Separate commands into batches by texture for proper rendering
+    struct RenderBatch {
+        TextureID textureId{INVALID_TEXTURE_ID};
+        std::uint32_t startIndex{0};
+        std::uint32_t indexCount{0};
+    };
+    std::vector<RenderBatch> batches;
+    TextureID currentTextureId = INVALID_TEXTURE_ID;
+    std::uint32_t batchStartIndex = 0;
+
+    auto finishBatch = [&]() {
+        if (currentTextureId != INVALID_TEXTURE_ID && m_indices.size() > batchStartIndex) {
+            RenderBatch batch;
+            batch.textureId = currentTextureId;
+            batch.startIndex = batchStartIndex;
+            batch.indexCount = static_cast<std::uint32_t>(m_indices.size()) - batchStartIndex;
+            batches.push_back(batch);
+        }
+        batchStartIndex = static_cast<std::uint32_t>(m_indices.size());
+    };
+
+    // Get white texture ID for solid color rendering
+    TextureID whiteTextureId = m_textureManager ? m_textureManager->default_white_texture() : INVALID_TEXTURE_ID;
+
     for (const auto& cmd : m_commands) {
         if (cmd.type == UICommandType::Text) {
-            // Text rendering - draw each character as a coloured rectangle for now
-            // This is a placeholder until proper font rendering is implemented
-            float charWidth = cmd.fontSize * 0.6f;
-            float charHeight = cmd.fontSize;
-            float x = cmd.x;
-
-            for (char c : cmd.text) {
-                if (c == ' ') {
-                    x += charWidth;
-                    continue;
-                }
-
-                // Simple coloured rectangle per character (placeholder)
-                UIRenderCommand charCmd = cmd;
-                charCmd.type = UICommandType::Rectangle;
-                charCmd.x = x;
-                charCmd.width = charWidth * 0.8f;
-                charCmd.height = charHeight;
-
-                SpriteVertex verts[4];
-                generateRectVertices(charCmd, verts, screenWidth, screenHeight);
-
-                for (int i = 0; i < 4; ++i) {
-                    m_vertices.push_back(verts[i]);
-                }
-
-                m_indices.push_back(vertexOffset + 0);
-                m_indices.push_back(vertexOffset + 1);
-                m_indices.push_back(vertexOffset + 2);
-                m_indices.push_back(vertexOffset + 2);
-                m_indices.push_back(vertexOffset + 3);
-                m_indices.push_back(vertexOffset + 0);
-
-                vertexOffset += 4;
-                x += charWidth;
+            // Text rendering using font textures
+            if (cmd.text.empty()) {
+                continue;
             }
+
+            // Get or create text texture
+            int textWidth = 0, textHeight = 0;
+            TextureID textTextureId = getOrCreateTextTexture(
+                cmd.text, cmd.fontId, cmd.r, cmd.g, cmd.b, cmd.a,
+                &textWidth, &textHeight
+            );
+
+            if (textTextureId == INVALID_TEXTURE_ID) {
+                // Fall back to placeholder rectangles if no font available
+                float charWidth = cmd.fontSize * 0.6f;
+                float charHeight = cmd.fontSize;
+                float x = cmd.x;
+
+                // Switch to white texture for placeholders
+                if (currentTextureId != whiteTextureId) {
+                    finishBatch();
+                    currentTextureId = whiteTextureId;
+                }
+
+                for (char c : cmd.text) {
+                    if (c == ' ') {
+                        x += charWidth;
+                        continue;
+                    }
+
+                    UIRenderCommand charCmd = cmd;
+                    charCmd.type = UICommandType::Rectangle;
+                    charCmd.x = x;
+                    charCmd.width = charWidth * 0.8f;
+                    charCmd.height = charHeight;
+
+                    SpriteVertex verts[4];
+                    generateRectVertices(charCmd, verts, screenWidth, screenHeight);
+
+                    for (int i = 0; i < 4; ++i) {
+                        m_vertices.push_back(verts[i]);
+                    }
+
+                    m_indices.push_back(vertexOffset + 0);
+                    m_indices.push_back(vertexOffset + 1);
+                    m_indices.push_back(vertexOffset + 2);
+                    m_indices.push_back(vertexOffset + 2);
+                    m_indices.push_back(vertexOffset + 3);
+                    m_indices.push_back(vertexOffset + 0);
+
+                    vertexOffset += 4;
+                    x += charWidth;
+                }
+                continue;
+            }
+
+            // Switch batch if texture changed
+            if (currentTextureId != textTextureId) {
+                finishBatch();
+                currentTextureId = textTextureId;
+            }
+
+            // Create a textured quad for the text
+            UIRenderCommand textCmd = cmd;
+            textCmd.type = UICommandType::TexturedRect;
+            textCmd.width = static_cast<float>(textWidth);
+            textCmd.height = static_cast<float>(textHeight);
+            textCmd.u0 = 0.0f;
+            textCmd.v0 = 0.0f;
+            textCmd.u1 = 1.0f;
+            textCmd.v1 = 1.0f;
+            // Use white color since the texture already has the text color baked in
+            textCmd.r = 255;
+            textCmd.g = 255;
+            textCmd.b = 255;
+            textCmd.a = 255;
+
+            SpriteVertex verts[4];
+            generateRectVertices(textCmd, verts, screenWidth, screenHeight);
+
+            for (int i = 0; i < 4; ++i) {
+                m_vertices.push_back(verts[i]);
+            }
+
+            m_indices.push_back(vertexOffset + 0);
+            m_indices.push_back(vertexOffset + 1);
+            m_indices.push_back(vertexOffset + 2);
+            m_indices.push_back(vertexOffset + 2);
+            m_indices.push_back(vertexOffset + 3);
+            m_indices.push_back(vertexOffset + 0);
+
+            vertexOffset += 4;
         } else {
+            // Switch to white texture for solid color rendering
+            if (currentTextureId != whiteTextureId) {
+                finishBatch();
+                currentTextureId = whiteTextureId;
+            }
             // Rectangle or textured rect
             SpriteVertex verts[4];
             generateRectVertices(cmd, verts, screenWidth, screenHeight);
@@ -505,7 +669,10 @@ void UIRenderer::executeCommands(
         }
     }
 
-    if (m_vertices.empty()) {
+    // Finish the last batch
+    finishBatch();
+
+    if (m_vertices.empty() || batches.empty()) {
         return;
     }
 
@@ -539,7 +706,7 @@ void UIRenderer::executeCommands(
         m_indexBufferSize = bufferInfo.size;
     }
 
-    // Upload vertex data
+    // Upload vertex data via copy pass (no render pass should be active)
     SDL_GPUTransferBufferCreateInfo transferInfo{};
     transferInfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
     transferInfo.size = static_cast<Uint32>(requiredVertexSize + requiredIndexSize);
@@ -557,7 +724,7 @@ void UIRenderer::executeCommands(
         SDL_UnmapGPUTransferBuffer(gpu, transferBuffer);
     }
 
-    // Copy to GPU buffers
+    // Copy pass for uploading vertex/index data
     SDL_GPUCopyPass* copyPass = SDL_BeginGPUCopyPass(commandBuffer);
 
     SDL_GPUTransferBufferLocation srcVertex{};
@@ -583,8 +750,44 @@ void UIRenderer::executeCommands(
     SDL_UploadToGPUBuffer(copyPass, &srcIndex, &dstIndex, false);
 
     SDL_EndGPUCopyPass(copyPass);
-
     SDL_ReleaseGPUTransferBuffer(gpu, transferBuffer);
+
+    // Start render pass for drawing (LOAD to preserve existing content)
+    SDL_GPUColorTargetInfo colorTarget{};
+    colorTarget.texture = swapchainTexture;
+    colorTarget.load_op = SDL_GPU_LOADOP_LOAD;
+    colorTarget.store_op = SDL_GPU_STOREOP_STORE;
+
+    SDL_GPURenderPass* renderPass = SDL_BeginGPURenderPass(commandBuffer, &colorTarget, 1, nullptr);
+    if (!renderPass) {
+        return;
+    }
+
+    PipelineManager* pipeline_mgr = m_device->pipeline_manager();
+    if (!pipeline_mgr) {
+        SDL_LogError(SDL_LOG_CATEGORY_RENDER, "No pipeline manager available");
+        SDL_EndGPURenderPass(renderPass);
+        return;
+    }
+
+    SDL_GPUGraphicsPipeline* sprite_pipeline = pipeline_mgr->get_core_pipeline(PipelineType::Sprite);
+    if (!sprite_pipeline) {
+        SDL_LogError(SDL_LOG_CATEGORY_RENDER, "Sprite pipeline not available");
+        SDL_EndGPURenderPass(renderPass);
+        return;
+    }
+
+    // Bind pipeline
+    SDL_BindGPUGraphicsPipeline(renderPass, sprite_pipeline);
+
+    // Push identity matrix for camera uniform (positions are already in NDC)
+    CameraData camera_data{};
+    // Identity matrix (column-major)
+    camera_data.projection[0] = 1.0f;   // [0][0]
+    camera_data.projection[5] = 1.0f;   // [1][1]
+    camera_data.projection[10] = 1.0f;  // [2][2]
+    camera_data.projection[15] = 1.0f;  // [3][3]
+    SDL_PushGPUVertexUniformData(commandBuffer, 0, &camera_data, sizeof(CameraData));
 
     // Bind buffers and draw
     SDL_GPUBufferBinding vertexBinding{};
@@ -599,7 +802,48 @@ void UIRenderer::executeCommands(
 
     SDL_BindGPUIndexBuffer(renderPass, &indexBinding, SDL_GPU_INDEXELEMENTSIZE_16BIT);
 
-    SDL_DrawGPUIndexedPrimitives(renderPass, static_cast<Uint32>(m_indices.size()), 1, 0, 0, 0);
+    // Create sampler lazily if needed (LINEAR for smoother text rendering)
+    if (!m_sampler) {
+        SDL_GPUSamplerCreateInfo samplerInfo{};
+        samplerInfo.min_filter = SDL_GPU_FILTER_LINEAR;
+        samplerInfo.mag_filter = SDL_GPU_FILTER_LINEAR;
+        samplerInfo.mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_LINEAR;
+        samplerInfo.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+        samplerInfo.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+        samplerInfo.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+        m_sampler = SDL_CreateGPUSampler(gpu, &samplerInfo);
+        if (!m_sampler) {
+            SDL_LogError(SDL_LOG_CATEGORY_RENDER, "Failed to create UI sampler: %s", SDL_GetError());
+            SDL_EndGPURenderPass(renderPass);
+            return;
+        }
+    }
+
+    // Check texture manager
+    if (!m_textureManager) {
+        SDL_LogError(SDL_LOG_CATEGORY_RENDER, "No texture manager set for UIRenderer");
+        SDL_EndGPURenderPass(renderPass);
+        return;
+    }
+
+    // Draw each batch with its own texture
+    for (const auto& batch : batches) {
+        const Texture* texture = m_textureManager->get(batch.textureId);
+        if (!texture || !texture->gpu_texture) {
+            continue;
+        }
+
+        // Bind texture and sampler for this batch
+        SDL_GPUTextureSamplerBinding textureSamplerBinding{};
+        textureSamplerBinding.texture = texture->gpu_texture;
+        textureSamplerBinding.sampler = m_sampler;
+        SDL_BindGPUFragmentSamplers(renderPass, 0, &textureSamplerBinding, 1);
+
+        // Draw this batch
+        SDL_DrawGPUIndexedPrimitives(renderPass, batch.indexCount, 1, batch.startIndex, 0, 0);
+    }
+
+    SDL_EndGPURenderPass(renderPass);
 }
 
 

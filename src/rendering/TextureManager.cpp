@@ -329,4 +329,39 @@ const TextureRegion* TextureManager::get_region(TextureID texture_id, const std:
     return region_it != texture_it->second.end() ? &region_it->second : nullptr;
 }
 
+TextureID TextureManager::default_white_texture() 
+{ 
+    if (default_white_texture_ == INVALID_TEXTURE_ID) {
+        create_default_1x1_white();
+    }
+    return default_white_texture_; 
+}
+
+void TextureManager::create_default_1x1_white()
+{
+    SDL_Surface* surface = SDL_CreateSurface(1, 1, SDL_PIXELFORMAT_RGBA32);
+    if (!surface) {
+        SDL_Log("Failed to create 1x1 surface: %s", SDL_GetError());
+        return;
+    }
+
+    SDL_Color white = { 255, 255, 255, 255 };
+    Uint32 pixel = SDL_MapSurfaceRGBA(surface, white.r, white.g, white.b, white.a);
+
+    if (!SDL_FillSurfaceRect(surface, nullptr, pixel)) {
+        SDL_Log("Failed to fill 1x1 surface: %s", SDL_GetError());
+        SDL_DestroySurface(surface);
+        return;
+    }
+
+    default_white_texture_ = create_from_surface(surface);
+    if (default_white_texture_ == rendering::INVALID_TEXTURE_ID) {
+        SDL_Log("Failed to create default white texture: %s", SDL_GetError());
+        SDL_DestroySurface(surface);
+        return;
+    }
+
+    SDL_DestroySurface(surface);
+}
+
 } // namespace rendering
