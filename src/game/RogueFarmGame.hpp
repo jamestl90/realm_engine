@@ -3,9 +3,6 @@
 #include "../../include/core/Game.hpp"
 #include "../../include/ecs/Entity.hpp"
 #include "../../include/rendering/Texture.hpp"
-#include "../../include/ui/Button.hpp"
-#include "../../include/ui/TextBox.hpp"
-#include <memory>
 
 namespace game {
 
@@ -24,11 +21,6 @@ public:
 private:
     ecs::Entity m_test_entity;
     rendering::TextureID m_test_texture{rendering::INVALID_TEXTURE_ID};
-
-    // UI elements
-    std::unique_ptr<ui::Button> m_button;
-    std::unique_ptr<ui::TextBox> m_textBox;
-    std::unique_ptr<ui::UIElement> m_uiRoot;
 };
 
 } // namespace game

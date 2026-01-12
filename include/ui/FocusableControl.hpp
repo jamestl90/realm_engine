@@ -41,6 +41,9 @@ public:
     void setOnFocus(FocusCallback callback) { m_onFocusCallback = std::move(callback); }
     void setOnBlur(FocusCallback callback) { m_onBlurCallback = std::move(callback); }
 
+    // Text input support - override in controls that accept text input
+    [[nodiscard]] virtual bool wantsTextInput() const noexcept { return false; }
+
     // Input handling with focus awareness
     void onMouseDown(MouseEventArgs& args) override;
     void onKeyDown(KeyEventArgs& args) override;

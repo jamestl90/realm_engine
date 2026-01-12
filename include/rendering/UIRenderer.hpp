@@ -2,6 +2,7 @@
 
 #include "../ui/UIElement.hpp"
 #include "../ui/Primitives.hpp"
+#include "../ui/Layout.hpp"
 #include "../ui/Button.hpp"
 #include "../ui/TextBox.hpp"
 #include "Sprite.hpp"
@@ -99,6 +100,7 @@ private:
     void collectCommands(ui::UIElement* element);
 
     // Collect commands for specific element types
+    void collectLayoutContainerCommands(ui::LayoutContainer* container);
     void collectButtonCommands(ui::Button* button);
     void collectTextBoxCommands(ui::TextBox* textBox);
     void collectRectangleCommands(ui::Rectangle* rect);

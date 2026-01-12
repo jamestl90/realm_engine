@@ -1,5 +1,6 @@
 #include "../../include/ui/Layout.hpp"
 #include <algorithm>
+#include <limits>
 #include <unordered_map>
 
 namespace ui {
@@ -16,13 +17,15 @@ LayoutContainer::~LayoutContainer() = default;
 
 LayoutContainer::LayoutContainer(LayoutContainer&& other) noexcept
     : UIElement(std::move(other))
-    , m_padding(other.m_padding) {
+    , m_padding(other.m_padding)
+    , m_backgroundColour(other.m_backgroundColour) {
 }
 
 LayoutContainer& LayoutContainer::operator=(LayoutContainer&& other) noexcept {
     if (this != &other) {
         UIElement::operator=(std::move(other));
         m_padding = other.m_padding;
+        m_backgroundColour = other.m_backgroundColour;
     }
     return *this;
 }
@@ -79,8 +82,31 @@ void StackPanel::setSpacing(float spacing) noexcept {
 }
 
 void StackPanel::measure(float availableWidth, float availableHeight) {
-    float contentWidth = availableWidth - m_padding.horizontalSum();
-    float contentHeight = availableHeight - m_padding.verticalSum();
+    // Apply our own size constraints to limit available space for children
+    const auto& constraints = sizeConstraints();
+
+    // If we have a preferred or constrained width, use it to limit child available space
+    float constrainedWidth = availableWidth;
+    if (constraints.preferred_width > 0.0f) {
+        constrainedWidth = std::min(constrainedWidth, constraints.preferred_width);
+    }
+    if (constraints.max_width < std::numeric_limits<float>::max()) {
+        constrainedWidth = std::min(constrainedWidth, constraints.max_width);
+    }
+    constrainedWidth = std::max(constrainedWidth, constraints.min_width);
+
+    // Same for height
+    float constrainedHeight = availableHeight;
+    if (constraints.preferred_height > 0.0f) {
+        constrainedHeight = std::min(constrainedHeight, constraints.preferred_height);
+    }
+    if (constraints.max_height < std::numeric_limits<float>::max()) {
+        constrainedHeight = std::min(constrainedHeight, constraints.max_height);
+    }
+    constrainedHeight = std::max(constrainedHeight, constraints.min_height);
+
+    float contentWidth = constrainedWidth - m_padding.horizontalSum();
+    float contentHeight = constrainedHeight - m_padding.verticalSum();
 
     float totalMain = 0.0f;
     float maxCross = 0.0f;
@@ -116,9 +142,8 @@ void StackPanel::measure(float availableWidth, float availableHeight) {
         m_measuredHeight = maxCross + m_padding.verticalSum();
     }
 
-    // Apply constraints
-    const auto& constraints = sizeConstraints();
-    m_measuredWidth = std::clamp(m_measuredWidth, constraints.min_width, 
+    // Apply constraints to final measured size
+    m_measuredWidth = std::clamp(m_measuredWidth, constraints.min_width,
         std::min(constraints.max_width, availableWidth));
     m_measuredHeight = std::clamp(m_measuredHeight, constraints.min_height,
         std::min(constraints.max_height, availableHeight));

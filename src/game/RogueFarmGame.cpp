@@ -19,6 +19,8 @@ void RogueFarmGame::on_startup(core::Engine& engine) {
         rendering::FontID fontId = ui_renderer->loadFont(fontPath.c_str(), 16.0f);
         if (fontId != rendering::INVALID_FONT_ID) {
             ui_renderer->setDefaultFont(fontId);
+            // Wire up font manager for text measurement in UI
+            engine.ui_manager().setFontManager(engine.font_manager(), fontId);
             SDL_Log("Loaded font: %s", fontPath.c_str());
         } else {
             SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to load font: %s", fontPath.c_str());
@@ -76,59 +78,63 @@ void RogueFarmGame::on_startup(core::Engine& engine) {
     sprite.a = 255;
     engine.world().add_component(m_test_entity, sprite);
 
-    // Create UI elements
-    m_uiRoot = std::make_unique<ui::UIElement>();
+    // Create UI elements using UIManager
+    auto& ui_mgr = engine.ui_manager();
+
+    // Create root as a vertical StackPanel for proper layout
+    auto root = std::make_unique<ui::StackPanel>(ui::Orientation::Vertical);
+    root->setPadding(ui::Thickness(20.0f));
+    root->setSpacing(10.0f);
+
+    // Set size constraints to make it 50% of screen width
+    ui::SizeConstraints constraints;
+    constraints.preferred_width = static_cast<float>(window_width) * 0.5f;
+    constraints.min_width = static_cast<float>(window_width) * 0.5f;  // Optional: enforce minimum
+    root->setSizeConstraints(constraints);
+
+    // Set white background
+    root->setBackgroundColour(ui::Colour::white());
 
     // Create Button
-    m_button = std::make_unique<ui::Button>("Click Me!");
-    m_button->setBackgroundColour(ui::Colour{80, 120, 200, 255});
-    m_button->setHoverColour(ui::Colour{100, 140, 220, 255});
-    m_button->setPressedColour(ui::Colour{60, 100, 180, 255});
-    m_button->setTextColour(ui::Colour{255, 255, 255, 255});
-    m_button->setBorderColour(ui::Colour{40, 80, 160, 255});
-    m_button->setBorderThickness(2.0f);
-    m_button->setFontSize(16.0f);
-    m_button->setOnClick([]() {
+    auto button = std::make_unique<ui::Button>("Click Me!");
+    button->setBackgroundColour(ui::Colour{80, 120, 200, 255});
+    button->setHoverColour(ui::Colour{100, 140, 220, 255});
+    button->setPressedColour(ui::Colour{60, 100, 180, 255});
+    button->setTextColour(ui::Colour{255, 255, 255, 255});
+    button->setBorderColour(ui::Colour{40, 80, 160, 255});
+    button->setBorderThickness(2.0f);
+    button->setFontSize(16.0f);
+    button->setOnClick([]() {
         SDL_Log("Button clicked!");
     });
 
-    // Measure and arrange button
-    m_button->measure(200.0f, 50.0f);
-    ui::Rect buttonBounds{20.0f, 20.0f, m_button->measuredWidth(), m_button->measuredHeight()};
-    m_button->setBounds(buttonBounds);
-
     // Create TextBox
-    m_textBox = std::make_unique<ui::TextBox>();
-    m_textBox->setPlaceholder("Enter text here...");
-    m_textBox->setBackgroundColour(ui::Colour{40, 40, 50, 255});
-    m_textBox->setTextColour(ui::Colour{255, 255, 255, 255});
-    m_textBox->setBorderColour(ui::Colour{80, 80, 100, 255});
-    m_textBox->setFocusBorderColour(ui::Colour{100, 150, 255, 255});
-    m_textBox->setBorderThickness(2.0f);
-    m_textBox->setFontSize(14.0f);
-    m_textBox->setOnTextChanged([](const std::string& text) {
+    auto textBox = std::make_unique<ui::TextBox>();
+    textBox->setPlaceholder("Enter text here...");
+    textBox->setBackgroundColour(ui::Colour{40, 40, 50, 255});
+    textBox->setTextColour(ui::Colour{255, 255, 255, 255});
+    textBox->setBorderColour(ui::Colour{80, 80, 100, 255});
+    textBox->setFocusBorderColour(ui::Colour{100, 150, 255, 255});
+    textBox->setBorderThickness(2.0f);
+    textBox->setFontSize(14.0f);
+    textBox->setOnTextChanged([](const std::string& text) {
         SDL_Log("Text changed: %s", text.c_str());
     });
 
-    // Measure and arrange textbox
-    m_textBox->measure(250.0f, 40.0f);
-    ui::Rect textBoxBounds{20.0f, 80.0f, 250.0f, m_textBox->measuredHeight()};
-    m_textBox->setBounds(textBoxBounds);
-
     // Add UI elements to root
-    m_uiRoot->addChild(std::unique_ptr<ui::UIElement>(m_button.release()));
-    m_uiRoot->addChild(std::unique_ptr<ui::UIElement>(m_textBox.release()));
+    root->addChild(std::move(button));
+    root->addChild(std::move(textBox));
+
+    // Set root on UIManager (it will handle layout)
+    ui_mgr.setRoot(std::move(root));
 
     SDL_Log("RogueFarmGame startup complete");
 }
 
 void RogueFarmGame::on_update(core::Engine& engine, double dt) {
     (void)engine;
-
-    // Update UI elements (for cursor blink, etc.)
-    if (m_uiRoot) {
-        m_uiRoot->update(static_cast<float>(dt));
-    }
+    (void)dt;
+    // UIManager handles UI updates now
 }
 
 void RogueFarmGame::on_render(core::Engine& engine, double alpha) {
@@ -137,8 +143,9 @@ void RogueFarmGame::on_render(core::Engine& engine, double alpha) {
     // UI rendering happens after sprites, before present
     auto* renderer = engine.renderer();
     auto* ui_renderer = engine.ui_renderer();
+    auto* ui_root = engine.ui_manager().root();
 
-    if (!renderer || !ui_renderer || !m_uiRoot) {
+    if (!renderer || !ui_renderer || !ui_root) {
         return;
     }
 
@@ -153,15 +160,14 @@ void RogueFarmGame::on_render(core::Engine& engine, double alpha) {
     ui_renderer->render(
         renderer->command_buffer(),
         renderer->swapchain_texture(),
-        m_uiRoot.get(),
+        ui_root,
         static_cast<float>(window_width),
         static_cast<float>(window_height)
     );
 }
 
 void RogueFarmGame::on_shutdown(core::Engine& engine) {
-    // Clean up UI
-    m_uiRoot.reset();
+    // UIManager owns the UI tree now, no need to clean it up here
 
     if (m_test_texture != rendering::INVALID_TEXTURE_ID) {
         engine.texture_manager()->destroy(m_test_texture);

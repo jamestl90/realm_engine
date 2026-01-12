@@ -53,9 +53,11 @@ public:
     // Callbacks
     using TextChangedCallback = std::function<void(const std::string&)>;
     using SubmitCallback = std::function<void(const std::string&)>;
+    using TextMeasureCallback = std::function<float(const std::string& text, float fontSize)>;
 
     void setOnTextChanged(TextChangedCallback callback) { m_onTextChanged = std::move(callback); }
     void setOnSubmit(SubmitCallback callback) { m_onSubmit = std::move(callback); }
+    void setTextMeasurer(TextMeasureCallback callback) { m_textMeasurer = std::move(callback); }
 
     // Appearance
     [[nodiscard]] const Colour& backgroundColour() const noexcept { return m_backgroundColour; }
@@ -96,6 +98,9 @@ public:
 
     // Cursor blink state
     [[nodiscard]] bool isCursorVisible() const noexcept { return m_cursorVisible; }
+
+    // Text input support
+    [[nodiscard]] bool wantsTextInput() const noexcept override { return !m_readOnly; }
 
     // Layout
     void measure(float availableWidth, float availableHeight) override;
@@ -138,6 +143,7 @@ private:
     // Callbacks
     TextChangedCallback m_onTextChanged;
     SubmitCallback m_onSubmit;
+    TextMeasureCallback m_textMeasurer;
 
     // Appearance
     Colour m_backgroundColour{40, 40, 40, 255};

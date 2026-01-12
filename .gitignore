@@ -20,3 +20,8 @@ ai/prompts/
 /external/include/rapidjson
 /external/include/SDL3_ttf
 /external/lib/SDL3_ttf
+docs/todo today.txt
+docs/.SDL3_gpu_reference.md
+docs/prompts.txt
+scripts/build.ps1
+scripts/dev.ps1

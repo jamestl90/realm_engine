@@ -57,6 +57,9 @@ bool Engine::initialize(const char* title, int width, int height) {
     // Register texture manager as a world resource for the renderer
     world_.set_resource(texture_manager_.get());
 
+    // Initialize UI manager
+    ui_manager_.initialize(window_, static_cast<float>(width), static_cast<float>(height));
+
     time_.reset();
     initialized_ = true;
     
@@ -186,6 +189,11 @@ void Engine::run() {
 void Engine::process_events() {
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
+        // Let UI manager handle the event first
+        if (ui_manager_.handleEvent(event)) {
+            continue; // Event was consumed by UI
+        }
+
         switch (event.type) {
             case SDL_EVENT_QUIT:
                 quit();
@@ -207,6 +215,9 @@ void Engine::fixed_update(float dt) {
 }
 
 void Engine::update(double dt) {
+    // Update UI manager
+    ui_manager_.update(static_cast<float>(dt));
+
     // Call game update hook
     if (game_) {
         game_->on_update(*this, dt);

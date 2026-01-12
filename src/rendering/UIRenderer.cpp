@@ -191,6 +191,8 @@ void UIRenderer::collectCommands(ui::UIElement* element) {
         collectTextBlockCommands(text);
     } else if (auto* image = dynamic_cast<ui::Image*>(element)) {
         collectImageCommands(image);
+    } else if (auto* container = dynamic_cast<ui::LayoutContainer*>(element)) {
+        collectLayoutContainerCommands(container);
     }
 
     // Collect commands from children
@@ -199,6 +201,30 @@ void UIRenderer::collectCommands(ui::UIElement* element) {
             collectCommands(child.get());
         }
     }
+}
+
+void UIRenderer::collectLayoutContainerCommands(ui::LayoutContainer* container) {
+    const auto& bg = container->backgroundColour();
+
+    // Only render background if it has visible alpha
+    if (bg.a == 0) {
+        return;
+    }
+
+    const auto& bounds = container->bounds();
+
+    UIRenderCommand bgCmd;
+    bgCmd.type = UICommandType::Rectangle;
+    bgCmd.x = bounds.x;
+    bgCmd.y = bounds.y;
+    bgCmd.width = bounds.width;
+    bgCmd.height = bounds.height;
+    bgCmd.r = bg.r;
+    bgCmd.g = bg.g;
+    bgCmd.b = bg.b;
+    bgCmd.a = bg.a;
+
+    m_commands.push_back(bgCmd);
 }
 
 void UIRenderer::collectButtonCommands(ui::Button* button) {
@@ -338,9 +364,16 @@ void UIRenderer::collectTextBoxCommands(ui::TextBox* textBox) {
 
     // Cursor
     if (textBox->isFocused() && textBox->isCursorVisible()) {
-        float charWidth = textBox->fontSize() * 0.6f;
-        float cursorX = bounds.x + padding.left +
-            static_cast<float>(textBox->cursorPosition()) * charWidth;
+        float cursorX = bounds.x + padding.left;
+
+        // Measure actual text width up to cursor position
+        if (textBox->cursorPosition() > 0 && m_fontManager && m_defaultFont != INVALID_FONT_ID) {
+            std::string textToCursor = textBox->displayText().substr(0, textBox->cursorPosition());
+            int textWidth = 0;
+            if (m_fontManager->getTextSize(m_defaultFont, textToCursor.c_str(), &textWidth, nullptr)) {
+                cursorX += static_cast<float>(textWidth);
+            }
+        }
 
         UIRenderCommand cursorCmd;
         cursorCmd.type = UICommandType::Rectangle;

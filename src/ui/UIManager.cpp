@@ -1,13 +1,17 @@
 #include "../../include/ui/UIManager.hpp"
 #include "../../include/ui/InputSurface.hpp"
+#include "../../include/ui/TextBox.hpp"
 #include <SDL3/SDL.h>
+#include <SDL3/SDL_keyboard.h>
 
 namespace ui {
 
-void UIManager::initialize(float screenWidth, float screenHeight) noexcept {
+void UIManager::initialize(SDL_Window* window, float screenWidth, float screenHeight) noexcept {
+    m_window = window;
     m_screenWidth = screenWidth;
     m_screenHeight = screenHeight;
     m_layoutDirty = true;
+    m_textInputActive = false;
 }
 
 void UIManager::setScreenSize(float width, float height) noexcept {
@@ -25,6 +29,12 @@ void UIManager::setRoot(std::unique_ptr<UIElement> root) {
     m_lastHoveredSurface = nullptr;
     m_capturedElement = nullptr;
     m_focusManager.clearFocus();
+    updateTextInputState(nullptr);
+
+    // Configure text measurement on new UI tree
+    if (m_root) {
+        configureTextMeasurement(m_root.get());
+    }
 }
 
 void UIManager::update(float dt) {
@@ -51,8 +61,8 @@ void UIManager::performLayout() {
     // Measure pass
     m_root->measure(m_screenWidth, m_screenHeight);
 
-    // Arrange pass
-    Rect rootRect{0.0f, 0.0f, m_screenWidth, m_screenHeight};
+    // Arrange pass - use measured size, not full screen size
+    Rect rootRect{0.0f, 0.0f, m_root->measuredWidth(), m_root->measuredHeight()};
     m_root->arrange(rootRect);
 
     m_layoutDirty = false;
@@ -112,6 +122,7 @@ bool UIManager::handleMouseButtonDown(const SDL_Event& event) {
     if (!target) {
         // Click outside UI - clear focus
         m_focusManager.clearFocus();
+        updateTextInputState(nullptr);
         return false;
     }
 
@@ -126,6 +137,7 @@ bool UIManager::handleMouseButtonDown(const SDL_Event& event) {
             auto* focusable = dynamic_cast<FocusableControl*>(surface);
             if (focusable && focusable->isFocusable()) {
                 m_focusManager.setFocus(focusable);
+                updateTextInputState(focusable);
             }
 
             return args.handled || true; // Consumed by UI
@@ -235,6 +247,7 @@ bool UIManager::handleKeyDown(const SDL_Event& event) {
     if (event.key.scancode == SDL_SCANCODE_TAB) {
         FocusDirection direction = args.shift ? FocusDirection::Previous : FocusDirection::Next;
         m_focusManager.moveFocus(direction, m_root.get());
+        updateTextInputState(m_focusManager.focusedElement());
         return true;
     }
 
@@ -317,6 +330,18 @@ void UIManager::updateHover(float x, float y) {
     m_hoveredElement = newHovered;
 }
 
+void UIManager::updateTextInputState(FocusableControl* newFocused) {
+    bool needsTextInput = newFocused && newFocused->wantsTextInput();
+
+    if (needsTextInput && !m_textInputActive) {
+        SDL_StartTextInput(m_window);
+        m_textInputActive = true;
+    } else if (!needsTextInput && m_textInputActive) {
+        SDL_StopTextInput(m_window);
+        m_textInputActive = false;
+    }
+}
+
 UIElement* UIManager::hitTest(float x, float y) const {
     if (!m_root) {
         return nullptr;
@@ -338,6 +363,43 @@ MouseButton UIManager::toMouseButton(std::uint8_t sdlButton) const noexcept {
             return MouseButton::X2;
         default:
             return MouseButton::Left;
+    }
+}
+
+void UIManager::setFontManager(rendering::FontManager* fontManager, rendering::FontID defaultFont) noexcept {
+    m_fontManager = fontManager;
+    m_defaultFont = defaultFont;
+
+    // Configure text measurement on existing UI tree
+    if (m_root) {
+        configureTextMeasurement(m_root.get());
+    }
+}
+
+void UIManager::configureTextMeasurement(UIElement* element) {
+    if (!element || !m_fontManager || m_defaultFont == rendering::INVALID_FONT_ID) {
+        return;
+    }
+
+    // If this is a TextBox, set up the text measurer
+    auto* textBox = dynamic_cast<TextBox*>(element);
+    if (textBox) {
+        // Capture fontManager and defaultFont by value for the lambda
+        rendering::FontManager* fm = m_fontManager;
+        rendering::FontID fontId = m_defaultFont;
+
+        textBox->setTextMeasurer([fm, fontId](const std::string& text, float /*fontSize*/) -> float {
+            int width = 0;
+            if (fm->getTextSize(fontId, text.c_str(), &width, nullptr)) {
+                return static_cast<float>(width);
+            }
+            return 0.0f;
+        });
+    }
+
+    // Recursively configure children
+    for (const auto& child : element->children()) {
+        configureTextMeasurement(child.get());
     }
 }
 

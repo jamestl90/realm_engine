@@ -8,6 +8,7 @@
 #include "../rendering/FontManager.hpp"
 #include "../rendering/UIRenderer.hpp"
 #include "../assets/AssetManager.hpp"
+#include "../ui/UIManager.hpp"
 #include <memory>
 #include <SDL3/SDL.h>
 
@@ -61,6 +62,9 @@ public:
     [[nodiscard]] rendering::FontManager* font_manager() noexcept { return font_manager_.get(); }
     [[nodiscard]] const rendering::FontManager* font_manager() const noexcept { return font_manager_.get(); }
 
+    [[nodiscard]] ui::UIManager& ui_manager() noexcept { return ui_manager_; }
+    [[nodiscard]] const ui::UIManager& ui_manager() const noexcept { return ui_manager_; }
+
 private:
     void process_events();
     void fixed_update(float dt);
@@ -82,6 +86,9 @@ private:
     
     // Assets
     std::unique_ptr<assets::AssetManager> asset_manager_;
+
+    // UI
+    ui::UIManager ui_manager_;
     
     // Game instance
     std::unique_ptr<Game> game_;

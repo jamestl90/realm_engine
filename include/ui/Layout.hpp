@@ -1,6 +1,7 @@
 #pragma once
 
 #include "UIElement.hpp"
+#include "Primitives.hpp"
 
 namespace ui {
 
@@ -51,10 +52,15 @@ public:
     [[nodiscard]] const Thickness& padding() const noexcept { return m_padding; }
     void setPadding(const Thickness& padding) noexcept;
 
+    // Background colour
+    [[nodiscard]] const Colour& backgroundColour() const noexcept { return m_backgroundColour; }
+    void setBackgroundColour(const Colour& colour) noexcept { m_backgroundColour = colour; }
+
 protected:
     [[nodiscard]] Rect getContentArea() const noexcept;
 
     Thickness m_padding{};
+    Colour m_backgroundColour{Colour::transparent()};
 };
 
 // Stack panel - arranges children in a line

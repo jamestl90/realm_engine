@@ -111,9 +111,12 @@ void Button::onMouseDown(MouseEventArgs& args) {
 }
 
 void Button::onMouseUp(MouseEventArgs& args) {
+    // Check pressed state before base class clears it
+    const bool wasPressed = isPressed();
+
     FocusableControl::onMouseUp(args);
 
-    if (isPressed() && isHovered()) {
+    if (wasPressed && isHovered()) {
         if (m_onClick) {
             m_onClick();
         }

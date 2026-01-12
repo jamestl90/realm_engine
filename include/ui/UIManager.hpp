@@ -3,13 +3,16 @@
 #include "UIElement.hpp"
 #include "FocusableControl.hpp"
 #include "Animation.hpp"
+#include "../rendering/FontManager.hpp"
 #include <SDL3/SDL_events.h>
+#include <SDL3/SDL_video.h>
 #include <memory>
 
 namespace ui {
 
 // Forward declarations
 class InputSurface;
+class TextBox;
 
 // UIManager - central coordinator for the UI system
 class UIManager {
@@ -23,8 +26,8 @@ public:
     UIManager(UIManager&&) = delete;
     UIManager& operator=(UIManager&&) = delete;
 
-    // Initialise with screen dimensions
-    void initialize(float screenWidth, float screenHeight) noexcept;
+    // Initialise with window and screen dimensions
+    void initialize(SDL_Window* window, float screenWidth, float screenHeight) noexcept;
 
     // Screen size management
     void setScreenSize(float width, float height) noexcept;
@@ -65,7 +68,12 @@ public:
     [[nodiscard]] bool isDebugDrawEnabled() const noexcept { return m_debugDraw; }
     void setDebugDraw(bool enabled) noexcept { m_debugDraw = enabled; }
 
+    // Font manager for text measurement
+    void setFontManager(rendering::FontManager* fontManager, rendering::FontID defaultFont) noexcept;
+
 private:
+    // Configure text measurement on TextBox elements in tree
+    void configureTextMeasurement(UIElement* element);
     // Input handling helpers
     bool handleMouseButtonDown(const SDL_Event& event);
     bool handleMouseButtonUp(const SDL_Event& event);
@@ -81,6 +89,12 @@ private:
     // Convert SDL mouse button to UI mouse button
     [[nodiscard]] MouseButton toMouseButton(std::uint8_t sdlButton) const noexcept;
 
+    // Text input management
+    void updateTextInputState(FocusableControl* newFocused);
+
+    SDL_Window* m_window{nullptr};
+    rendering::FontManager* m_fontManager{nullptr};
+    rendering::FontID m_defaultFont{rendering::INVALID_FONT_ID};
     std::unique_ptr<UIElement> m_root;
     FocusManager m_focusManager;
     AnimationManager m_animationManager;
@@ -103,6 +117,7 @@ private:
 
     bool m_debugDraw{false};
     bool m_layoutDirty{true};
+    bool m_textInputActive{false};
 };
 
 } // namespace ui
