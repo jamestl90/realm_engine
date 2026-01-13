@@ -17,6 +17,7 @@ public:
     void on_update(core::Engine& engine, double dt) override;
     void on_render(core::Engine& engine, double alpha) override;
     void on_shutdown(core::Engine& engine) override;
+    void on_resized(core::Engine& engine, int width, int height) override;
 
 private:
     ecs::Entity m_test_entity;

@@ -10,7 +10,7 @@ int main(int argc, char* argv[]) {
 
     core::Engine engine;
 
-    if (!engine.initialize("Rogue Farm Game", 1280, 720)) {
+    if (!engine.initialize("Rogue Farm Game", 1920, 1080)) {
         return 1;
     }
 

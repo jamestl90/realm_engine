@@ -41,6 +41,8 @@ public:
     // Request exit
     void quit() noexcept { running_ = false; }
 
+    void resize_window(int width, int height);
+
     // Access subsystems
     [[nodiscard]] ecs::World& world() noexcept { return world_; }
     [[nodiscard]] const ecs::World& world() const noexcept { return world_; }
@@ -101,6 +103,31 @@ private:
     // Fixed timestep accumulator
     double accumulator_{0.0};
     static constexpr double max_frame_time_{0.25}; // Cap at 250ms to prevent spiral of death
+
+public:
+    // Logical resolution constants
+    static constexpr int LOGICAL_W = 1920;
+    static constexpr int LOGICAL_H = 1080;
+
+    // Handle window resize
+    void on_resize(int pixel_w, int pixel_h);
+
+    // Convert screen (pixel) coordinates to logical coordinates
+    // Maps full window to logical coordinate space
+    [[nodiscard]] bool screen_to_logical(float screen_x, float screen_y,
+                                          float& logical_x, float& logical_y) const noexcept;
+
+    // Convert logical coordinates to screen (pixel) coordinates
+    void logical_to_screen(float logical_x, float logical_y,
+                           float& screen_x, float& screen_y) const noexcept;
+
+    // Get current window dimensions
+    [[nodiscard]] int window_width() const noexcept { return window_width_; }
+    [[nodiscard]] int window_height() const noexcept { return window_height_; }
+
+private:
+    int window_width_{LOGICAL_W};
+    int window_height_{LOGICAL_H};
 };
 
 } // namespace core

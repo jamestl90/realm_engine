@@ -156,8 +156,8 @@ void UIRenderer::render(
     SDL_GPUCommandBuffer* commandBuffer,
     SDL_GPUTexture* swapchainTexture,
     ui::UIElement* root,
-    float screenWidth,
-    float screenHeight
+    float logicalWidth,
+    float logicalHeight
 ) {
     if (!root || !commandBuffer || !swapchainTexture) {
         return;
@@ -172,7 +172,7 @@ void UIRenderer::render(
     }
 
     // Execute commands (handles copy pass + render pass internally)
-    executeCommands(commandBuffer, swapchainTexture, screenWidth, screenHeight);
+    executeCommands(commandBuffer, swapchainTexture, logicalWidth, logicalHeight);
 }
 
 void UIRenderer::collectCommands(ui::UIElement* element) {
@@ -185,6 +185,8 @@ void UIRenderer::collectCommands(ui::UIElement* element) {
         collectButtonCommands(button);
     } else if (auto* textBox = dynamic_cast<ui::TextBox*>(element)) {
         collectTextBoxCommands(textBox);
+    } else if (auto* comboBox = dynamic_cast<ui::ComboBox*>(element)) {
+        collectComboBoxCommands(comboBox);
     } else if (auto* rect = dynamic_cast<ui::Rectangle*>(element)) {
         collectRectangleCommands(rect);
     } else if (auto* text = dynamic_cast<ui::TextBlock*>(element)) {
@@ -391,6 +393,139 @@ void UIRenderer::collectTextBoxCommands(ui::TextBox* textBox) {
     }
 }
 
+void UIRenderer::collectComboBoxCommands(ui::ComboBox* comboBox) {
+    const auto& bounds = comboBox->bounds();
+    const auto& padding = comboBox->padding();
+
+    // Calculate header height
+    float headerHeight = comboBox->fontSize() + padding.verticalSum();
+    headerHeight = std::max(headerHeight, 24.0f);
+
+    // Determine header background color based on state
+    ui::Colour headerBg = comboBox->backgroundColour();
+    if (comboBox->isHovered() && !comboBox->isOpen()) {
+        headerBg = comboBox->hoverColour();
+    }
+
+    // Header background rectangle
+    UIRenderCommand headerCmd;
+    headerCmd.type = UICommandType::Rectangle;
+    headerCmd.x = bounds.x;
+    headerCmd.y = bounds.y;
+    headerCmd.width = bounds.width;
+    headerCmd.height = headerHeight;
+    headerCmd.r = headerBg.r;
+    headerCmd.g = headerBg.g;
+    headerCmd.b = headerBg.b;
+    headerCmd.a = headerBg.a;
+    headerCmd.borderThickness = comboBox->borderThickness();
+    const auto& border = comboBox->borderColour();
+    headerCmd.borderR = border.r;
+    headerCmd.borderG = border.g;
+    headerCmd.borderB = border.b;
+    headerCmd.borderA = border.a;
+    m_commands.push_back(headerCmd);
+
+    // Header text (selected item or placeholder)
+    std::string displayText = comboBox->placeholder();
+    if (comboBox->selectedIndex() >= 0) {
+        displayText = comboBox->selectedItem();
+    }
+
+    if (!displayText.empty()) {
+        UIRenderCommand textCmd;
+        textCmd.type = UICommandType::Text;
+        textCmd.text = displayText;
+        textCmd.fontSize = comboBox->fontSize();
+        textCmd.x = bounds.x + padding.left;
+        textCmd.y = bounds.y + padding.top;
+
+        const auto& textColour = comboBox->textColour();
+        textCmd.r = textColour.r;
+        textCmd.g = textColour.g;
+        textCmd.b = textColour.b;
+        // Use dimmer text for placeholder
+        textCmd.a = (comboBox->selectedIndex() >= 0) ? textColour.a : static_cast<std::uint8_t>(textColour.a * 0.6f);
+        m_commands.push_back(textCmd);
+    }
+
+    // Dropdown arrow indicator (simple triangle made of text)
+    UIRenderCommand arrowCmd;
+    arrowCmd.type = UICommandType::Text;
+    arrowCmd.text = comboBox->isOpen() ? "^" : "v";
+    arrowCmd.fontSize = comboBox->fontSize();
+    arrowCmd.x = bounds.x + bounds.width - 20.0f;
+    arrowCmd.y = bounds.y + padding.top;
+    const auto& textColour = comboBox->textColour();
+    arrowCmd.r = textColour.r;
+    arrowCmd.g = textColour.g;
+    arrowCmd.b = textColour.b;
+    arrowCmd.a = textColour.a;
+    m_commands.push_back(arrowCmd);
+
+    // Render dropdown if open
+    if (comboBox->isOpen() && !comboBox->items().empty()) {
+        float itemHeight = comboBox->fontSize() + 12.0f;
+        float dropdownHeight = itemHeight * static_cast<float>(comboBox->items().size());
+
+        // Dropdown background
+        UIRenderCommand dropdownBgCmd;
+        dropdownBgCmd.type = UICommandType::Rectangle;
+        dropdownBgCmd.x = bounds.x;
+        dropdownBgCmd.y = bounds.y + headerHeight;
+        dropdownBgCmd.width = bounds.width;
+        dropdownBgCmd.height = dropdownHeight;
+        const auto& dropdownBg = comboBox->dropdownBackgroundColour();
+        dropdownBgCmd.r = dropdownBg.r;
+        dropdownBgCmd.g = dropdownBg.g;
+        dropdownBgCmd.b = dropdownBg.b;
+        dropdownBgCmd.a = dropdownBg.a;
+        dropdownBgCmd.borderThickness = comboBox->borderThickness();
+        dropdownBgCmd.borderR = border.r;
+        dropdownBgCmd.borderG = border.g;
+        dropdownBgCmd.borderB = border.b;
+        dropdownBgCmd.borderA = border.a;
+        m_commands.push_back(dropdownBgCmd);
+
+        // Render each item
+        float itemY = bounds.y + headerHeight;
+        int itemIndex = 0;
+        for (const auto& item : comboBox->items()) {
+            // Item background (if hovered)
+            if (itemIndex == comboBox->hoveredItemIndex()) {
+                UIRenderCommand itemBgCmd;
+                itemBgCmd.type = UICommandType::Rectangle;
+                itemBgCmd.x = bounds.x;
+                itemBgCmd.y = itemY;
+                itemBgCmd.width = bounds.width;
+                itemBgCmd.height = itemHeight;
+                const auto& itemHoverColour = comboBox->itemHoverColour();
+                itemBgCmd.r = itemHoverColour.r;
+                itemBgCmd.g = itemHoverColour.g;
+                itemBgCmd.b = itemHoverColour.b;
+                itemBgCmd.a = itemHoverColour.a;
+                m_commands.push_back(itemBgCmd);
+            }
+
+            // Item text
+            UIRenderCommand itemTextCmd;
+            itemTextCmd.type = UICommandType::Text;
+            itemTextCmd.text = item;
+            itemTextCmd.fontSize = comboBox->fontSize();
+            itemTextCmd.x = bounds.x + padding.left;
+            itemTextCmd.y = itemY + 6.0f; // Center vertically in item
+            itemTextCmd.r = textColour.r;
+            itemTextCmd.g = textColour.g;
+            itemTextCmd.b = textColour.b;
+            itemTextCmd.a = textColour.a;
+            m_commands.push_back(itemTextCmd);
+
+            itemY += itemHeight;
+            itemIndex++;
+        }
+    }
+}
+
 void UIRenderer::collectRectangleCommands(ui::Rectangle* rect) {
     const auto& bounds = rect->bounds();
 
@@ -482,8 +617,8 @@ void UIRenderer::collectImageCommands(ui::Image* image) {
 void UIRenderer::executeCommands(
     SDL_GPUCommandBuffer* commandBuffer,
     SDL_GPUTexture* swapchainTexture,
-    float screenWidth,
-    float screenHeight
+    float logicalWidth,
+    float logicalHeight
 ) {
     if (m_commands.empty() || !m_device || !m_device->is_valid()) {
         return;
@@ -558,7 +693,7 @@ void UIRenderer::executeCommands(
                     charCmd.height = charHeight;
 
                     SpriteVertex verts[4];
-                    generateRectVertices(charCmd, verts, screenWidth, screenHeight);
+                    generateRectVertices(charCmd, verts, logicalWidth, logicalHeight);
 
                     for (int i = 0; i < 4; ++i) {
                         m_vertices.push_back(verts[i]);
@@ -599,7 +734,7 @@ void UIRenderer::executeCommands(
             textCmd.a = 255;
 
             SpriteVertex verts[4];
-            generateRectVertices(textCmd, verts, screenWidth, screenHeight);
+            generateRectVertices(textCmd, verts, logicalWidth, logicalHeight);
 
             for (int i = 0; i < 4; ++i) {
                 m_vertices.push_back(verts[i]);
@@ -621,7 +756,7 @@ void UIRenderer::executeCommands(
             }
             // Rectangle or textured rect
             SpriteVertex verts[4];
-            generateRectVertices(cmd, verts, screenWidth, screenHeight);
+            generateRectVertices(cmd, verts, logicalWidth, logicalHeight);
 
             for (int i = 0; i < 4; ++i) {
                 m_vertices.push_back(verts[i]);
@@ -650,7 +785,7 @@ void UIRenderer::executeCommands(
                 borderCmd.b = cmd.borderB;
                 borderCmd.a = cmd.borderA;
 
-                generateRectVertices(borderCmd, verts, screenWidth, screenHeight);
+                generateRectVertices(borderCmd, verts, logicalWidth, logicalHeight);
                 for (int i = 0; i < 4; ++i) m_vertices.push_back(verts[i]);
                 m_indices.push_back(vertexOffset + 0);
                 m_indices.push_back(vertexOffset + 1);
@@ -662,7 +797,7 @@ void UIRenderer::executeCommands(
 
                 // Bottom border
                 borderCmd.y = cmd.y + cmd.height - cmd.borderThickness;
-                generateRectVertices(borderCmd, verts, screenWidth, screenHeight);
+                generateRectVertices(borderCmd, verts, logicalWidth, logicalHeight);
                 for (int i = 0; i < 4; ++i) m_vertices.push_back(verts[i]);
                 m_indices.push_back(vertexOffset + 0);
                 m_indices.push_back(vertexOffset + 1);
@@ -677,7 +812,7 @@ void UIRenderer::executeCommands(
                 borderCmd.y = cmd.y + cmd.borderThickness;
                 borderCmd.width = cmd.borderThickness;
                 borderCmd.height = cmd.height - 2.0f * cmd.borderThickness;
-                generateRectVertices(borderCmd, verts, screenWidth, screenHeight);
+                generateRectVertices(borderCmd, verts, logicalWidth, logicalHeight);
                 for (int i = 0; i < 4; ++i) m_vertices.push_back(verts[i]);
                 m_indices.push_back(vertexOffset + 0);
                 m_indices.push_back(vertexOffset + 1);
@@ -689,7 +824,7 @@ void UIRenderer::executeCommands(
 
                 // Right border
                 borderCmd.x = cmd.x + cmd.width - cmd.borderThickness;
-                generateRectVertices(borderCmd, verts, screenWidth, screenHeight);
+                generateRectVertices(borderCmd, verts, logicalWidth, logicalHeight);
                 for (int i = 0; i < 4; ++i) m_vertices.push_back(verts[i]);
                 m_indices.push_back(vertexOffset + 0);
                 m_indices.push_back(vertexOffset + 1);
@@ -884,14 +1019,14 @@ void UIRenderer::executeCommands(
 void UIRenderer::generateRectVertices(
     const UIRenderCommand& cmd,
     SpriteVertex* vertices,
-    float screenWidth,
-    float screenHeight
+    float logicalWidth,
+    float logicalHeight
 ) const {
-    // Convert screen coordinates to NDC (-1 to 1)
-    float x0 = (cmd.x / screenWidth) * 2.0f - 1.0f;
-    float y0 = 1.0f - (cmd.y / screenHeight) * 2.0f;
-    float x1 = ((cmd.x + cmd.width) / screenWidth) * 2.0f - 1.0f;
-    float y1 = 1.0f - ((cmd.y + cmd.height) / screenHeight) * 2.0f;
+    // Convert logical coordinates to NDC (-1 to 1)
+    float x0 = (cmd.x / logicalWidth) * 2.0f - 1.0f;
+    float y0 = 1.0f - (cmd.y / logicalHeight) * 2.0f;
+    float x1 = ((cmd.x + cmd.width) / logicalWidth) * 2.0f - 1.0f;
+    float y1 = 1.0f - ((cmd.y + cmd.height) / logicalHeight) * 2.0f;
 
     // UV coordinates
     float u0 = cmd.u0;

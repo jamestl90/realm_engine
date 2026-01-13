@@ -13,6 +13,7 @@ namespace ui {
 // Forward declarations
 class InputSurface;
 class TextBox;
+class ComboBox;
 
 // UIManager - central coordinator for the UI system
 class UIManager {
@@ -26,8 +27,8 @@ public:
     UIManager(UIManager&&) = delete;
     UIManager& operator=(UIManager&&) = delete;
 
-    // Initialise with window and screen dimensions
-    void initialize(SDL_Window* window, float screenWidth, float screenHeight) noexcept;
+    // Initialise with window and logical dimensions
+    void initialize(SDL_Window* window, float logicalWidth, float logicalHeight) noexcept;
 
     // Screen size management
     void setScreenSize(float width, float height) noexcept;
@@ -89,8 +90,15 @@ private:
     // Convert SDL mouse button to UI mouse button
     [[nodiscard]] MouseButton toMouseButton(std::uint8_t sdlButton) const noexcept;
 
+    // Convert screen coordinates to logical coordinates
+    // Maps full window to logical coordinate space
+    [[nodiscard]] bool screenToLogical(float screenX, float screenY, float& logicalX, float& logicalY) const noexcept;
+
     // Text input management
     void updateTextInputState(FocusableControl* newFocused);
+
+    // Helper to find open ComboBoxes in the tree
+    void findOpenComboBoxes(UIElement* element, std::vector<ComboBox*>& outComboBoxes) const;
 
     SDL_Window* m_window{nullptr};
     rendering::FontManager* m_fontManager{nullptr};
@@ -99,8 +107,13 @@ private:
     FocusManager m_focusManager;
     AnimationManager m_animationManager;
 
+    // Logical coordinate space dimensions
     float m_screenWidth{0.0f};
     float m_screenHeight{0.0f};
+
+    // Actual window dimensions for coordinate conversion
+    int m_windowWidth{0};
+    int m_windowHeight{0};
 
     // Current mouse position
     float m_mouseX{0.0f};

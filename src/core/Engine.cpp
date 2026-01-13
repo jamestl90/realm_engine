@@ -32,7 +32,7 @@ bool Engine::initialize(const char* title, int width, int height) {
     }
 
     // Create window
-    window_ = SDL_CreateWindow(title, width, height, SDL_WINDOW_RESIZABLE);
+    window_ = SDL_CreateWindow(title, width, height, 0L);
     if (!window_) {
         SDL_Log("SDL_CreateWindow failed: %s", SDL_GetError());
         SDL_Quit();
@@ -57,12 +57,14 @@ bool Engine::initialize(const char* title, int width, int height) {
     // Register texture manager as a world resource for the renderer
     world_.set_resource(texture_manager_.get());
 
-    // Initialize UI manager
-    ui_manager_.initialize(window_, static_cast<float>(width), static_cast<float>(height));
+    // Initialize viewport with initial window size (handles HiDPI)
+    int pixel_w = 0, pixel_h = 0;
+    SDL_GetWindowSizeInPixels(window_, &pixel_w, &pixel_h);
+    on_resize(pixel_w, pixel_h);
 
     time_.reset();
     initialized_ = true;
-    
+
     SDL_Log("Engine initialized successfully");
     return true;
 }
@@ -186,6 +188,47 @@ void Engine::run() {
     }
 }
 
+void Engine::resize_window(int width, int height)
+{
+    SDL_SetWindowSize(window_, width, height);
+    SDL_SetWindowPosition(window_, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+    // Note: on_resize will be called via SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED
+}
+
+void Engine::on_resize(int pixel_w, int pixel_h)
+{
+    if (pixel_w <= 0 || pixel_h <= 0) {
+        return;
+    }
+
+    window_width_ = pixel_w;
+    window_height_ = pixel_h;
+
+    // Update UI manager with logical size
+    ui_manager_.initialize(window_, static_cast<float>(LOGICAL_W), static_cast<float>(LOGICAL_H));
+
+    SDL_Log("Window resized: %dx%d (logical: %dx%d)", pixel_w, pixel_h, LOGICAL_W, LOGICAL_H);
+}
+
+bool Engine::screen_to_logical(float screen_x, float screen_y,
+                                float& logical_x, float& logical_y) const noexcept
+{
+    // Map screen pixels to logical coordinates
+    // Full window maps to full logical space
+    logical_x = (screen_x / static_cast<float>(window_width_)) * static_cast<float>(LOGICAL_W);
+    logical_y = (screen_y / static_cast<float>(window_height_)) * static_cast<float>(LOGICAL_H);
+
+    return true;
+}
+
+void Engine::logical_to_screen(float logical_x, float logical_y,
+                                float& screen_x, float& screen_y) const noexcept
+{
+    // Map logical coordinates to screen pixels
+    screen_x = (logical_x / static_cast<float>(LOGICAL_W)) * static_cast<float>(window_width_);
+    screen_y = (logical_y / static_cast<float>(LOGICAL_H)) * static_cast<float>(window_height_);
+}
+
 void Engine::process_events() {
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
@@ -203,6 +246,16 @@ void Engine::process_events() {
                     quit();
                 }
                 break;
+            case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED: {
+                // GPU swapchain has been resized - update viewport
+                const int pixel_w = event.window.data1;
+                const int pixel_h = event.window.data2;
+                on_resize(pixel_w, pixel_h);
+                if (game_) {
+                    game_->on_resized(*this, pixel_w, pixel_h);
+                }
+                break;
+            }
             default:
                 break;
         }
@@ -228,6 +281,9 @@ void Engine::render(double alpha) {
     if (!renderer_->begin_frame()) {
         quit();
     }
+
+    // Set logical resolution for coordinate mapping
+    renderer_->set_logical_size(LOGICAL_W, LOGICAL_H);
 
     renderer_->clear(0, 0, 51, 255);
 

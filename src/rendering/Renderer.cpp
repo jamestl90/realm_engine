@@ -579,9 +579,10 @@ void Renderer::draw_batches(const TextureManager& texture_manager) {
     CameraData camera_data{};
 
     // Build orthographic projection matrix (column-major for GPU)
-    // Maps screen coordinates to NDC [-1, 1]
-    const float width = static_cast<float>(swapchain_width_);
-    const float height = static_cast<float>(swapchain_height_);
+    // Maps LOGICAL coordinates to NDC [-1, 1]
+    // Logical coordinates are mapped to the full swapchain (native resolution)
+    const float width = static_cast<float>(logical_width_);
+    const float height = static_cast<float>(logical_height_);
     const float left = 0.0f;
     const float right = width;
     const float top = 0.0f;

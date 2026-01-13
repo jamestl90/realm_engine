@@ -1,17 +1,38 @@
 #include "../../include/ui/UIManager.hpp"
 #include "../../include/ui/InputSurface.hpp"
 #include "../../include/ui/TextBox.hpp"
+#include "../../include/ui/ComboBox.hpp"
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_keyboard.h>
 
 namespace ui {
 
-void UIManager::initialize(SDL_Window* window, float screenWidth, float screenHeight) noexcept {
+void UIManager::initialize(SDL_Window* window, float logicalWidth, float logicalHeight) noexcept {
     m_window = window;
-    m_screenWidth = screenWidth;
-    m_screenHeight = screenHeight;
+    m_screenWidth = logicalWidth;
+    m_screenHeight = logicalHeight;
     m_layoutDirty = true;
     m_textInputActive = false;
+
+    // Get actual window dimensions for coordinate conversion
+    if (window) {
+        SDL_GetWindowSizeInPixels(window, &m_windowWidth, &m_windowHeight);
+    }
+}
+
+bool UIManager::screenToLogical(float screenX, float screenY, float& logicalX, float& logicalY) const noexcept {
+    // Map screen pixels to logical coordinates
+    // Full window maps to full logical space
+    if (m_windowWidth <= 0 || m_windowHeight <= 0) {
+        logicalX = screenX;
+        logicalY = screenY;
+        return true;
+    }
+
+    logicalX = (screenX / static_cast<float>(m_windowWidth)) * m_screenWidth;
+    logicalY = (screenY / static_cast<float>(m_windowHeight)) * m_screenHeight;
+
+    return true;
 }
 
 void UIManager::setScreenSize(float width, float height) noexcept {
@@ -73,6 +94,12 @@ bool UIManager::handleEvent(const SDL_Event& event) {
         return false;
     }
 
+    // Perform layout if dirty before handling events
+    // This ensures bounds are up-to-date for hit testing
+    if (m_layoutDirty) {
+        performLayout();
+    }
+
     switch (event.type) {
         case SDL_EVENT_MOUSE_BUTTON_DOWN:
             return handleMouseButtonDown(event);
@@ -101,8 +128,16 @@ bool UIManager::handleEvent(const SDL_Event& event) {
 }
 
 bool UIManager::handleMouseButtonDown(const SDL_Event& event) {
-    float x = event.button.x;
-    float y = event.button.y;
+    float screenX = event.button.x;
+    float screenY = event.button.y;
+
+    // Convert screen coordinates to logical coordinates
+    float x, y;
+    if (!screenToLogical(screenX, screenY, x, y)) {
+        // Click was in letterbox area - ignore
+        return false;
+    }
+
     m_mouseX = x;
     m_mouseY = y;
 
@@ -149,8 +184,25 @@ bool UIManager::handleMouseButtonDown(const SDL_Event& event) {
 }
 
 bool UIManager::handleMouseButtonUp(const SDL_Event& event) {
-    float x = event.button.x;
-    float y = event.button.y;
+    float screenX = event.button.x;
+    float screenY = event.button.y;
+
+    // Convert screen coordinates to logical coordinates
+    float x, y;
+    if (!screenToLogical(screenX, screenY, x, y)) {
+        // Release in letterbox area - still send to captured element if any
+        if (m_capturedElement) {
+            // Use last known logical position
+            MouseEventArgs args;
+            args.x = m_mouseX;
+            args.y = m_mouseY;
+            args.button = toMouseButton(event.button.button);
+            m_capturedElement->onMouseUp(args);
+            return args.handled;
+        }
+        return false;
+    }
+
     m_mouseX = x;
     m_mouseY = y;
 
@@ -186,8 +238,16 @@ bool UIManager::handleMouseButtonUp(const SDL_Event& event) {
 }
 
 bool UIManager::handleMouseMotion(const SDL_Event& event) {
-    float x = event.motion.x;
-    float y = event.motion.y;
+    float screenX = event.motion.x;
+    float screenY = event.motion.y;
+
+    // Convert screen coordinates to logical coordinates
+    float x, y;
+    if (!screenToLogical(screenX, screenY, x, y)) {
+        // Motion in letterbox area - ignore but don't consume
+        return false;
+    }
+
     m_mouseX = x;
     m_mouseY = y;
 
@@ -346,7 +406,42 @@ UIElement* UIManager::hitTest(float x, float y) const {
     if (!m_root) {
         return nullptr;
     }
+
+    // Check for open ComboBoxes first (they extend beyond parent bounds)
+    std::vector<ComboBox*> openComboBoxes;
+    findOpenComboBoxes(m_root.get(), openComboBoxes);
+
+    // Check open ComboBoxes in reverse order (most recently added first)
+    for (auto it = openComboBoxes.rbegin(); it != openComboBoxes.rend(); ++it) {
+        ComboBox* comboBox = *it;
+        if (comboBox->hitTest(x, y)) {
+            //SDL_Log("UIManager::hitTest - Open ComboBox hit!");
+            return comboBox;
+        }
+    }
+
+    // Normal hit testing through hierarchy
     return m_root->hitTestRecursive(x, y);
+}
+
+void UIManager::findOpenComboBoxes(UIElement* element, std::vector<ComboBox*>& outComboBoxes) const {
+    if (!element || element->visibility() != Visibility::Visible) {
+        return;
+    }
+
+    // Check if this element is an open ComboBox
+    if (auto* comboBox = dynamic_cast<ComboBox*>(element)) {
+        if (comboBox->isOpen()) {
+            outComboBoxes.push_back(comboBox);
+        }
+    }
+
+    // Recursively check children
+    for (const auto& child : element->children()) {
+        if (child) {
+            findOpenComboBoxes(child.get(), outComboBoxes);
+        }
+    }
 }
 
 MouseButton UIManager::toMouseButton(std::uint8_t sdlButton) const noexcept {

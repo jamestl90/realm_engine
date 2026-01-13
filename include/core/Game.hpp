@@ -25,6 +25,8 @@ public:
     // Called once when the engine is shutting down
     // Use for cleanup, saving state, etc.
     virtual void on_shutdown(Engine& engine) { (void)engine; }
+
+    virtual void on_resized(Engine& engine, int width, int height) { (void)engine; (void)width; (void)height; }
 };
 
 } // namespace core

@@ -42,6 +42,15 @@ public:
     // Present frame
     void present();
 
+    // Set logical resolution for coordinate mapping
+    void set_logical_size(int width, int height) noexcept {
+        logical_width_ = width;
+        logical_height_ = height;
+    }
+
+    [[nodiscard]] int logical_width() const noexcept { return logical_width_; }
+    [[nodiscard]] int logical_height() const noexcept { return logical_height_; }
+
     // Camera control
     void set_camera_position(float x, float y) noexcept {
         camera_x_ = x;
@@ -116,6 +125,9 @@ private:
     float camera_x_{0.0f};
     float camera_y_{0.0f};
     float camera_zoom_{1.0f};
+
+    int logical_width_{1920};
+    int logical_height_{1080};
 };
 
 } // namespace rendering

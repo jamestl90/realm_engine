@@ -99,7 +99,7 @@ TextureID TextureManager::create_from_surface(SDL_Surface* surface, SDL_GPUTextu
             return INVALID_TEXTURE_ID;
         }
         needs_free = true;
-        SDL_Log("DEBUG: Converted surface from format %u to RGBA32", surface->format);
+        //SDL_Log("DEBUG: Converted surface from format %u to RGBA32", surface->format);
     }
 
     const Uint32 width = static_cast<Uint32>(converted_surface->w);
@@ -128,7 +128,7 @@ TextureID TextureManager::create_from_surface(SDL_Surface* surface, SDL_GPUTextu
         }
         return INVALID_TEXTURE_ID;
     }
-    SDL_Log("DEBUG: Created GPU texture successfully");
+    //SDL_Log("DEBUG: Created GPU texture successfully");
 
     // Create transfer buffer to upload pixel data
     SDL_GPUTransferBufferCreateInfo transfer_info = {};
@@ -144,7 +144,7 @@ TextureID TextureManager::create_from_surface(SDL_Surface* surface, SDL_GPUTextu
         }
         return INVALID_TEXTURE_ID;
     }
-    SDL_Log("DEBUG: Created transfer buffer successfully");
+    //SDL_Log("DEBUG: Created transfer buffer successfully");
 
     // Map transfer buffer and copy pixel data
     void* mapped_data = SDL_MapGPUTransferBuffer(device_->handle(), transfer_buffer, false);
@@ -169,7 +169,7 @@ TextureID TextureManager::create_from_surface(SDL_Surface* surface, SDL_GPUTextu
     }
 
     SDL_UnmapGPUTransferBuffer(device_->handle(), transfer_buffer);
-    SDL_Log("DEBUG: Copied %u bytes of pixel data to transfer buffer", data_size);
+    //SDL_Log("DEBUG: Copied %u bytes of pixel data to transfer buffer", data_size);
 
     // Acquire command buffer for upload
     SDL_GPUCommandBuffer* cmd_buffer = SDL_AcquireGPUCommandBuffer(device_->handle());
@@ -217,12 +217,12 @@ TextureID TextureManager::create_from_surface(SDL_Surface* surface, SDL_GPUTextu
 
     // Upload texture data
     SDL_UploadToGPUTexture(copy_pass, &src_transfer, &dst_region, false);
-    SDL_Log("DEBUG: Uploaded texture data via copy pass");
+    //SDL_Log("DEBUG: Uploaded texture data via copy pass");
 
     // End copy pass and submit
     SDL_EndGPUCopyPass(copy_pass);
     SDL_SubmitGPUCommandBuffer(cmd_buffer);
-    SDL_Log("DEBUG: Submitted texture upload command buffer");
+    //SDL_Log("DEBUG: Submitted texture upload command buffer");
 
     // Wait for upload to complete before releasing transfer buffer
     SDL_WaitForGPUIdle(device_->handle());
@@ -245,7 +245,7 @@ TextureID TextureManager::create_from_surface(SDL_Surface* surface, SDL_GPUTextu
     TextureID new_id = texture->id;
     textures_[new_id] = std::move(texture);
     
-    SDL_Log("DEBUG: Texture created successfully with ID %u", new_id);
+    //SDL_Log("DEBUG: Texture created successfully with ID %u", new_id);
     return new_id;
 }
 

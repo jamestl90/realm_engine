@@ -1,10 +1,12 @@
 #include "RogueFarmGame.hpp"
 #include "../../include/core/Engine.hpp"
 #include "../../include/core/Config.hpp"
+#include "../../include/core/Utils.hpp"
 #include "../../include/rendering/Sprite.hpp"
 #include "../../include/rendering/UIRenderer.hpp"
 #include "../../include/rendering/FontManager.hpp"
 #include "../../include/ui/Layout.hpp"
+#include "../../include/ui/ComboBox.hpp"
 #include <SDL3/SDL.h>
 
 namespace game {
@@ -59,13 +61,13 @@ void RogueFarmGame::on_startup(core::Engine& engine) {
 
     m_test_entity = engine.world().create_entity();
 
-    int window_width = 0;
-    int window_height = 0;
-    SDL_GetWindowSize(engine.window(), &window_width, &window_height);
+    // Use logical coordinates (fixed resolution, letterboxed)
+    const int logical_w = core::Engine::LOGICAL_W;
+    const int logical_h = core::Engine::LOGICAL_H;
 
     rendering::Transform transform;
-    transform.x = static_cast<float>(window_width) / 2.0f;
-    transform.y = static_cast<float>(window_height) / 2.0f;
+    transform.x = static_cast<float>(logical_w) / 2.0f;
+    transform.y = static_cast<float>(logical_h) / 2.0f;
     transform.z = 0.0f;
     engine.world().add_component(m_test_entity, transform);
 
@@ -86,10 +88,10 @@ void RogueFarmGame::on_startup(core::Engine& engine) {
     root->setPadding(ui::Thickness(20.0f));
     root->setSpacing(10.0f);
 
-    // Set size constraints to make it 50% of screen width
+    // Set size constraints to make it 50% of logical screen width
     ui::SizeConstraints constraints;
-    constraints.preferred_width = static_cast<float>(window_width) * 0.5f;
-    constraints.min_width = static_cast<float>(window_width) * 0.5f;  // Optional: enforce minimum
+    constraints.preferred_width = static_cast<float>(logical_w) * 0.5f;
+    constraints.min_width = static_cast<float>(logical_w) * 0.5f;
     root->setSizeConstraints(constraints);
 
     // Set white background
@@ -104,8 +106,11 @@ void RogueFarmGame::on_startup(core::Engine& engine) {
     button->setBorderColour(ui::Colour{40, 80, 160, 255});
     button->setBorderThickness(2.0f);
     button->setFontSize(16.0f);
-    button->setOnClick([]() {
+    button->setOnClick([&engine]() {
         SDL_Log("Button clicked!");
+        int w, h;
+        SDL_GetWindowSize(engine.window(), &w, &h);
+        engine.resize_window(w + 100, h + 100);
     });
 
     // Create TextBox
@@ -118,12 +123,34 @@ void RogueFarmGame::on_startup(core::Engine& engine) {
     textBox->setBorderThickness(2.0f);
     textBox->setFontSize(14.0f);
     textBox->setOnTextChanged([](const std::string& text) {
-        SDL_Log("Text changed: %s", text.c_str());
+        //SDL_Log("Text changed: %s", text.c_str());
+    });
+
+    // Create ComboBox
+    auto comboBox = std::make_unique<ui::ComboBox>();
+    comboBox->setPlaceholder("Select an option...");
+    comboBox->addItem("2560 x 1440");
+    comboBox->addItem("1920 x 1080");
+    comboBox->addItem("1280 x 720");
+    comboBox->setBackgroundColour(ui::Colour{240, 240, 240, 255});
+    comboBox->setTextColour(ui::Colour{0, 0, 0, 255});
+    comboBox->setBorderColour(ui::Colour{180, 180, 180, 255});
+    comboBox->setHoverColour(ui::Colour{230, 230, 230, 255});
+    comboBox->setDropdownBackgroundColour(ui::Colour{250, 250, 250, 255});
+    comboBox->setItemHoverColour(ui::Colour{220, 0, 220, 255});
+    comboBox->setBorderThickness(1.0f);
+    comboBox->setFontSize(14.0f);
+    comboBox->setOnSelectionChanged([&engine](const std::string& selectedItem) {
+        auto res = core::parseResolutionString(selectedItem);
+        if (res.has_value()) {
+            engine.resize_window(res->first, res->second);
+        }
     });
 
     // Add UI elements to root
     root->addChild(std::move(button));
     root->addChild(std::move(textBox));
+    root->addChild(std::move(comboBox));
 
     // Set root on UIManager (it will handle layout)
     ui_mgr.setRoot(std::move(root));
@@ -152,17 +179,13 @@ void RogueFarmGame::on_render(core::Engine& engine, double alpha) {
     // End sprite render pass so UI can do its copy pass
     renderer->end_render_pass();
 
-    // Render UI
-    int window_width = 0;
-    int window_height = 0;
-    SDL_GetWindowSize(engine.window(), &window_width, &window_height);
-
+    // Render UI using logical dimensions
     ui_renderer->render(
         renderer->command_buffer(),
         renderer->swapchain_texture(),
         ui_root,
-        static_cast<float>(window_width),
-        static_cast<float>(window_height)
+        static_cast<float>(core::Engine::LOGICAL_W),
+        static_cast<float>(core::Engine::LOGICAL_H)
     );
 }
 
@@ -179,6 +202,11 @@ void RogueFarmGame::on_shutdown(core::Engine& engine) {
     }
 
     SDL_Log("RogueFarmGame shutting down...");
+}
+
+void RogueFarmGame::on_resized(core::Engine& engine, int width, int height)
+{
+
 }
 
 } // namespace game

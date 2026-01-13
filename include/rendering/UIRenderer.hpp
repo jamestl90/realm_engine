@@ -5,6 +5,7 @@
 #include "../ui/Layout.hpp"
 #include "../ui/Button.hpp"
 #include "../ui/TextBox.hpp"
+#include "../ui/ComboBox.hpp"
 #include "Sprite.hpp"
 #include "Texture.hpp"
 #include "FontManager.hpp"
@@ -84,12 +85,13 @@ public:
     void setDefaultFont(FontID fontId) noexcept { m_defaultFont = fontId; }
 
     // Render UI tree (manages its own render pass)
+    // Renders using logical coordinates that map to the full swapchain
     void render(
         SDL_GPUCommandBuffer* commandBuffer,
         SDL_GPUTexture* swapchainTexture,
         ui::UIElement* root,
-        float screenWidth,
-        float screenHeight
+        float logicalWidth,
+        float logicalHeight
     );
 
     // Clear render commands
@@ -103,6 +105,7 @@ private:
     void collectLayoutContainerCommands(ui::LayoutContainer* container);
     void collectButtonCommands(ui::Button* button);
     void collectTextBoxCommands(ui::TextBox* textBox);
+    void collectComboBoxCommands(ui::ComboBox* comboBox);
     void collectRectangleCommands(ui::Rectangle* rect);
     void collectTextBlockCommands(ui::TextBlock* text);
     void collectImageCommands(ui::Image* image);
@@ -111,16 +114,16 @@ private:
     void executeCommands(
         SDL_GPUCommandBuffer* commandBuffer,
         SDL_GPUTexture* swapchainTexture,
-        float screenWidth,
-        float screenHeight
+        float logicalWidth,
+        float logicalHeight
     );
 
     // Generate vertices for a rectangle
     void generateRectVertices(
         const UIRenderCommand& cmd,
         SpriteVertex* vertices,
-        float screenWidth,
-        float screenHeight
+        float logicalWidth,
+        float logicalHeight
     ) const;
 
     // Get or create cached text texture
