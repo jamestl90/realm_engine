@@ -1,6 +1,12 @@
 .build_mode
 
 .aider*
+AGENTS.md
+CLAUDE.md
+GEMINI.md
+codex.md
+docs/*AGENTS*.md
+docs/*CLAUDE*.md
 
 build/
 bin/

@@ -1,5 +1,7 @@
 # High-Performance 2D Game Engine Architecture
 
+This document owns the engine's technical design. Project scope and product intent belong in [PROJECT_BRIEF.md](PROJECT_BRIEF.md).
+
 ## Overview
 This engine is built on a pure Entity Component System (ECS) architecture with Data-Oriented Design (DoD) principles, leveraging SDL3 and the SDL3 GPU API for high-performance 2D rendering.
 
@@ -167,7 +169,10 @@ sequenceDiagram
 
 ## Dependency Management
 - **SDL3**: Core windowing, events, GPU API, audio
+- **SDL3_ttf**: Runtime font loading and text rasterisation
 - **C++20**: Concepts, ranges, spans for type safety
+- **RapidJSON**: JSON parsing for data assets, manifests, and metadata
+- **stb_truetype** (optional): TTF parsing for SDF font generation
 - **No external ECS libraries**: Custom implementation for full control
 
 ## File Structure
@@ -225,7 +230,7 @@ The following decisions have been made for the initial implementation:
 |---------|----------|-----------|
 | Loading Model | Synchronous (async-ready interface) | Simpler initial implementation, interface supports future async |
 | Font Support | Included (Bitmap + SDF) | Required for UI and text rendering |
-| JSON Parser | RapidJSON | Fast, header-only, widely used |
+| Data Metadata Format | JSON | Human-readable, easy to validate |
 | Archive Support | Direct filesystem only | Deferred to later milestone |
 | Hot Reload | Runtime toggle (all builds) | Essential for development workflow |
 
@@ -312,7 +317,7 @@ The engine requires the following asset types for a complete 2D game:
 - **Dialogue/Localisation**: Text strings with language variants
 
 **Formats:**
-- JSON for human-readable data (parsed with RapidJSON)
+- JSON for human-readable data
 - Binary for optimised runtime loading
 
 #### 7. Shader Assets (Future)
@@ -645,9 +650,3 @@ For release builds, assets are processed:
 
 This reduces load times and distribution size whilst maintaining source assets for development.
 
-### Dependencies
-
-The asset system requires:
-- **RapidJSON**: JSON parsing for data assets, manifests, and metadata
-- **SDL3**: Image loading (SDL_image), audio loading
-- **stb_truetype** (optional): TTF parsing for SDF font generation

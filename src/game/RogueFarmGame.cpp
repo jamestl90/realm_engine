@@ -90,8 +90,8 @@ void RogueFarmGame::on_startup(core::Engine& engine) {
 
     // Set size constraints to make it 50% of logical screen width
     ui::SizeConstraints constraints;
-    constraints.preferred_width = static_cast<float>(logical_w) * 0.5f;
-    constraints.min_width = static_cast<float>(logical_w) * 0.5f;
+    constraints.preferred_width = static_cast<float>(logical_w) * 0.25f;
+    constraints.min_width = static_cast<float>(logical_w) * 0.25f;
     root->setSizeConstraints(constraints);
 
     // Set white background
@@ -107,10 +107,7 @@ void RogueFarmGame::on_startup(core::Engine& engine) {
     button->setBorderThickness(2.0f);
     button->setFontSize(16.0f);
     button->setOnClick([&engine]() {
-        SDL_Log("Button clicked!");
-        int w, h;
-        SDL_GetWindowSize(engine.window(), &w, &h);
-        engine.resize_window(w + 100, h + 100);
+        SDL_Log("Button clicked.");
     });
 
     // Create TextBox
@@ -128,7 +125,7 @@ void RogueFarmGame::on_startup(core::Engine& engine) {
 
     // Create ComboBox
     auto comboBox = std::make_unique<ui::ComboBox>();
-    comboBox->setPlaceholder("Select an option...");
+    comboBox->setPlaceholder("Select an resolution");
     comboBox->addItem("2560 x 1440");
     comboBox->addItem("1920 x 1080");
     comboBox->addItem("1280 x 720");
