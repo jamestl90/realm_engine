@@ -9,7 +9,86 @@
 #include "../../include/ui/ComboBox.hpp"
 #include <SDL3/SDL.h>
 
+#if defined(RFD_ENABLE_PROCGEN_DEBUG_VIEW)
+#include "../../include/procgen/GreaterRealm.hpp"
+#endif
+
 namespace game {
+
+#if defined(RFD_ENABLE_PROCGEN_DEBUG_VIEW)
+namespace {
+
+SDL_Color terrain_colour(const procgen::GreaterRealmCell& cell) noexcept {
+    const float shade = 0.82f + cell.elevation * 0.18f;
+    const auto scale = [shade](std::uint8_t value) -> std::uint8_t {
+        return static_cast<std::uint8_t>(static_cast<float>(value) * shade);
+    };
+
+    switch (cell.terrain_form) {
+        case procgen::TerrainForm::Ocean:
+            return SDL_Color{24, 76, 132, 255};
+        case procgen::TerrainForm::Coast:
+            return SDL_Color{210, 190, 126, 255};
+        case procgen::TerrainForm::Plains:
+            return SDL_Color{scale(78), scale(150), scale(82), 255};
+        case procgen::TerrainForm::Hills:
+            return SDL_Color{scale(112), scale(136), scale(74), 255};
+        case procgen::TerrainForm::Highlands:
+            return SDL_Color{scale(126), scale(112), scale(94), 255};
+        case procgen::TerrainForm::Mountains:
+            return SDL_Color{scale(192), scale(194), scale(188), 255};
+    }
+
+    return SDL_Color{255, 0, 255, 255};
+}
+
+SDL_Surface* create_procgen_debug_surface() {
+    procgen::GreaterRealmGeneratorSettings settings;
+    settings.seed = 8675309;
+    settings.width = 256;
+    settings.height = 192;
+    settings.sea_level = 0.5f;
+
+    const auto map = procgen::generate_greater_realm(settings);
+    SDL_Surface* surface = SDL_CreateSurface(
+        static_cast<int>(map.width),
+        static_cast<int>(map.height),
+        SDL_PIXELFORMAT_RGBA32
+    );
+
+    if (!surface) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create procgen debug surface: %s", SDL_GetError());
+        return nullptr;
+    }
+
+    if (SDL_MUSTLOCK(surface) && !SDL_LockSurface(surface)) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to lock procgen debug surface: %s", SDL_GetError());
+        SDL_DestroySurface(surface);
+        return nullptr;
+    }
+
+    for (std::uint32_t y = 0; y < map.height; ++y) {
+        auto* row = reinterpret_cast<std::uint32_t*>(
+            static_cast<std::uint8_t*>(surface->pixels) + static_cast<std::size_t>(y) * surface->pitch
+        );
+
+        for (std::uint32_t x = 0; x < map.width; ++x) {
+            const auto& cell = map.cells[map.index(x, y)];
+            const SDL_Color colour = terrain_colour(cell);
+            row[x] = SDL_MapSurfaceRGBA(surface, colour.r, colour.g, colour.b, colour.a);
+        }
+    }
+
+    if (SDL_MUSTLOCK(surface)) {
+        SDL_UnlockSurface(surface);
+    }
+
+    SDL_Log("Generated procgen debug map: seed=%llu size=%ux%u", settings.seed, map.width, map.height);
+    return surface;
+}
+
+} // namespace
+#endif
 
 void RogueFarmGame::on_startup(core::Engine& engine) {
     SDL_Log("RogueFarmGame starting up...");
@@ -29,12 +108,20 @@ void RogueFarmGame::on_startup(core::Engine& engine) {
         }
     }
 
-    SDL_Surface* surface = SDL_CreateSurface(24, 24, SDL_PIXELFORMAT_RGBA32);
+    SDL_Surface* surface = nullptr;
+
+#if defined(RFD_ENABLE_PROCGEN_DEBUG_VIEW)
+    surface = create_procgen_debug_surface();
+#else
+    surface = SDL_CreateSurface(24, 24, SDL_PIXELFORMAT_RGBA32);
+#endif
+
     if (!surface) {
         SDL_Log("Failed to create surface: %s", SDL_GetError());
         return;
     }
 
+#if !defined(RFD_ENABLE_PROCGEN_DEBUG_VIEW)
     SDL_Color color = {255, 0, 0, 255};
     Uint32 pixel = SDL_MapSurfaceRGBA(surface, color.r, color.g, color.b, color.a);
     if (!SDL_FillSurfaceRect(surface, nullptr, pixel)) {
@@ -42,6 +129,7 @@ void RogueFarmGame::on_startup(core::Engine& engine) {
         SDL_DestroySurface(surface);
         return;
     }
+#endif
 
     auto* texture_manager = engine.texture_manager();
     if (!texture_manager) {
@@ -78,6 +166,10 @@ void RogueFarmGame::on_startup(core::Engine& engine) {
     sprite.g = 255;
     sprite.b = 255;
     sprite.a = 255;
+#if defined(RFD_ENABLE_PROCGEN_DEBUG_VIEW)
+    sprite.scale_x = 4.0f;
+    sprite.scale_y = 4.0f;
+#endif
     engine.world().add_component(m_test_entity, sprite);
 
     // Create UI elements using UIManager

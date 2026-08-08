@@ -11,6 +11,12 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
 endif()
 option(RFD_BUILD_TESTS "Build engine test targets" ${RFD_BUILD_TESTS_DEFAULT})
 
+set(RFD_ENABLE_PROCGEN_DEBUG_VIEW_DEFAULT ON)
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    set(RFD_ENABLE_PROCGEN_DEBUG_VIEW_DEFAULT OFF)
+endif()
+option(RFD_ENABLE_PROCGEN_DEBUG_VIEW "Build the procgen debug map view into the game executable" ${RFD_ENABLE_PROCGEN_DEBUG_VIEW_DEFAULT})
+
 # MSVC: Force synchronous PDB writes to avoid C1041 errors during parallel builds
 if(MSVC)
     add_compile_options(/FS)
@@ -42,6 +48,10 @@ target_link_directories(rfd_game PRIVATE
     ${SDL3_TTF_LIB_DIR}
 )
 target_link_libraries(rfd_game PRIVATE SDL3 SDL3_ttf)
+
+if(RFD_ENABLE_PROCGEN_DEBUG_VIEW)
+    target_compile_definitions(rfd_game PRIVATE RFD_ENABLE_PROCGEN_DEBUG_VIEW=1)
+endif()
 
 # Copy SDL3 DLLs to output directory
 add_custom_command(TARGET rfd_game POST_BUILD
