@@ -8,8 +8,36 @@
 #include "../../include/ui/Layout.hpp"
 #include "../../include/ui/ComboBox.hpp"
 #include <SDL3/SDL.h>
+#include <filesystem>
+#include <optional>
 
 namespace game {
+
+namespace {
+
+std::optional<std::filesystem::path> find_test_asset(const std::filesystem::path& relative_path) {
+    const std::filesystem::path start_paths[] = {
+        config::get_executable_dir(),
+        std::filesystem::current_path()
+    };
+
+    for (const auto& start_path : start_paths) {
+        for (std::filesystem::path base = start_path; !base.empty(); base = base.parent_path()) {
+            const auto candidate = base / relative_path;
+            if (std::filesystem::exists(candidate)) {
+                return candidate;
+            }
+
+            if (base == base.root_path()) {
+                break;
+            }
+        }
+    }
+
+    return std::nullopt;
+}
+
+} // namespace
 
 void RogueFarmGame::on_startup(core::Engine& engine) {
     SDL_Log("RogueFarmGame starting up...");
@@ -29,35 +57,35 @@ void RogueFarmGame::on_startup(core::Engine& engine) {
         }
     }
 
-    SDL_Surface* surface = SDL_CreateSurface(24, 24, SDL_PIXELFORMAT_RGBA32);
-    if (!surface) {
-        SDL_Log("Failed to create surface: %s", SDL_GetError());
-        return;
-    }
-
-    SDL_Color color = {255, 0, 0, 255};
-    Uint32 pixel = SDL_MapSurfaceRGBA(surface, color.r, color.g, color.b, color.a);
-    if (!SDL_FillSurfaceRect(surface, nullptr, pixel)) {
-        SDL_Log("Failed to fill surface: %s", SDL_GetError());
-        SDL_DestroySurface(surface);
-        return;
-    }
-
     auto* texture_manager = engine.texture_manager();
     if (!texture_manager) {
         SDL_Log("Texture manager is null!");
-        SDL_DestroySurface(surface);
         return;
     }
 
-    m_test_texture = texture_manager->create_from_surface(surface);
+    const auto sprite_path = find_test_asset("assets/test/walkcycle/BODY_male.png");
+    if (!sprite_path) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to find test sprite asset");
+        return;
+    }
+
+    m_test_texture = texture_manager->load(sprite_path->string().c_str());
     if (m_test_texture == rendering::INVALID_TEXTURE_ID) {
-        SDL_Log("Failed to create texture from surface: %s", SDL_GetError());
-        SDL_DestroySurface(surface);
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to load test sprite: %s", sprite_path->string().c_str());
         return;
     }
 
-    SDL_DestroySurface(surface);
+    if (const auto* texture = texture_manager->get(m_test_texture)) {
+        rendering::TextureRegion first_frame{};
+        first_frame.u0 = 0.0f;
+        first_frame.v0 = 0.0f;
+        first_frame.u1 = 64.0f / static_cast<float>(texture->width);
+        first_frame.v1 = 64.0f / static_cast<float>(texture->height);
+        first_frame.width = 64;
+        first_frame.height = 64;
+        texture_manager->define_region(m_test_texture, "0", first_frame);
+        SDL_Log("Loaded test sprite: %s", sprite_path->string().c_str());
+    }
 
     m_test_entity = engine.world().create_entity();
 
@@ -78,6 +106,8 @@ void RogueFarmGame::on_startup(core::Engine& engine) {
     sprite.g = 255;
     sprite.b = 255;
     sprite.a = 255;
+    sprite.scale_x = 4.0f;
+    sprite.scale_y = 4.0f;
     engine.world().add_component(m_test_entity, sprite);
 
     // Create UI elements using UIManager
