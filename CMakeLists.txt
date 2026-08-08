@@ -5,6 +5,12 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+set(RFD_BUILD_TESTS_DEFAULT ON)
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    set(RFD_BUILD_TESTS_DEFAULT OFF)
+endif()
+option(RFD_BUILD_TESTS "Build engine test targets" ${RFD_BUILD_TESTS_DEFAULT})
+
 # MSVC: Force synchronous PDB writes to avoid C1041 errors during parallel builds
 if(MSVC)
     add_compile_options(/FS)
@@ -44,3 +50,20 @@ add_custom_command(TARGET rfd_game POST_BUILD
         "${SDL3_TTF_LIB_DIR}/SDL3_ttf.dll"
         $<TARGET_FILE_DIR:rfd_game>
 )
+
+if(RFD_BUILD_TESTS)
+    enable_testing()
+
+    add_executable(rfd_engine_tests EXCLUDE_FROM_ALL
+        tests/procgen/GreaterRealmTests.cpp
+        src/procgen/GreaterRealm.cpp
+    )
+
+    target_include_directories(rfd_engine_tests PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+    )
+
+    target_compile_definitions(rfd_engine_tests PRIVATE RFD_TEST_BUILD=1)
+
+    add_test(NAME procgen_greater_realm COMMAND rfd_engine_tests)
+endif()

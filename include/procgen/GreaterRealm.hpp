@@ -44,6 +44,13 @@ struct GreaterRealmGeneratorSettings {
     float highland_threshold{0.68f};
     float hill_threshold{0.55f};
 
+    float land_shape_frequency{2.0f};
+    float base_elevation_frequency{5.0f};
+    float mountain_frequency{3.0f};
+    float ridge_frequency{9.0f};
+    float valley_frequency{6.0f};
+    float terrain_noise_frequency{18.0f};
+
     float land_shape_weight{1.0f};
     float base_elevation_weight{1.0f};
     float mountain_weight{0.35f};
@@ -68,5 +75,7 @@ struct GreaterRealmMap {
     [[nodiscard]] GreaterRealmCell* cell(std::int32_t x, std::int32_t y) noexcept;
     [[nodiscard]] const GreaterRealmCell* cell(std::int32_t x, std::int32_t y) const noexcept;
 };
+
+[[nodiscard]] GreaterRealmMap generate_greater_realm(const GreaterRealmGeneratorSettings& settings);
 
 } // namespace procgen
