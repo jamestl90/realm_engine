@@ -294,41 +294,30 @@ void Renderer::render(ecs::World& world, double alpha) {
 }
 
 void Renderer::collect_render_commands(ecs::World& world, double alpha) {
-    auto* sprite_array = world.get_component_array<Sprite>();
-    auto* transform_array = world.get_component_array<Transform>();
-    if (!sprite_array || !transform_array) {
-        return;
-    }
+    (void)alpha;
 
-    const auto& entities = sprite_array->entity_data();
-    const auto entity_count = entities.size();
-
-    for (std::size_t i = 0; i < entity_count; ++i) {
-        const auto entity_id = entities[i];
-        const auto* sprite = sprite_array->get(entity_id);
-        const auto* transform = transform_array->get(entity_id);
-
-        if (!sprite || !transform || sprite->texture_id == INVALID_TEXTURE_ID) {
-            continue;
+    world.each<Sprite, Transform>([this](ecs::Entity, const Sprite& sprite, const Transform& transform) {
+        if (sprite.texture_id == INVALID_TEXTURE_ID) {
+            return;
         }
 
         RenderCommand cmd;
-        cmd.sprite = sprite;
-        cmd.transform = transform;
+        cmd.sprite = &sprite;
+        cmd.transform = &transform;
 
         // Interpolate position using alpha for smooth rendering between fixed updates
         // For now we use current position; when previous position tracking is added,
         // this would be: lerp(prev_x, curr_x, alpha)
-        cmd.interpolated_x = transform->x;
-        cmd.interpolated_y = transform->y;
+        cmd.interpolated_x = transform.x;
+        cmd.interpolated_y = transform.y;
 
         // TODO: When previous transform is tracked, implement proper interpolation:
         // cmd.interpolated_x = prev_transform->x + (transform->x - prev_transform->x) * static_cast<float>(alpha);
         // cmd.interpolated_y = prev_transform->y + (transform->y - prev_transform->y) * static_cast<float>(alpha);
 
-        cmd.layer = sprite->layer;
+        cmd.layer = sprite.layer;
         render_commands_.push_back(cmd);
-    }
+    });
 }
 
 void Renderer::sort_render_commands() {

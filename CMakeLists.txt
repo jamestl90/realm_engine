@@ -121,6 +121,19 @@ if(RFD_BUILD_TESTS)
 
     add_test(NAME ecs_system_resources COMMAND rfd_ecs_system_tests)
 
+    add_executable(rfd_ecs_query_tests EXCLUDE_FROM_ALL
+        tests/ecs/WorldQueryTests.cpp
+        src/ecs/World.cpp
+    )
+
+    target_include_directories(rfd_ecs_query_tests PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+    )
+
+    target_compile_definitions(rfd_ecs_query_tests PRIVATE RFD_TEST_BUILD=1)
+
+    add_test(NAME ecs_component_queries COMMAND rfd_ecs_query_tests)
+
     add_executable(rfd_ui_tests EXCLUDE_FROM_ALL
         tests/ui/TextMeasurementTests.cpp
         src/ui/Button.cpp
