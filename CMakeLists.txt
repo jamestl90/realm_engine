@@ -5,11 +5,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-set(RFD_BUILD_TESTS_DEFAULT ON)
-if(CMAKE_BUILD_TYPE STREQUAL "Release")
-    set(RFD_BUILD_TESTS_DEFAULT OFF)
-endif()
-option(RFD_BUILD_TESTS "Build engine test targets" ${RFD_BUILD_TESTS_DEFAULT})
+option(RFD_BUILD_TESTS "Create engine test targets" OFF)
 
 set(RFD_ENABLE_PROCGEN_DEBUG_VIEW_DEFAULT ON)
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
@@ -28,6 +24,19 @@ set(SDL3_LIB_DIR "${CMAKE_SOURCE_DIR}/external/lib/SDL3/x64")
 set(SDL3_TTF_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/external/include/SDL3_ttf")
 set(SDL3_TTF_LIB_DIR "${CMAKE_SOURCE_DIR}/external/lib/SDL3_ttf/x64")
 set(RAPIDJSON_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/external/include/rapidjson") # Adjust path if needed
+
+set(RFD_ASSET_SOURCE_DIR "${CMAKE_SOURCE_DIR}/assets")
+set(RFD_SHADER_ASSETS
+    "${RFD_ASSET_SOURCE_DIR}/Shaders/sprite.vert.spv"
+    "${RFD_ASSET_SOURCE_DIR}/Shaders/sprite.frag.spv"
+    "${RFD_ASSET_SOURCE_DIR}/Shaders/sprite.vert.reflect.json"
+    "${RFD_ASSET_SOURCE_DIR}/Shaders/sprite.frag.reflect.json"
+)
+set(RFD_FONT_ASSETS
+    "${RFD_ASSET_SOURCE_DIR}/Fonts/Inter-4.1/extras/ttf/Inter-Regular.ttf"
+    "${RFD_ASSET_SOURCE_DIR}/Fonts/Inter-4.1/extras/ttf/Inter-SemiBold.ttf"
+    "${RFD_ASSET_SOURCE_DIR}/Fonts/Inter-4.1/LICENSE.txt"
+)
 
 # Automatically find all .cpp files in src directory
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS "src/*.cpp")
@@ -53,12 +62,21 @@ if(RFD_ENABLE_PROCGEN_DEBUG_VIEW)
     target_compile_definitions(rfd_game PRIVATE RFD_ENABLE_PROCGEN_DEBUG_VIEW=1)
 endif()
 
-# Copy SDL3 DLLs to output directory
+# Bundle runtime dependencies and the explicit runtime asset allowlist.
 add_custom_command(TARGET rfd_game POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+        "$<TARGET_FILE_DIR:rfd_game>/assets/Shaders"
+        "$<TARGET_FILE_DIR:rfd_game>/assets/Fonts"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${SDL3_LIB_DIR}/SDL3.dll"
         "${SDL3_TTF_LIB_DIR}/SDL3_ttf.dll"
         $<TARGET_FILE_DIR:rfd_game>
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${RFD_SHADER_ASSETS}
+        "$<TARGET_FILE_DIR:rfd_game>/assets/Shaders"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${RFD_FONT_ASSETS}
+        "$<TARGET_FILE_DIR:rfd_game>/assets/Fonts"
 )
 
 if(RFD_BUILD_TESTS)
@@ -76,4 +94,51 @@ if(RFD_BUILD_TESTS)
     target_compile_definitions(rfd_engine_tests PRIVATE RFD_TEST_BUILD=1)
 
     add_test(NAME procgen_greater_realm COMMAND rfd_engine_tests)
+
+    add_executable(rfd_ecs_tests EXCLUDE_FROM_ALL
+        tests/ecs/WorldLifecycleTests.cpp
+        src/ecs/World.cpp
+    )
+
+    target_include_directories(rfd_ecs_tests PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+    )
+
+    target_compile_definitions(rfd_ecs_tests PRIVATE RFD_TEST_BUILD=1)
+
+    add_test(NAME ecs_world_lifecycle COMMAND rfd_ecs_tests)
+
+    add_executable(rfd_ecs_system_tests EXCLUDE_FROM_ALL
+        tests/ecs/WorldSystemResourceTests.cpp
+        src/ecs/World.cpp
+    )
+
+    target_include_directories(rfd_ecs_system_tests PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+    )
+
+    target_compile_definitions(rfd_ecs_system_tests PRIVATE RFD_TEST_BUILD=1)
+
+    add_test(NAME ecs_system_resources COMMAND rfd_ecs_system_tests)
+
+    add_executable(rfd_ui_tests EXCLUDE_FROM_ALL
+        tests/ui/TextMeasurementTests.cpp
+        src/ui/Button.cpp
+        src/ui/ComboBox.cpp
+        src/ui/FocusableControl.cpp
+        src/ui/InputSurface.cpp
+        src/ui/Primitives.cpp
+        src/ui/Style.cpp
+        src/ui/TextBox.cpp
+        src/ui/UIElement.cpp
+    )
+
+    target_include_directories(rfd_ui_tests PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${SDL3_INCLUDE_DIR}
+    )
+
+    target_compile_definitions(rfd_ui_tests PRIVATE RFD_TEST_BUILD=1)
+
+    add_test(NAME ui_text_measurement COMMAND rfd_ui_tests)
 endif()

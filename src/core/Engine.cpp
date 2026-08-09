@@ -95,6 +95,9 @@ void Engine::shutdown() noexcept {
         SDL_Log("Asset Manager Reset");
     }
 
+    ui_renderer_.reset();
+    SDL_Log("UI Renderer Reset");
+
     if (font_manager_) {
         font_manager_->clear();
         font_manager_.reset();
@@ -106,9 +109,6 @@ void Engine::shutdown() noexcept {
         texture_manager_.reset();
         SDL_Log("Texture Manager Reset");
     }
-
-    ui_renderer_.reset();
-    SDL_Log("UI Renderer Reset");
 
     renderer_.reset();
     SDL_Log("Renderer Reset");

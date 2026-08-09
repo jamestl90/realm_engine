@@ -27,7 +27,6 @@ TextBox::TextBox(TextBox&& other) noexcept
     , m_cursorVisible(other.m_cursorVisible)
     , m_onTextChanged(std::move(other.m_onTextChanged))
     , m_onSubmit(std::move(other.m_onSubmit))
-    , m_textMeasurer(std::move(other.m_textMeasurer))
     , m_backgroundColour(other.m_backgroundColour)
     , m_textColour(other.m_textColour)
     , m_placeholderColour(other.m_placeholderColour)
@@ -56,7 +55,6 @@ TextBox& TextBox::operator=(TextBox&& other) noexcept {
         m_cursorVisible = other.m_cursorVisible;
         m_onTextChanged = std::move(other.m_onTextChanged);
         m_onSubmit = std::move(other.m_onSubmit);
-        m_textMeasurer = std::move(other.m_textMeasurer);
         m_backgroundColour = other.m_backgroundColour;
         m_textColour = other.m_textColour;
         m_placeholderColour = other.m_placeholderColour;
@@ -128,8 +126,9 @@ std::string TextBox::displayText() const {
 
 void TextBox::measure(float availableWidth, float availableHeight) {
     // Default size for text box
+    const TextMetrics textMetrics = measureText("Mg", m_fontSize);
     m_measuredWidth = 200.0f;
-    m_measuredHeight = m_fontSize + m_padding.verticalSum();
+    m_measuredHeight = textMetrics.height + m_padding.verticalSum();
 
     // Apply constraints
     const auto& constraints = sizeConstraints();
@@ -270,24 +269,17 @@ void TextBox::onMouseDown(MouseEventArgs& args) {
             ? std::string(m_text.length(), m_passwordChar)
             : m_text;
 
-        if (m_textMeasurer) {
-            // Use accurate text measurement - find position where click occurred
-            for (std::size_t i = 1; i <= displayStr.length(); ++i) {
-                float textWidth = m_textMeasurer(displayStr.substr(0, i), m_fontSize);
-                if (textWidth > localX) {
-                    // Check if click is closer to this char or previous
-                    float prevWidth = (i > 1) ? m_textMeasurer(displayStr.substr(0, i - 1), m_fontSize) : 0.0f;
-                    clickPos = (localX - prevWidth < textWidth - localX) ? i - 1 : i;
-                    break;
-                }
-                clickPos = i;
+        // Find the nearest insertion point using the active font's metrics.
+        for (std::size_t i = 1; i <= displayStr.length(); ++i) {
+            const float textWidth = measureText(displayStr.substr(0, i), m_fontSize).width;
+            if (textWidth > localX) {
+                const float previousWidth = i > 1
+                    ? measureText(displayStr.substr(0, i - 1), m_fontSize).width
+                    : 0.0f;
+                clickPos = (localX - previousWidth < textWidth - localX) ? i - 1 : i;
+                break;
             }
-        } else {
-            // Fallback to estimated character width
-            float charWidth = m_fontSize * 0.6f;
-            if (charWidth > 0) {
-                clickPos = static_cast<std::size_t>(localX / charWidth);
-            }
+            clickPos = i;
         }
     }
 

@@ -19,6 +19,7 @@ using ComponentTypeID = std::uint32_t;
 // Forward declare for World
 struct IComponentArray {
     virtual ~IComponentArray() = default;
+    virtual void remove(EntityID entity) = 0;
 };
 
 namespace detail {
@@ -50,6 +51,16 @@ public:
 
     // Add component for entity
     void insert(EntityID entity, const T& component) {
+        if (!entity.is_valid()) {
+            return;
+        }
+
+        const auto existing = entity_to_index_.find(entity);
+        if (existing != entity_to_index_.end()) {
+            components_[existing->second] = component;
+            return;
+        }
+
         const std::size_t index = components_.size();
         components_.push_back(component);
         entities_.push_back(entity);
@@ -57,7 +68,7 @@ public:
     }
 
     // Remove component for entity
-    void remove(EntityID entity) {
+    void remove(EntityID entity) override {
         auto it = entity_to_index_.find(entity);
         if (it == entity_to_index_.end()) return;
 

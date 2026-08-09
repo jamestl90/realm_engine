@@ -128,9 +128,6 @@ void ComboBox::close() {
 }
 
 void ComboBox::measure(float availableWidth, float availableHeight) {
-    // Calculate header size
-    const float charWidth = m_fontSize * 0.6f;
-
     // Find longest text (selected item or placeholder)
     std::string displayText = m_placeholder;
     if (m_selectedIndex >= 0 && m_selectedIndex < static_cast<int>(m_items.size())) {
@@ -138,17 +135,18 @@ void ComboBox::measure(float availableWidth, float availableHeight) {
     }
 
     // Also consider all items for width calculation
-    float maxTextWidth = static_cast<float>(displayText.length()) * charWidth;
+    TextMetrics textMetrics = measureText(displayText, m_fontSize);
+    float maxTextWidth = textMetrics.width;
     for (const auto& item : m_items) {
-        float itemWidth = static_cast<float>(item.length()) * charWidth;
-        maxTextWidth = std::max(maxTextWidth, itemWidth);
+        const TextMetrics itemMetrics = measureText(item, m_fontSize);
+        maxTextWidth = std::max(maxTextWidth, itemMetrics.width);
+        textMetrics.height = std::max(textMetrics.height, itemMetrics.height);
     }
-
-    const float textHeight = m_fontSize;
 
     // Add padding and arrow space
     const float arrowWidth = 20.0f;
-    m_headerHeight = textHeight + m_padding.verticalSum();
+    m_headerHeight = textMetrics.height + m_padding.verticalSum();
+    m_itemHeight = textMetrics.height + 12.0f;
 
     m_measuredWidth = maxTextWidth + m_padding.horizontalSum() + arrowWidth;
     m_measuredHeight = m_headerHeight;

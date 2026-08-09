@@ -4,6 +4,7 @@
 #include "../../include/rendering/UniformBuffers.hpp"
 #include <algorithm>
 #include <cstring>
+#include <limits>
 #include <rendering/PipelineManager.hpp>
 
 namespace rendering {
@@ -16,6 +17,11 @@ UIRenderer::UIRenderer(GPUDevice* device)
 }
 
 UIRenderer::~UIRenderer() {
+    if (m_textEngine) {
+        TTF_DestroyGPUTextEngine(m_textEngine);
+        m_textEngine = nullptr;
+    }
+
     if (m_device && m_device->is_valid()) {
         SDL_GPUDevice* gpu = m_device->handle();
         if (m_sampler) {
@@ -35,8 +41,8 @@ UIRenderer::UIRenderer(UIRenderer&& other) noexcept
     , m_textureManager(other.m_textureManager)
     , m_fontManager(other.m_fontManager)
     , m_defaultFont(other.m_defaultFont)
+    , m_textEngine(other.m_textEngine)
     , m_commands(std::move(other.m_commands))
-    , m_textCache(std::move(other.m_textCache))
     , m_vertices(std::move(other.m_vertices))
     , m_indices(std::move(other.m_indices))
     , m_vertexBuffer(other.m_vertexBuffer)
@@ -48,6 +54,7 @@ UIRenderer::UIRenderer(UIRenderer&& other) noexcept
     other.m_device = nullptr;
     other.m_textureManager = nullptr;
     other.m_fontManager = nullptr;
+    other.m_textEngine = nullptr;
     other.m_vertexBuffer = nullptr;
     other.m_indexBuffer = nullptr;
     other.m_sampler = nullptr;
@@ -55,6 +62,10 @@ UIRenderer::UIRenderer(UIRenderer&& other) noexcept
 
 UIRenderer& UIRenderer::operator=(UIRenderer&& other) noexcept {
     if (this != &other) {
+        if (m_textEngine) {
+            TTF_DestroyGPUTextEngine(m_textEngine);
+        }
+
         if (m_device && m_device->is_valid()) {
             SDL_GPUDevice* gpu = m_device->handle();
             if (m_sampler) {
@@ -72,8 +83,8 @@ UIRenderer& UIRenderer::operator=(UIRenderer&& other) noexcept {
         m_textureManager = other.m_textureManager;
         m_fontManager = other.m_fontManager;
         m_defaultFont = other.m_defaultFont;
+        m_textEngine = other.m_textEngine;
         m_commands = std::move(other.m_commands);
-        m_textCache = std::move(other.m_textCache);
         m_vertices = std::move(other.m_vertices);
         m_indices = std::move(other.m_indices);
         m_vertexBuffer = other.m_vertexBuffer;
@@ -86,6 +97,7 @@ UIRenderer& UIRenderer::operator=(UIRenderer&& other) noexcept {
         other.m_device = nullptr;
         other.m_textureManager = nullptr;
         other.m_fontManager = nullptr;
+        other.m_textEngine = nullptr;
         other.m_vertexBuffer = nullptr;
         other.m_indexBuffer = nullptr;
         other.m_sampler = nullptr;
@@ -101,55 +113,58 @@ FontID UIRenderer::loadFont(const char* path, float pointSize) {
     return m_fontManager->load(path, pointSize);
 }
 
-TextureID UIRenderer::getOrCreateTextTexture(
+FontID UIRenderer::resolveFont(FontID fontId, float fontSize) {
+    if (!m_fontManager) {
+        return INVALID_FONT_ID;
+    }
+
+    const FontID baseFont = fontId != INVALID_FONT_ID ? fontId : m_defaultFont;
+    if (baseFont == INVALID_FONT_ID) {
+        return INVALID_FONT_ID;
+    }
+
+    return m_fontManager->loadVariant(baseFont, fontSize);
+}
+
+bool UIRenderer::measureText(
     const std::string& text,
     FontID fontId,
-    std::uint8_t r, std::uint8_t g, std::uint8_t b, std::uint8_t a,
-    int* outWidth, int* outHeight
+    float fontSize,
+    int* outWidth,
+    int* outHeight
 ) {
-    if (!m_fontManager || !m_textureManager) {
-        return INVALID_TEXTURE_ID;
+    const FontID resolvedFont = resolveFont(fontId, fontSize);
+    if (resolvedFont != INVALID_FONT_ID
+        && m_fontManager->getTextSize(resolvedFont, text.c_str(), outWidth, outHeight)) {
+        return true;
     }
 
-    // Use default font if none specified
-    FontID actualFont = (fontId != INVALID_FONT_ID) ? fontId : m_defaultFont;
-    if (actualFont == INVALID_FONT_ID) {
-        return INVALID_TEXTURE_ID;
+    if (outWidth) {
+        *outWidth = static_cast<int>(text.length() * fontSize * 0.6f);
+    }
+    if (outHeight) {
+        *outHeight = static_cast<int>(fontSize * 1.2f);
+    }
+    return false;
+}
+
+bool UIRenderer::ensureTextEngine() {
+    if (m_textEngine) {
+        return true;
     }
 
-    // Create cache key
-    std::uint32_t packedColor = (static_cast<std::uint32_t>(r) << 24) |
-                                 (static_cast<std::uint32_t>(g) << 16) |
-                                 (static_cast<std::uint32_t>(b) << 8) |
-                                 static_cast<std::uint32_t>(a);
-
-    TextCacheKey key{text, actualFont, packedColor};
-
-    // Check cache
-    auto it = m_textCache.find(key);
-    if (it != m_textCache.end()) {
-        if (outWidth) *outWidth = it->second.width;
-        if (outHeight) *outHeight = it->second.height;
-        return it->second.textureId;
+    if (!m_device || !m_device->is_valid() || !m_fontManager || !m_fontManager->isInitialized()) {
+        return false;
     }
 
-    // Render text to texture
-    RenderedText result = m_fontManager->renderText(actualFont, text.c_str(), r, g, b, a);
-    if (result.textureId == INVALID_TEXTURE_ID) {
-        return INVALID_TEXTURE_ID;
+    m_textEngine = TTF_CreateGPUTextEngine(m_device->handle());
+    if (!m_textEngine) {
+        SDL_LogError(SDL_LOG_CATEGORY_RENDER, "Failed to create GPU text engine: %s", SDL_GetError());
+        return false;
     }
 
-    // Cache the result
-    TextCacheEntry entry;
-    entry.textureId = result.textureId;
-    entry.width = result.width;
-    entry.height = result.height;
-    m_textCache[key] = entry;
-
-    if (outWidth) *outWidth = result.width;
-    if (outHeight) *outHeight = result.height;
-
-    return result.textureId;
+    TTF_SetGPUTextEngineWinding(m_textEngine, TTF_GPU_TEXTENGINE_WINDING_CLOCKWISE);
+    return true;
 }
 
 void UIRenderer::render(
@@ -268,15 +283,17 @@ void UIRenderer::collectButtonCommands(ui::Button* button) {
         textCmd.b = textColour.b;
         textCmd.a = textColour.a;
 
-        // Center text in button
-        float charWidth = textCmd.fontSize * 0.6f;
-        float textWidth = static_cast<float>(textCmd.text.length()) * charWidth;
-        float textHeight = textCmd.fontSize;
+        int textWidth = 0;
+        int textHeight = 0;
+        if (!measureText(textCmd.text, textCmd.fontId, textCmd.fontSize, &textWidth, &textHeight)) {
+            textWidth = static_cast<int>(textCmd.text.length() * textCmd.fontSize * 0.6f);
+            textHeight = static_cast<int>(textCmd.fontSize * 1.2f);
+        }
 
-        textCmd.x = bounds.x + (bounds.width - textWidth) * 0.5f;
-        textCmd.y = bounds.y + (bounds.height - textHeight) * 0.5f;
-        textCmd.width = textWidth;
-        textCmd.height = textHeight;
+        textCmd.x = bounds.x + (bounds.width - static_cast<float>(textWidth)) * 0.5f;
+        textCmd.y = bounds.y + (bounds.height - static_cast<float>(textHeight)) * 0.5f;
+        textCmd.width = static_cast<float>(textWidth);
+        textCmd.height = static_cast<float>(textHeight);
         m_commands.push_back(textCmd);
     }
 }
@@ -284,6 +301,12 @@ void UIRenderer::collectButtonCommands(ui::Button* button) {
 void UIRenderer::collectTextBoxCommands(ui::TextBox* textBox) {
     const auto& bounds = textBox->bounds();
     const auto& padding = textBox->padding();
+    const std::string renderedText = textBox->displayText();
+    int lineWidth = 0;
+    int lineHeight = 0;
+    if (!measureText("Mg", INVALID_FONT_ID, textBox->fontSize(), &lineWidth, &lineHeight)) {
+        lineHeight = static_cast<int>(textBox->fontSize() * 1.2f);
+    }
 
     // Background rectangle
     UIRenderCommand bgCmd;
@@ -312,16 +335,17 @@ void UIRenderer::collectTextBoxCommands(ui::TextBox* textBox) {
         std::size_t selStart = std::min(textBox->selectionStart(), textBox->selectionEnd());
         std::size_t selEnd = std::max(textBox->selectionStart(), textBox->selectionEnd());
 
-        float charWidth = textBox->fontSize() * 0.6f;
-        float selX = bounds.x + padding.left + static_cast<float>(selStart) * charWidth;
-        float selWidth = static_cast<float>(selEnd - selStart) * charWidth;
+        int selectionStartWidth = 0;
+        int selectionEndWidth = 0;
+        measureText(renderedText.substr(0, selStart), INVALID_FONT_ID, textBox->fontSize(), &selectionStartWidth, nullptr);
+        measureText(renderedText.substr(0, selEnd), INVALID_FONT_ID, textBox->fontSize(), &selectionEndWidth, nullptr);
 
         UIRenderCommand selCmd;
         selCmd.type = UICommandType::Rectangle;
-        selCmd.x = selX;
-        selCmd.y = bounds.y + padding.top;
-        selCmd.width = selWidth;
-        selCmd.height = textBox->fontSize();
+        selCmd.x = bounds.x + padding.left + static_cast<float>(selectionStartWidth);
+        selCmd.y = bounds.y + (bounds.height - static_cast<float>(lineHeight)) * 0.5f;
+        selCmd.width = static_cast<float>(selectionEndWidth - selectionStartWidth);
+        selCmd.height = static_cast<float>(lineHeight);
 
         const auto& selColour = textBox->selectionColour();
         selCmd.r = selColour.r;
@@ -332,7 +356,7 @@ void UIRenderer::collectTextBoxCommands(ui::TextBox* textBox) {
     }
 
     // Text or placeholder
-    std::string displayText = textBox->displayText();
+    std::string displayText = renderedText;
     bool showPlaceholder = displayText.empty() && !textBox->placeholder().empty();
 
     if (showPlaceholder) {
@@ -345,7 +369,7 @@ void UIRenderer::collectTextBoxCommands(ui::TextBox* textBox) {
         textCmd.text = displayText;
         textCmd.fontSize = textBox->fontSize();
         textCmd.x = bounds.x + padding.left;
-        textCmd.y = bounds.y + padding.top;
+        textCmd.y = bounds.y + (bounds.height - static_cast<float>(lineHeight)) * 0.5f;
 
         if (showPlaceholder) {
             const auto& phColour = textBox->placeholderColour();
@@ -369,10 +393,10 @@ void UIRenderer::collectTextBoxCommands(ui::TextBox* textBox) {
         float cursorX = bounds.x + padding.left;
 
         // Measure actual text width up to cursor position
-        if (textBox->cursorPosition() > 0 && m_fontManager && m_defaultFont != INVALID_FONT_ID) {
-            std::string textToCursor = textBox->displayText().substr(0, textBox->cursorPosition());
+        if (textBox->cursorPosition() > 0) {
+            const std::string textToCursor = renderedText.substr(0, textBox->cursorPosition());
             int textWidth = 0;
-            if (m_fontManager->getTextSize(m_defaultFont, textToCursor.c_str(), &textWidth, nullptr)) {
+            if (measureText(textToCursor, INVALID_FONT_ID, textBox->fontSize(), &textWidth, nullptr)) {
                 cursorX += static_cast<float>(textWidth);
             }
         }
@@ -380,9 +404,9 @@ void UIRenderer::collectTextBoxCommands(ui::TextBox* textBox) {
         UIRenderCommand cursorCmd;
         cursorCmd.type = UICommandType::Rectangle;
         cursorCmd.x = cursorX;
-        cursorCmd.y = bounds.y + padding.top;
+        cursorCmd.y = bounds.y + (bounds.height - static_cast<float>(lineHeight)) * 0.5f;
         cursorCmd.width = 2.0f;
-        cursorCmd.height = textBox->fontSize();
+        cursorCmd.height = static_cast<float>(lineHeight);
 
         const auto& cursorColour = textBox->cursorColour();
         cursorCmd.r = cursorColour.r;
@@ -397,8 +421,13 @@ void UIRenderer::collectComboBoxCommands(ui::ComboBox* comboBox) {
     const auto& bounds = comboBox->bounds();
     const auto& padding = comboBox->padding();
 
-    // Calculate header height
-    float headerHeight = comboBox->fontSize() + padding.verticalSum();
+    int sampleWidth = 0;
+    int textHeight = 0;
+    if (!measureText("Mg", INVALID_FONT_ID, comboBox->fontSize(), &sampleWidth, &textHeight)) {
+        textHeight = static_cast<int>(comboBox->fontSize() * 1.2f);
+    }
+
+    float headerHeight = static_cast<float>(textHeight) + padding.verticalSum();
     headerHeight = std::max(headerHeight, 24.0f);
 
     // Determine header background color based on state
@@ -438,7 +467,7 @@ void UIRenderer::collectComboBoxCommands(ui::ComboBox* comboBox) {
         textCmd.text = displayText;
         textCmd.fontSize = comboBox->fontSize();
         textCmd.x = bounds.x + padding.left;
-        textCmd.y = bounds.y + padding.top;
+        textCmd.y = bounds.y + (headerHeight - static_cast<float>(textHeight)) * 0.5f;
 
         const auto& textColour = comboBox->textColour();
         textCmd.r = textColour.r;
@@ -454,8 +483,11 @@ void UIRenderer::collectComboBoxCommands(ui::ComboBox* comboBox) {
     arrowCmd.type = UICommandType::Text;
     arrowCmd.text = comboBox->isOpen() ? "^" : "v";
     arrowCmd.fontSize = comboBox->fontSize();
-    arrowCmd.x = bounds.x + bounds.width - 20.0f;
-    arrowCmd.y = bounds.y + padding.top;
+    int arrowWidth = 0;
+    int arrowHeight = 0;
+    measureText(arrowCmd.text, arrowCmd.fontId, arrowCmd.fontSize, &arrowWidth, &arrowHeight);
+    arrowCmd.x = bounds.x + bounds.width - padding.right - static_cast<float>(arrowWidth);
+    arrowCmd.y = bounds.y + (headerHeight - static_cast<float>(arrowHeight)) * 0.5f;
     const auto& textColour = comboBox->textColour();
     arrowCmd.r = textColour.r;
     arrowCmd.g = textColour.g;
@@ -465,7 +497,7 @@ void UIRenderer::collectComboBoxCommands(ui::ComboBox* comboBox) {
 
     // Render dropdown if open
     if (comboBox->isOpen() && !comboBox->items().empty()) {
-        float itemHeight = comboBox->fontSize() + 12.0f;
+        const float itemHeight = static_cast<float>(textHeight) + 12.0f;
         float dropdownHeight = itemHeight * static_cast<float>(comboBox->items().size());
 
         // Dropdown background
@@ -513,7 +545,10 @@ void UIRenderer::collectComboBoxCommands(ui::ComboBox* comboBox) {
             itemTextCmd.text = item;
             itemTextCmd.fontSize = comboBox->fontSize();
             itemTextCmd.x = bounds.x + padding.left;
-            itemTextCmd.y = itemY + 6.0f; // Center vertically in item
+            int itemTextWidth = 0;
+            int itemTextHeight = 0;
+            measureText(item, itemTextCmd.fontId, itemTextCmd.fontSize, &itemTextWidth, &itemTextHeight);
+            itemTextCmd.y = itemY + (itemHeight - static_cast<float>(itemTextHeight)) * 0.5f;
             itemTextCmd.r = textColour.r;
             itemTextCmd.g = textColour.g;
             itemTextCmd.b = textColour.b;
@@ -569,6 +604,17 @@ void UIRenderer::collectTextBlockCommands(ui::TextBlock* text) {
     cmd.width = bounds.width;
     cmd.height = bounds.height;
 
+    int textWidth = 0;
+    int textHeight = 0;
+    if (measureText(cmd.text, cmd.fontId, cmd.fontSize, &textWidth, &textHeight)) {
+        if (text->alignment() == ui::TextAlignment::Center) {
+            cmd.x = bounds.x + (bounds.width - static_cast<float>(textWidth)) * 0.5f;
+        } else if (text->alignment() == ui::TextAlignment::Right) {
+            cmd.x = bounds.x + bounds.width - static_cast<float>(textWidth);
+        }
+        cmd.y = bounds.y + (bounds.height - static_cast<float>(textHeight)) * 0.5f;
+    }
+
     const auto& colour = text->colour();
     cmd.r = colour.r;
     cmd.g = colour.g;
@@ -620,7 +666,7 @@ void UIRenderer::executeCommands(
     float logicalWidth,
     float logicalHeight
 ) {
-    if (m_commands.empty() || !m_device || !m_device->is_valid()) {
+    if (m_commands.empty() || !m_device || !m_device->is_valid() || !m_textureManager) {
         return;
     }
 
@@ -628,22 +674,22 @@ void UIRenderer::executeCommands(
     m_vertices.clear();
     m_indices.clear();
 
-    std::uint16_t vertexOffset = 0;
+    std::uint32_t vertexOffset = 0;
 
     // Separate commands into batches by texture for proper rendering
     struct RenderBatch {
-        TextureID textureId{INVALID_TEXTURE_ID};
+        SDL_GPUTexture* texture{nullptr};
         std::uint32_t startIndex{0};
         std::uint32_t indexCount{0};
     };
     std::vector<RenderBatch> batches;
-    TextureID currentTextureId = INVALID_TEXTURE_ID;
+    SDL_GPUTexture* currentTexture = nullptr;
     std::uint32_t batchStartIndex = 0;
 
     auto finishBatch = [&]() {
-        if (currentTextureId != INVALID_TEXTURE_ID && m_indices.size() > batchStartIndex) {
+        if (currentTexture && m_indices.size() > batchStartIndex) {
             RenderBatch batch;
-            batch.textureId = currentTextureId;
+            batch.texture = currentTexture;
             batch.startIndex = batchStartIndex;
             batch.indexCount = static_cast<std::uint32_t>(m_indices.size()) - batchStartIndex;
             batches.push_back(batch);
@@ -651,109 +697,122 @@ void UIRenderer::executeCommands(
         batchStartIndex = static_cast<std::uint32_t>(m_indices.size());
     };
 
-    // Get white texture ID for solid color rendering
-    TextureID whiteTextureId = m_textureManager ? m_textureManager->default_white_texture() : INVALID_TEXTURE_ID;
+    auto switchTexture = [&](SDL_GPUTexture* texture) {
+        if (currentTexture != texture) {
+            finishBatch();
+            currentTexture = texture;
+        }
+    };
+
+    auto textureForId = [&](TextureID textureId) -> SDL_GPUTexture* {
+        const Texture* texture = m_textureManager->get(textureId);
+        return texture ? texture->gpu_texture : nullptr;
+    };
+
+    SDL_GPUTexture* whiteTexture = textureForId(m_textureManager->default_white_texture());
+    if (!whiteTexture) {
+        SDL_LogError(SDL_LOG_CATEGORY_RENDER, "UIRenderer: Default white texture is unavailable");
+        return;
+    }
 
     for (const auto& cmd : m_commands) {
         if (cmd.type == UICommandType::Text) {
-            // Text rendering using font textures
             if (cmd.text.empty()) {
                 continue;
             }
 
-            // Get or create text texture
-            int textWidth = 0, textHeight = 0;
-            TextureID textTextureId = getOrCreateTextTexture(
-                cmd.text, cmd.fontId, cmd.r, cmd.g, cmd.b, cmd.a,
-                &textWidth, &textHeight
-            );
+            bool rendered = false;
+            const FontID resolvedFont = resolveFont(cmd.fontId, cmd.fontSize);
+            const Font* font = resolvedFont != INVALID_FONT_ID ? m_fontManager->get(resolvedFont) : nullptr;
 
-            if (textTextureId == INVALID_TEXTURE_ID) {
-                // Fall back to placeholder rectangles if no font available
-                float charWidth = cmd.fontSize * 0.6f;
-                float charHeight = cmd.fontSize;
+            if (font && font->ttf_font && ensureTextEngine()) {
+                TTF_Text* text = TTF_CreateText(m_textEngine, font->ttf_font, cmd.text.c_str(), 0);
+                if (text) {
+                    for (TTF_GPUAtlasDrawSequence* sequence = TTF_GetGPUTextDrawData(text);
+                         sequence;
+                         sequence = sequence->next) {
+                        if (!sequence->atlas_texture || sequence->num_vertices <= 0 || sequence->num_indices <= 0) {
+                            continue;
+                        }
+
+                        if (vertexOffset + static_cast<std::uint32_t>(sequence->num_vertices)
+                            > std::numeric_limits<std::uint16_t>::max()) {
+                            SDL_LogError(SDL_LOG_CATEGORY_RENDER, "UIRenderer: UI vertex limit exceeded");
+                            break;
+                        }
+
+                        switchTexture(sequence->atlas_texture);
+                        const auto baseVertex = static_cast<std::uint16_t>(vertexOffset);
+
+                        for (int i = 0; i < sequence->num_vertices; ++i) {
+                            const float screenX = cmd.x + sequence->xy[i].x;
+                            const float screenY = cmd.y - sequence->xy[i].y;
+                            m_vertices.push_back(SpriteVertex{
+                                (screenX / logicalWidth) * 2.0f - 1.0f,
+                                1.0f - (screenY / logicalHeight) * 2.0f,
+                                sequence->uv[i].x,
+                                sequence->uv[i].y,
+                                cmd.r,
+                                cmd.g,
+                                cmd.b,
+                                cmd.a
+                            });
+                        }
+
+                        for (int i = 0; i < sequence->num_indices; ++i) {
+                            const int index = sequence->indices[i];
+                            if (index >= 0 && index < sequence->num_vertices) {
+                                m_indices.push_back(static_cast<std::uint16_t>(baseVertex + index));
+                            }
+                        }
+
+                        vertexOffset += static_cast<std::uint32_t>(sequence->num_vertices);
+                        rendered = true;
+                    }
+                    TTF_DestroyText(text);
+                }
+            }
+
+            if (!rendered) {
+                const float characterWidth = cmd.fontSize * 0.6f;
                 float x = cmd.x;
+                switchTexture(whiteTexture);
 
-                // Switch to white texture for placeholders
-                if (currentTextureId != whiteTextureId) {
-                    finishBatch();
-                    currentTextureId = whiteTextureId;
-                }
+                for (const char character : cmd.text) {
+                    if (character != ' ') {
+                        UIRenderCommand characterCommand = cmd;
+                        characterCommand.type = UICommandType::Rectangle;
+                        characterCommand.x = x;
+                        characterCommand.width = characterWidth * 0.8f;
+                        characterCommand.height = cmd.fontSize;
 
-                for (char c : cmd.text) {
-                    if (c == ' ') {
-                        x += charWidth;
-                        continue;
+                        SpriteVertex vertices[4];
+                        generateRectVertices(characterCommand, vertices, logicalWidth, logicalHeight);
+                        for (const auto& vertex : vertices) {
+                            m_vertices.push_back(vertex);
+                        }
+
+                        const auto baseVertex = static_cast<std::uint16_t>(vertexOffset);
+                        m_indices.push_back(baseVertex + 0);
+                        m_indices.push_back(baseVertex + 1);
+                        m_indices.push_back(baseVertex + 2);
+                        m_indices.push_back(baseVertex + 2);
+                        m_indices.push_back(baseVertex + 3);
+                        m_indices.push_back(baseVertex + 0);
+                        vertexOffset += 4;
                     }
-
-                    UIRenderCommand charCmd = cmd;
-                    charCmd.type = UICommandType::Rectangle;
-                    charCmd.x = x;
-                    charCmd.width = charWidth * 0.8f;
-                    charCmd.height = charHeight;
-
-                    SpriteVertex verts[4];
-                    generateRectVertices(charCmd, verts, logicalWidth, logicalHeight);
-
-                    for (int i = 0; i < 4; ++i) {
-                        m_vertices.push_back(verts[i]);
-                    }
-
-                    m_indices.push_back(vertexOffset + 0);
-                    m_indices.push_back(vertexOffset + 1);
-                    m_indices.push_back(vertexOffset + 2);
-                    m_indices.push_back(vertexOffset + 2);
-                    m_indices.push_back(vertexOffset + 3);
-                    m_indices.push_back(vertexOffset + 0);
-
-                    vertexOffset += 4;
-                    x += charWidth;
+                    x += characterWidth;
                 }
+            }
+        } else {
+            SDL_GPUTexture* commandTexture = cmd.type == UICommandType::TexturedRect
+                ? textureForId(cmd.textureId)
+                : whiteTexture;
+            if (!commandTexture) {
                 continue;
             }
+            switchTexture(commandTexture);
 
-            // Switch batch if texture changed
-            if (currentTextureId != textTextureId) {
-                finishBatch();
-                currentTextureId = textTextureId;
-            }
-
-            // Create a textured quad for the text
-            UIRenderCommand textCmd = cmd;
-            textCmd.type = UICommandType::TexturedRect;
-            textCmd.width = static_cast<float>(textWidth);
-            textCmd.height = static_cast<float>(textHeight);
-            textCmd.u0 = 0.0f;
-            textCmd.v0 = 0.0f;
-            textCmd.u1 = 1.0f;
-            textCmd.v1 = 1.0f;
-            // Use white color since the texture already has the text color baked in
-            textCmd.r = 255;
-            textCmd.g = 255;
-            textCmd.b = 255;
-            textCmd.a = 255;
-
-            SpriteVertex verts[4];
-            generateRectVertices(textCmd, verts, logicalWidth, logicalHeight);
-
-            for (int i = 0; i < 4; ++i) {
-                m_vertices.push_back(verts[i]);
-            }
-
-            m_indices.push_back(vertexOffset + 0);
-            m_indices.push_back(vertexOffset + 1);
-            m_indices.push_back(vertexOffset + 2);
-            m_indices.push_back(vertexOffset + 2);
-            m_indices.push_back(vertexOffset + 3);
-            m_indices.push_back(vertexOffset + 0);
-
-            vertexOffset += 4;
-        } else {
-            // Switch to white texture for solid color rendering
-            if (currentTextureId != whiteTextureId) {
-                finishBatch();
-                currentTextureId = whiteTextureId;
-            }
             // Rectangle or textured rect
             SpriteVertex verts[4];
             generateRectVertices(cmd, verts, logicalWidth, logicalHeight);
@@ -773,6 +832,8 @@ void UIRenderer::executeCommands(
 
             // Draw border if specified
             if (cmd.borderThickness > 0.0f && cmd.borderA > 0) {
+                switchTexture(whiteTexture);
+
                 // Top border
                 UIRenderCommand borderCmd;
                 borderCmd.type = UICommandType::Rectangle;
@@ -987,23 +1048,15 @@ void UIRenderer::executeCommands(
         }
     }
 
-    // Check texture manager
-    if (!m_textureManager) {
-        SDL_LogError(SDL_LOG_CATEGORY_RENDER, "No texture manager set for UIRenderer");
-        SDL_EndGPURenderPass(renderPass);
-        return;
-    }
-
     // Draw each batch with its own texture
     for (const auto& batch : batches) {
-        const Texture* texture = m_textureManager->get(batch.textureId);
-        if (!texture || !texture->gpu_texture) {
+        if (!batch.texture) {
             continue;
         }
 
         // Bind texture and sampler for this batch
         SDL_GPUTextureSamplerBinding textureSamplerBinding{};
-        textureSamplerBinding.texture = texture->gpu_texture;
+        textureSamplerBinding.texture = batch.texture;
         textureSamplerBinding.sampler = m_sampler;
         SDL_BindGPUFragmentSamplers(renderPass, 0, &textureSamplerBinding, 1);
 

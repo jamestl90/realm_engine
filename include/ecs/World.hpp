@@ -27,11 +27,17 @@ public:
     // Component management
     template<Component T>
     void add_component(Entity entity, const T& component) {
+        if (!is_valid(entity)) {
+            return;
+        }
         get_or_create_component_array<T>().insert(entity.id(), component);
     }
 
     template<Component T>
     void remove_component(Entity entity) {
+        if (!is_valid(entity)) {
+            return;
+        }
         if (auto* array = get_component_array<T>()) {
             array->remove(entity.id());
         }
@@ -39,6 +45,9 @@ public:
 
     template<Component T>
     [[nodiscard]] T* get_component(Entity entity) noexcept {
+        if (!is_valid(entity)) {
+            return nullptr;
+        }
         if (auto* array = get_component_array<T>()) {
             return array->get(entity.id());
         }
@@ -47,6 +56,9 @@ public:
 
     template<Component T>
     [[nodiscard]] const T* get_component(Entity entity) const noexcept {
+        if (!is_valid(entity)) {
+            return nullptr;
+        }
         if (auto* array = get_component_array<T>()) {
             return array->get(entity.id());
         }
@@ -55,6 +67,9 @@ public:
 
     template<Component T>
     [[nodiscard]] bool has_component(Entity entity) const noexcept {
+        if (!is_valid(entity)) {
+            return false;
+        }
         if (auto* array = get_component_array<T>()) {
             return array->has(entity.id());
         }

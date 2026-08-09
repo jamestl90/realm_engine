@@ -79,14 +79,11 @@ Colour Button::currentBackgroundColour() const noexcept {
 
 
 void Button::measure(float availableWidth, float availableHeight) {
-    // Estimate text size (rough approximation - proper text measurement needs font metrics)
-    const float charWidth = m_fontSize * 0.6f;
-    const float textWidth = static_cast<float>(m_text.length()) * charWidth;
-    const float textHeight = m_fontSize;
+    const TextMetrics textMetrics = measureText(m_text, m_fontSize);
 
     // Add padding
-    m_measuredWidth = textWidth + m_padding.horizontalSum();
-    m_measuredHeight = textHeight + m_padding.verticalSum();
+    m_measuredWidth = textMetrics.width + m_padding.horizontalSum();
+    m_measuredHeight = textMetrics.height + m_padding.verticalSum();
 
     // Apply constraints
     const auto& constraints = sizeConstraints();

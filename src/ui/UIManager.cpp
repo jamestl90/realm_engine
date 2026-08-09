@@ -469,6 +469,7 @@ void UIManager::setFontManager(rendering::FontManager* fontManager, rendering::F
     if (m_root) {
         configureTextMeasurement(m_root.get());
     }
+    m_layoutDirty = true;
 }
 
 void UIManager::configureTextMeasurement(UIElement* element) {
@@ -476,21 +477,23 @@ void UIManager::configureTextMeasurement(UIElement* element) {
         return;
     }
 
-    // If this is a TextBox, set up the text measurer
-    auto* textBox = dynamic_cast<TextBox*>(element);
-    if (textBox) {
-        // Capture fontManager and defaultFont by value for the lambda
-        rendering::FontManager* fm = m_fontManager;
-        rendering::FontID fontId = m_defaultFont;
+    rendering::FontManager* fontManager = m_fontManager;
+    const rendering::FontID defaultFont = m_defaultFont;
 
-        textBox->setTextMeasurer([fm, fontId](const std::string& text, float /*fontSize*/) -> float {
-            int width = 0;
-            if (fm->getTextSize(fontId, text.c_str(), &width, nullptr)) {
-                return static_cast<float>(width);
-            }
-            return 0.0f;
-        });
-    }
+    element->setTextMeasurer([fontManager, defaultFont](const std::string& text, float fontSize) {
+        const rendering::FontID sizedFont = fontManager->loadVariant(defaultFont, fontSize);
+        int width = 0;
+        int height = 0;
+        if (sizedFont != rendering::INVALID_FONT_ID
+            && fontManager->getTextSize(sizedFont, text.c_str(), &width, &height)) {
+            return TextMetrics{static_cast<float>(width), static_cast<float>(height)};
+        }
+
+        return TextMetrics{
+            static_cast<float>(text.length()) * fontSize * 0.6f,
+            fontSize * 1.2f
+        };
+    });
 
     // Recursively configure children
     for (const auto& child : element->children()) {

@@ -134,7 +134,7 @@ PipelineHandle PipelineManager::get_or_create_pipeline(
     }
 
     // Load shader reflection data
-    const auto base_path = config::get_executable_dir().string() + path_to_assets_ + "shaders\\";
+    const auto base_path = config::get_executable_dir() / "assets" / "Shaders";
     
     std::string shader_prefix;
     switch (base_type) {
@@ -150,8 +150,8 @@ PipelineHandle PipelineManager::get_or_create_pipeline(
             break;
     }
     
-    auto vert_reflection = load_shader_reflection(base_path + shader_prefix + ".vert.reflect.json");
-    auto frag_reflection = load_shader_reflection(base_path + shader_prefix + ".frag.reflect.json");
+    auto vert_reflection = load_shader_reflection((base_path / (shader_prefix + ".vert.reflect.json")).string());
+    auto frag_reflection = load_shader_reflection((base_path / (shader_prefix + ".frag.reflect.json")).string());
 
     SDL_GPUGraphicsPipeline* pipeline = create_pipeline(base_type, config, swapchain_format_, vert_reflection, frag_reflection);
     if (!pipeline) {
@@ -429,15 +429,15 @@ SDL_GPUVertexInputState PipelineManager::build_vertex_input_state(PipelineType t
 }
 
 bool PipelineManager::initialise_sprite_pipeline(SDL_GPUTextureFormat format) {
-    const auto base_path = config::get_executable_dir().string() + path_to_assets_ + "shaders\\";
+    const auto base_path = config::get_executable_dir() / "assets" / "Shaders";
     
-    auto vert_bytecode = load_shader(base_path + "sprite.vert.spv", SDL_GPU_SHADERSTAGE_VERTEX);
+    auto vert_bytecode = load_shader((base_path / "sprite.vert.spv").string(), SDL_GPU_SHADERSTAGE_VERTEX);
     if (!vert_bytecode) {
         SDL_LogError(SDL_LOG_CATEGORY_RENDER, "Failed to load sprite vertex shader");
         return false;
     }
 
-    auto vert_reflection = load_shader_reflection(base_path + "sprite.vert.reflect.json");
+    auto vert_reflection = load_shader_reflection((base_path / "sprite.vert.reflect.json").string());
 
     if (vert_reflection.num_uniform_buffers > 0 && !vert_reflection.validate_ubo_size<CameraData>()) {
         SDL_LogError(SDL_LOG_CATEGORY_RENDER, 
@@ -451,13 +451,13 @@ bool PipelineManager::initialise_sprite_pipeline(SDL_GPUTextureFormat format) {
     vert_bytecode->num_storage_buffers = vert_reflection.num_storage_buffers;
     vert_bytecode->num_samplers = vert_reflection.num_samplers;
 
-    auto frag_bytecode = load_shader(base_path + "sprite.frag.spv", SDL_GPU_SHADERSTAGE_FRAGMENT);
+    auto frag_bytecode = load_shader((base_path / "sprite.frag.spv").string(), SDL_GPU_SHADERSTAGE_FRAGMENT);
     if (!frag_bytecode) {
         SDL_LogError(SDL_LOG_CATEGORY_RENDER, "Failed to load sprite fragment shader");
         return false;
     }
 
-    auto frag_reflection = load_shader_reflection(base_path + "sprite.frag.reflect.json");
+    auto frag_reflection = load_shader_reflection((base_path / "sprite.frag.reflect.json").string());
 
     frag_bytecode->num_uniform_buffers = frag_reflection.num_uniform_buffers;
     frag_bytecode->num_storage_textures = frag_reflection.num_storage_textures;

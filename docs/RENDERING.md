@@ -41,7 +41,7 @@ This document tracks rendering features currently present in the engine. It is a
 
 ## Shaders And Pipelines
 
-- Sprite shaders live in `shaders/` as HLSL source, compiled SPIR-V bytecode, and reflection JSON.
+- Editable sprite shader sources and compilation scripts live in `shaders/`; compiled SPIR-V bytecode and reflection JSON live in `assets/Shaders` and are copied into each runtime bundle.
 - The active core pipeline is `PipelineType::Sprite`.
 - Pipeline configuration includes blend state, depth/stencil settings, primitive type, cull mode, front face, and scissor flag.
 - Shader reflection data is loaded to populate SDL shader resource counts and validate the camera uniform block.

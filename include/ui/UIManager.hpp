@@ -73,7 +73,7 @@ public:
     void setFontManager(rendering::FontManager* fontManager, rendering::FontID defaultFont) noexcept;
 
 private:
-    // Configure text measurement on TextBox elements in tree
+    // Configure renderer-backed text measurement on the UI tree.
     void configureTextMeasurement(UIElement* element);
     // Input handling helpers
     bool handleMouseButtonDown(const SDL_Event& event);

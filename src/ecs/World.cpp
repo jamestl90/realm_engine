@@ -32,11 +32,8 @@ void World::destroy_entity(Entity entity) {
         return;
     }
     
-    // Remove all components for this entity
-    for (auto& [type_id, array] : component_arrays_) {
-        // Component arrays handle removal internally
-        // This is type-erased, so we can't call remove directly
-        // The actual removal will happen when systems process dead entities
+    for (auto& entry : component_arrays_) {
+        entry.second->remove(id);
     }
     
     // Increment generation to invalidate existing handles

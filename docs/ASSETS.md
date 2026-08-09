@@ -47,6 +47,14 @@ This document tracks asset-system features currently present in the engine. It i
 - `preload_manifest()` supports a simple line-oriented `type:path` format.
 - Manifest JSON parsing described in the architecture is not currently implemented.
 
+## Source And Build Bundling
+
+- `assets/` is the authoritative source directory for runtime content.
+- CMake copies an explicit allowlist of runtime shaders, fonts, and font license files beside `rfd_game` after each Debug or Release build.
+- Generated build copies are disposable; assets should never be maintained directly under `out/build/`.
+- Test tile sheets and unused font variants are not included in runtime output bundles.
+- Compiled sprite shader artifacts live in `assets/Shaders`; editable HLSL sources and shader compilation scripts remain in `shaders/`.
+
 ## Current Notes
 
 - The asset system is synchronous; `LoadPriority` exists for future async behavior.
@@ -56,3 +64,4 @@ This document tracks asset-system features currently present in the engine. It i
 - Pipeline definition loading reads a file but currently creates a default sprite pipeline; JSON parsing is not implemented.
 - Engine startup currently constructs `AssetManager` without an audio system or pipeline manager, so audio playback integration and custom pipeline asset loading are not wired through the default engine path.
 - Runtime font rendering used by UI currently goes through `rendering::FontManager`, not `AssetManager::load_font()`.
+- Asset packing into an indexed blob is not implemented; current builds bundle selected assets as loose files.

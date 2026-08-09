@@ -19,6 +19,7 @@ UIElement::UIElement(UIElement&& other) noexcept
     , m_bounds(other.m_bounds)
     , m_localBounds(other.m_localBounds)
     , m_sizeConstraints(other.m_sizeConstraints)
+    , m_textMeasurer(std::move(other.m_textMeasurer))
     , m_visibility(other.m_visibility)
     , m_enabled(other.m_enabled)
     , m_layoutDirty(other.m_layoutDirty)
@@ -45,6 +46,7 @@ UIElement& UIElement::operator=(UIElement&& other) noexcept {
         m_bounds = other.m_bounds;
         m_localBounds = other.m_localBounds;
         m_sizeConstraints = other.m_sizeConstraints;
+        m_textMeasurer = std::move(other.m_textMeasurer);
         m_visibility = other.m_visibility;
         m_enabled = other.m_enabled;
         m_layoutDirty = other.m_layoutDirty;
@@ -61,6 +63,22 @@ UIElement& UIElement::operator=(UIElement&& other) noexcept {
         other.m_parent = nullptr;
     }
     return *this;
+}
+
+void UIElement::setTextMeasurer(TextMeasureCallback callback) {
+    m_textMeasurer = std::move(callback);
+    invalidateLayout();
+}
+
+TextMetrics UIElement::measureText(const std::string& text, float fontSize) const {
+    if (m_textMeasurer) {
+        return m_textMeasurer(text, fontSize);
+    }
+
+    return TextMetrics{
+        static_cast<float>(text.length()) * fontSize * 0.6f,
+        fontSize * 1.2f
+    };
 }
 
 void UIElement::addChild(std::unique_ptr<UIElement> child) {

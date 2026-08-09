@@ -46,7 +46,11 @@ This document tracks the UI system features currently present in the engine. It 
 ## Rendering Capabilities
 
 - UI rendering batches rectangle, text, and textured-rectangle commands by texture.
-- Text rendering uses `FontManager`/SDL_ttf to rasterise text into GPU textures, cached by text, font, and colour.
+- Text rendering uses SDL_ttf's GPU text engine and reusable glyph atlases; glyph quads are tinted and submitted through the UI sprite pipeline.
+- Changing dynamic text does not allocate a standalone GPU texture for each complete string. Previously unseen glyphs may be added to an atlas page as needed.
+- Font faces are loaded once per requested point size and reused through the font cache.
+- `TextBlock`, `Button`, `TextBox`, and `ComboBox` layout uses SDL_ttf metrics for the same font size used during rendering.
+- Button labels, text alignment, text-box selections/cursors, and combo-box text placement use measured glyph dimensions rather than character-count estimates.
 - Solid colour UI uses the texture manager's generated 1x1 white texture.
 - Borders are rendered as rectangular edge quads.
 - The UI pass renders over the sprite/world pass and preserves existing swapchain contents.
@@ -54,6 +58,6 @@ This document tracks the UI system features currently present in the engine. It 
 ## Current Notes
 
 - Corner radius values exist on some controls/primitives, but current rendering uses rectangular quads.
-- `TextBlock::fontFamily` is stored, but actual font selection is currently handled by the renderer/default font path.
+- `TextBlock::fontFamily` is stored, but per-element font-face selection is not yet connected; UI text currently uses size variants of the renderer's default font face.
 - The combo box dropdown is rendered internally by `UIRenderer`, not as child UI elements.
 - The current sample UI in `RogueFarmGame` demonstrates a button, text box, and combo box wired to window resizing.

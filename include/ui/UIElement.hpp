@@ -5,6 +5,7 @@
 #include <vector>
 #include <memory>
 #include <functional>
+#include <limits>
 
 namespace ui {
 
@@ -39,6 +40,13 @@ struct SizeConstraints {
     float preferred_width{0.0f};
     float preferred_height{0.0f};
 };
+
+struct TextMetrics {
+    float width{0.0f};
+    float height{0.0f};
+};
+
+using TextMeasureCallback = std::function<TextMetrics(const std::string& text, float fontSize)>;
 
 // Visibility state
 enum class Visibility : std::uint8_t {
@@ -80,6 +88,9 @@ public:
     [[nodiscard]] const SizeConstraints& sizeConstraints() const noexcept { return m_sizeConstraints; }
     void setSizeConstraints(const SizeConstraints& constraints) noexcept { m_sizeConstraints = constraints; }
 
+    // Supplied by UIManager so layout uses the same font metrics as rendering.
+    void setTextMeasurer(TextMeasureCallback callback);
+
     // Visibility
     [[nodiscard]] Visibility visibility() const noexcept { return m_visibility; }
     void setVisibility(Visibility vis) noexcept { m_visibility = vis; }
@@ -109,6 +120,7 @@ public:
 protected:
     void setParent(UIElement* parent) noexcept { m_parent = parent; }
     void markLayoutClean() noexcept { m_layoutDirty = false; }
+    [[nodiscard]] TextMetrics measureText(const std::string& text, float fontSize) const;
 
     // Measured size from measure pass
     float m_measuredWidth{0.0f};
@@ -125,6 +137,7 @@ private:
     std::vector<std::unique_ptr<UIElement>> m_children;
 
     SizeConstraints m_sizeConstraints{};
+    TextMeasureCallback m_textMeasurer;
 
     Visibility m_visibility{Visibility::Visible};
     bool m_enabled{true};

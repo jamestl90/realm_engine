@@ -122,7 +122,6 @@ private:
     std::vector<PipelineEntry> pipelines_;
     PipelineHandle next_handle_{1};
 
-    std::string path_to_assets_ = "\\assets\\";
 };
 
 } // namespace rendering
