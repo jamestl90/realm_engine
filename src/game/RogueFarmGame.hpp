@@ -41,10 +41,15 @@ private:
     procgen::GreaterRealmGeneratorSettings m_procgen_settings{};
     ui::TextBlock* m_procgen_seed_text{nullptr};
     ui::TextBlock* m_procgen_sea_text{nullptr};
+    ui::TextBlock* m_procgen_land_shape_text{nullptr};
+    ui::TextBlock* m_procgen_island_bias_text{nullptr};
+    ui::TextBlock* m_procgen_coastline_noise_text{nullptr};
+    ui::TextBlock* m_procgen_base_elevation_text{nullptr};
     ui::TextBlock* m_procgen_mountain_text{nullptr};
     ui::TextBlock* m_procgen_ridge_text{nullptr};
     ui::TextBlock* m_procgen_valley_text{nullptr};
     ui::TextBlock* m_procgen_noise_text{nullptr};
+    ui::TextBlock* m_procgen_ocean_depth_text{nullptr};
     ui::TextBlock* m_procgen_coverage_text{nullptr};
     ui::TextBlock* m_procgen_terrain_text{nullptr};
 #endif

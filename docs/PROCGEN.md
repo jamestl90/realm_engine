@@ -7,17 +7,18 @@ This document tracks the procedural generation capabilities currently present in
 - Generates deterministic greater realm maps from a seed and settings.
 - Uses a regular grid with configurable width, height, and cell size.
 - Produces a signed landmass elevation field: negative values are water, positive values are land, and zero is the coastline.
-- Uses low-frequency land shape, edge falloff, and coastline-localized noise to form continents, islands, and coastlines.
+- Combines five-octave land-shape noise with Mapgen4's square-distance island constraint and coastline-localized noise.
 - Keeps broad land/water topology independent from inland terrain weights.
 - Builds normalized final elevation with separate land-relief and water-depth paths.
 - Shapes land with base elevation, mountains, ridges, valleys, and controlled terrain noise.
+- Applies terrain noise after base relief normalization so its weight remains independently tunable.
 - Marks boundary-connected water as ocean.
 - Computes distance to coast and local slope.
 - Classifies cells as ocean, coast, plains, hills, highlands, or mountains.
 
 ## Pipeline
 
-1. Generate the broad landmass field.
+1. Generate a signed broad landmass field from fBm and a square-distance island constraint.
 2. Apply controlled noise near the coastline.
 3. Convert the field into a signed landmass constraint at sea level.
 4. Generate base elevation and inland relief influences.
@@ -31,8 +32,9 @@ This follows Mapgen4's layered elevation approach while retaining the engine's c
 
 ## Debugging And Tests
 
-- A compile-gated debug view renders terrain forms as a coloured texture.
-- Debug UI controls expose seed, sea level, and major terrain weights.
+- A compile-gated debug view renders terrain forms as a coloured texture and shades ocean cells by relative depth.
+- Debug UI controls expose seed, sea level, land shape, island bias, coastline detail, base relief, mountain, ridge, valley, terrain noise, and ocean depth.
+- Island bias defaults to Mapgen4's `0.5`; terrain noise and ocean depth use larger tuning steps and contrast-enhanced debug shading so changes are visible.
 - Automated tests cover output shape, deterministic seeds, map lookup, signed constraints, topology stability, ocean connectivity, and sea-level response.
 - Test code is compiled only when `RFD_BUILD_TESTS=ON` and does not enter release builds.
 

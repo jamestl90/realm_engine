@@ -99,6 +99,37 @@ std::size_t count_land(const procgen::GreaterRealmMap& map) {
     return count;
 }
 
+bool boundaries_are_water(const procgen::GreaterRealmMap& map) {
+    for (std::uint32_t x = 0; x < map.width; ++x) {
+        if (!map.cells[map.index(x, 0)].is_water
+            || !map.cells[map.index(x, map.height - 1)].is_water) {
+            return false;
+        }
+    }
+
+    for (std::uint32_t y = 0; y < map.height; ++y) {
+        if (!map.cells[map.index(0, y)].is_water
+            || !map.cells[map.index(map.width - 1, y)].is_water) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+std::size_t topology_difference_count(const procgen::GreaterRealmMap& a, const procgen::GreaterRealmMap& b) {
+    const std::size_t count = std::min(a.cells.size(), b.cells.size());
+    std::size_t differences = 0;
+
+    for (std::size_t i = 0; i < count; ++i) {
+        if (a.cells[i].is_water != b.cells[i].is_water) {
+            ++differences;
+        }
+    }
+
+    return differences;
+}
+
 bool topology_matches(const procgen::GreaterRealmMap& a, const procgen::GreaterRealmMap& b) {
     if (a.width != b.width || a.height != b.height || a.cells.size() != b.cells.size()) {
         return false;
@@ -229,6 +260,36 @@ bool test_inland_relief_preserves_landmass_topology() {
     return ok;
 }
 
+bool test_terrain_noise_changes_land_relief_only() {
+    procgen::GreaterRealmGeneratorSettings settings;
+    settings.seed = 11223;
+    settings.width = 96;
+    settings.height = 72;
+    settings.terrain_noise_weight = 0.0f;
+    const auto smooth = procgen::generate_greater_realm(settings);
+
+    settings.terrain_noise_weight = 1.5f;
+    const auto noisy = procgen::generate_greater_realm(settings);
+
+    float land_elevation_difference = 0.0f;
+    bool water_elevation_unchanged = true;
+    for (std::size_t i = 0; i < smooth.cells.size(); ++i) {
+        if (smooth.cells[i].is_water) {
+            if (smooth.cells[i].elevation != noisy.cells[i].elevation) {
+                water_elevation_unchanged = false;
+            }
+        } else {
+            land_elevation_difference += std::abs(smooth.cells[i].elevation - noisy.cells[i].elevation);
+        }
+    }
+
+    bool ok = true;
+    ok &= require(topology_matches(smooth, noisy), "terrain noise does not change land or ocean topology");
+    ok &= require(water_elevation_unchanged, "terrain noise does not change water elevation");
+    ok &= require(land_elevation_difference > 1.0f, "terrain noise changes land elevation");
+    return ok;
+}
+
 bool test_sea_level_controls_landmass_topology() {
     procgen::GreaterRealmGeneratorSettings settings;
     settings.seed = 13579;
@@ -241,6 +302,52 @@ bool test_sea_level_controls_landmass_topology() {
     const auto high_sea = procgen::generate_greater_realm(settings);
 
     return require(count_land(low_sea) > count_land(high_sea), "higher sea level reduces generated land area");
+}
+
+bool test_ocean_depth_preserves_topology() {
+    procgen::GreaterRealmGeneratorSettings settings;
+    settings.seed = 97531;
+    settings.width = 96;
+    settings.height = 72;
+    settings.ocean_depth_weight = 0.1f;
+    const auto shallow = procgen::generate_greater_realm(settings);
+
+    settings.ocean_depth_weight = 2.0f;
+    const auto deep = procgen::generate_greater_realm(settings);
+
+    float water_elevation_difference = 0.0f;
+    bool land_elevation_unchanged = true;
+    for (std::size_t i = 0; i < shallow.cells.size(); ++i) {
+        if (shallow.cells[i].is_water) {
+            water_elevation_difference += std::abs(shallow.cells[i].elevation - deep.cells[i].elevation);
+        } else if (shallow.cells[i].elevation != deep.cells[i].elevation) {
+            land_elevation_unchanged = false;
+        }
+    }
+
+    bool ok = true;
+    ok &= require(topology_matches(shallow, deep), "ocean depth does not change land or ocean topology");
+    ok &= require(land_elevation_unchanged, "ocean depth does not change land elevation");
+    ok &= require(water_elevation_difference > 1.0f, "ocean depth changes water elevation");
+    return ok;
+}
+
+bool test_island_bias_controls_topology() {
+    procgen::GreaterRealmGeneratorSettings settings;
+    settings.seed = 86420;
+    settings.width = 128;
+    settings.height = 80;
+    settings.coastline_noise_weight = 0.0f;
+    settings.island_bias = 0.0f;
+    const auto unbiased = procgen::generate_greater_realm(settings);
+
+    settings.island_bias = 1.0f;
+    const auto island = procgen::generate_greater_realm(settings);
+
+    bool ok = true;
+    ok &= require(topology_difference_count(unbiased, island) > 0, "island bias changes landmass topology");
+    ok &= require(boundaries_are_water(island), "strong island bias keeps rectangular map boundaries underwater");
+    return ok;
 }
 
 bool test_seed_determinism() {
@@ -289,7 +396,10 @@ int main() {
         test_seed_determinism,
         test_map_cell_lookup,
         test_inland_relief_preserves_landmass_topology,
-        test_sea_level_controls_landmass_topology
+        test_terrain_noise_changes_land_relief_only,
+        test_sea_level_controls_landmass_topology,
+        test_ocean_depth_preserves_topology,
+        test_island_bias_controls_topology
     };
 
     bool ok = true;

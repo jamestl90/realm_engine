@@ -55,13 +55,14 @@ struct GreaterRealmGeneratorSettings {
     float ocean_noise_frequency{8.0f};
 
     float land_shape_weight{1.0f};
+    float island_bias{0.5f};
     float base_elevation_weight{1.0f};
     float mountain_weight{0.35f};
     float ridge_weight{0.25f};
     float valley_weight{0.25f};
     float coastline_noise_weight{0.08f};
     float terrain_noise_weight{0.12f};
-    float ocean_depth_weight{0.20f};
+    float ocean_depth_weight{1.0f};
 };
 
 struct GreaterRealmMap {

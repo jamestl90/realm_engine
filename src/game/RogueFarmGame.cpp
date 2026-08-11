@@ -14,6 +14,7 @@
 #if defined(RFD_ENABLE_PROCGEN_DEBUG_VIEW)
 #include "../../include/procgen/GreaterRealm.hpp"
 #include <algorithm>
+#include <cmath>
 #include <iomanip>
 #include <sstream>
 #endif
@@ -97,7 +98,7 @@ std::string terrain_text(const TerrainCounts& counts) {
 
 std::unique_ptr<ui::TextBlock> make_text(const std::string& text, ui::TextBlock** out = nullptr) {
     auto element = std::make_unique<ui::TextBlock>(text);
-    element->setFontSize(16.0f);
+    element->setFontSize(14.0f);
     element->setColour(ui::Colour{20, 24, 30, 255});
     if (out) {
         *out = element.get();
@@ -108,7 +109,7 @@ std::unique_ptr<ui::TextBlock> make_text(const std::string& text, ui::TextBlock*
 std::unique_ptr<ui::Button> make_debug_button(
     const std::string& text,
     ui::Button::ClickCallback callback,
-    float min_width = 44.0f
+    float min_width = 38.0f
 ) {
     auto button = std::make_unique<ui::Button>(text);
     button->setBackgroundColour(ui::Colour{54, 88, 128, 255});
@@ -117,13 +118,13 @@ std::unique_ptr<ui::Button> make_debug_button(
     button->setTextColour(ui::Colour::white());
     button->setBorderColour(ui::Colour{28, 52, 78, 255});
     button->setBorderThickness(1.0f);
-    button->setFontSize(16.0f);
-    button->setPadding(ui::Thickness(10.0f, 6.0f));
+    button->setFontSize(14.0f);
+    button->setPadding(ui::Thickness(8.0f, 4.0f));
     button->setOnClick(std::move(callback));
 
     ui::SizeConstraints constraints;
     constraints.min_width = min_width;
-    constraints.min_height = 34.0f;
+    constraints.min_height = 30.0f;
     button->setSizeConstraints(constraints);
     return button;
 }
@@ -139,8 +140,8 @@ std::unique_ptr<ui::StackPanel> make_control_row(
     row->setSpacing(4.0f);
 
     ui::SizeConstraints label_constraints;
-    label_constraints.preferred_width = 240.0f;
-    label_constraints.min_width = 240.0f;
+    label_constraints.preferred_width = 210.0f;
+    label_constraints.min_width = 210.0f;
     label->setSizeConstraints(label_constraints);
 
     row->addChild(std::move(label));
@@ -149,15 +150,27 @@ std::unique_ptr<ui::StackPanel> make_control_row(
     return row;
 }
 
-SDL_Color terrain_colour(const procgen::GreaterRealmCell& cell) noexcept {
-    const float shade = 0.82f + cell.elevation * 0.18f;
+SDL_Color terrain_colour(const procgen::GreaterRealmCell& cell, float sea_level) noexcept {
+    const float land_range = sea_level < 0.99f ? 1.0f - sea_level : 0.01f;
+    const float relative_land_height = std::clamp((cell.elevation - sea_level) / land_range, 0.0f, 1.0f);
+    const float shade = 0.62f + relative_land_height * 0.38f;
     const auto scale = [shade](std::uint8_t value) -> std::uint8_t {
         return static_cast<std::uint8_t>(static_cast<float>(value) * shade);
     };
 
     switch (cell.terrain_form) {
-        case procgen::TerrainForm::Ocean:
-            return SDL_Color{24, 76, 132, 255};
+        case procgen::TerrainForm::Ocean: {
+            const float safe_sea_level = sea_level > 0.01f ? sea_level : 0.01f;
+            const float relative_depth = 1.0f - std::clamp(cell.elevation / safe_sea_level, 0.0f, 1.0f);
+            const float shallow = 1.0f - std::sqrt(relative_depth);
+            const auto mix = [shallow](std::uint8_t deep, std::uint8_t coast) -> std::uint8_t {
+                return static_cast<std::uint8_t>(
+                    static_cast<float>(deep)
+                    + (static_cast<float>(coast) - static_cast<float>(deep)) * shallow
+                );
+            };
+            return SDL_Color{mix(3, 66), mix(18, 145), mix(52, 196), 255};
+        }
         case procgen::TerrainForm::Coast:
             return SDL_Color{210, 190, 126, 255};
         case procgen::TerrainForm::Plains:
@@ -173,7 +186,7 @@ SDL_Color terrain_colour(const procgen::GreaterRealmCell& cell) noexcept {
     return SDL_Color{255, 0, 255, 255};
 }
 
-SDL_Surface* create_procgen_debug_surface(const procgen::GreaterRealmMap& map) {
+SDL_Surface* create_procgen_debug_surface(const procgen::GreaterRealmMap& map, float sea_level) {
     SDL_Surface* surface = SDL_CreateSurface(
         static_cast<int>(map.width),
         static_cast<int>(map.height),
@@ -198,7 +211,7 @@ SDL_Surface* create_procgen_debug_surface(const procgen::GreaterRealmMap& map) {
 
         for (std::uint32_t x = 0; x < map.width; ++x) {
             const auto& cell = map.cells[map.index(x, y)];
-            const SDL_Color colour = terrain_colour(cell);
+            const SDL_Color colour = terrain_colour(cell, sea_level);
             row[x] = SDL_MapSurfaceRGBA(surface, colour.r, colour.g, colour.b, colour.a);
         }
     }
@@ -220,7 +233,7 @@ bool RogueFarmGame::regenerate_procgen_debug_map(core::Engine& engine) {
     }
 
     const auto map = procgen::generate_greater_realm(m_procgen_settings);
-    SDL_Surface* surface = create_procgen_debug_surface(map);
+    SDL_Surface* surface = create_procgen_debug_surface(map, m_procgen_settings.sea_level);
     if (!surface) {
         return false;
     }
@@ -252,15 +265,20 @@ bool RogueFarmGame::regenerate_procgen_debug_map(core::Engine& engine) {
 
     update_procgen_debug_text(map);
     SDL_Log(
-        "Generated procgen debug map: seed=%llu size=%ux%u sea=%.2f mountain=%.2f ridge=%.2f valley=%.2f noise=%.2f",
+        "Generated procgen debug map: seed=%llu size=%ux%u sea=%.2f land=%.2f island=%.2f coast=%.2f base=%.2f mountain=%.2f ridge=%.2f valley=%.2f noise=%.2f ocean=%.2f",
         m_procgen_settings.seed,
         m_procgen_settings.width,
         m_procgen_settings.height,
         m_procgen_settings.sea_level,
+        m_procgen_settings.land_shape_weight,
+        m_procgen_settings.island_bias,
+        m_procgen_settings.coastline_noise_weight,
+        m_procgen_settings.base_elevation_weight,
         m_procgen_settings.mountain_weight,
         m_procgen_settings.ridge_weight,
         m_procgen_settings.valley_weight,
-        m_procgen_settings.terrain_noise_weight
+        m_procgen_settings.terrain_noise_weight,
+        m_procgen_settings.ocean_depth_weight
     );
     return true;
 }
@@ -272,6 +290,18 @@ void RogueFarmGame::update_procgen_debug_text(const procgen::GreaterRealmMap& ma
     if (m_procgen_sea_text) {
         m_procgen_sea_text->setText(setting_text("Sea", m_procgen_settings.sea_level));
     }
+    if (m_procgen_land_shape_text) {
+        m_procgen_land_shape_text->setText(setting_text("Land shape", m_procgen_settings.land_shape_weight));
+    }
+    if (m_procgen_island_bias_text) {
+        m_procgen_island_bias_text->setText(setting_text("Island bias", m_procgen_settings.island_bias));
+    }
+    if (m_procgen_coastline_noise_text) {
+        m_procgen_coastline_noise_text->setText(setting_text("Coast detail", m_procgen_settings.coastline_noise_weight));
+    }
+    if (m_procgen_base_elevation_text) {
+        m_procgen_base_elevation_text->setText(setting_text("Base relief", m_procgen_settings.base_elevation_weight));
+    }
     if (m_procgen_mountain_text) {
         m_procgen_mountain_text->setText(setting_text("Mountain", m_procgen_settings.mountain_weight));
     }
@@ -282,7 +312,10 @@ void RogueFarmGame::update_procgen_debug_text(const procgen::GreaterRealmMap& ma
         m_procgen_valley_text->setText(setting_text("Valley", m_procgen_settings.valley_weight));
     }
     if (m_procgen_noise_text) {
-        m_procgen_noise_text->setText(setting_text("Noise", m_procgen_settings.terrain_noise_weight));
+        m_procgen_noise_text->setText(setting_text("Terrain noise", m_procgen_settings.terrain_noise_weight));
+    }
+    if (m_procgen_ocean_depth_text) {
+        m_procgen_ocean_depth_text->setText(setting_text("Ocean depth", m_procgen_settings.ocean_depth_weight));
     }
     if (m_procgen_coverage_text || m_procgen_terrain_text) {
         const auto counts = count_terrain_forms(map);
@@ -297,20 +330,19 @@ void RogueFarmGame::update_procgen_debug_text(const procgen::GreaterRealmMap& ma
 
 void RogueFarmGame::create_procgen_debug_ui(core::Engine& engine, const procgen::GreaterRealmMap& map) {
     auto& ui_mgr = engine.ui_manager();
-    const int logical_w = core::Engine::LOGICAL_W;
 
     auto root = std::make_unique<ui::StackPanel>(ui::Orientation::Vertical);
-    root->setPadding(ui::Thickness(12.0f));
-    root->setSpacing(8.0f);
+    root->setPadding(ui::Thickness(10.0f));
+    root->setSpacing(5.0f);
     root->setBackgroundColour(ui::Colour{238, 242, 238, 240});
 
     ui::SizeConstraints root_constraints;
-    root_constraints.preferred_width = 500.0f;
-    root_constraints.min_width = 500.0f;
+    root_constraints.preferred_width = 430.0f;
+    root_constraints.min_width = 430.0f;
     root->setSizeConstraints(root_constraints);
 
     auto title = make_text("Greater Realm Debug");
-    title->setFontSize(24.0f);
+    title->setFontSize(20.0f);
     title->setColour(ui::Colour{10, 18, 24, 255});
     root->addChild(std::move(title));
 
@@ -326,6 +358,62 @@ void RogueFarmGame::create_procgen_debug_ui(core::Engine& engine, const procgen:
         },
         [this, &engine]() {
             ++m_procgen_settings.seed;
+            regenerate_procgen_debug_map(engine);
+        }
+    ));
+
+    root->addChild(make_control_row(
+        "-",
+        "+",
+        make_text(setting_text("Island bias", m_procgen_settings.island_bias), &m_procgen_island_bias_text),
+        [this, &engine]() {
+            m_procgen_settings.island_bias = std::clamp(m_procgen_settings.island_bias - 0.10f, 0.0f, 2.0f);
+            regenerate_procgen_debug_map(engine);
+        },
+        [this, &engine]() {
+            m_procgen_settings.island_bias = std::clamp(m_procgen_settings.island_bias + 0.10f, 0.0f, 2.0f);
+            regenerate_procgen_debug_map(engine);
+        }
+    ));
+
+    root->addChild(make_control_row(
+        "-",
+        "+",
+        make_text(setting_text("Land shape", m_procgen_settings.land_shape_weight), &m_procgen_land_shape_text),
+        [this, &engine]() {
+            m_procgen_settings.land_shape_weight = std::clamp(m_procgen_settings.land_shape_weight - 0.05f, 0.20f, 2.0f);
+            regenerate_procgen_debug_map(engine);
+        },
+        [this, &engine]() {
+            m_procgen_settings.land_shape_weight = std::clamp(m_procgen_settings.land_shape_weight + 0.05f, 0.20f, 2.0f);
+            regenerate_procgen_debug_map(engine);
+        }
+    ));
+
+    root->addChild(make_control_row(
+        "-",
+        "+",
+        make_text(setting_text("Coast detail", m_procgen_settings.coastline_noise_weight), &m_procgen_coastline_noise_text),
+        [this, &engine]() {
+            m_procgen_settings.coastline_noise_weight = std::clamp(m_procgen_settings.coastline_noise_weight - 0.01f, 0.0f, 0.40f);
+            regenerate_procgen_debug_map(engine);
+        },
+        [this, &engine]() {
+            m_procgen_settings.coastline_noise_weight = std::clamp(m_procgen_settings.coastline_noise_weight + 0.01f, 0.0f, 0.40f);
+            regenerate_procgen_debug_map(engine);
+        }
+    ));
+
+    root->addChild(make_control_row(
+        "-",
+        "+",
+        make_text(setting_text("Base relief", m_procgen_settings.base_elevation_weight), &m_procgen_base_elevation_text),
+        [this, &engine]() {
+            m_procgen_settings.base_elevation_weight = std::clamp(m_procgen_settings.base_elevation_weight - 0.05f, 0.0f, 2.0f);
+            regenerate_procgen_debug_map(engine);
+        },
+        [this, &engine]() {
+            m_procgen_settings.base_elevation_weight = std::clamp(m_procgen_settings.base_elevation_weight + 0.05f, 0.0f, 2.0f);
             regenerate_procgen_debug_map(engine);
         }
     ));
@@ -389,13 +477,27 @@ void RogueFarmGame::create_procgen_debug_ui(core::Engine& engine, const procgen:
     root->addChild(make_control_row(
         "-",
         "+",
-        make_text(setting_text("Noise", m_procgen_settings.terrain_noise_weight), &m_procgen_noise_text),
+        make_text(setting_text("Terrain noise", m_procgen_settings.terrain_noise_weight), &m_procgen_noise_text),
         [this, &engine]() {
-            m_procgen_settings.terrain_noise_weight = std::clamp(m_procgen_settings.terrain_noise_weight - 0.02f, 0.0f, 0.8f);
+            m_procgen_settings.terrain_noise_weight = std::clamp(m_procgen_settings.terrain_noise_weight - 0.10f, 0.0f, 2.0f);
             regenerate_procgen_debug_map(engine);
         },
         [this, &engine]() {
-            m_procgen_settings.terrain_noise_weight = std::clamp(m_procgen_settings.terrain_noise_weight + 0.02f, 0.0f, 0.8f);
+            m_procgen_settings.terrain_noise_weight = std::clamp(m_procgen_settings.terrain_noise_weight + 0.10f, 0.0f, 2.0f);
+            regenerate_procgen_debug_map(engine);
+        }
+    ));
+
+    root->addChild(make_control_row(
+        "-",
+        "+",
+        make_text(setting_text("Ocean depth", m_procgen_settings.ocean_depth_weight), &m_procgen_ocean_depth_text),
+        [this, &engine]() {
+            m_procgen_settings.ocean_depth_weight = std::clamp(m_procgen_settings.ocean_depth_weight - 0.25f, 0.0f, 3.0f);
+            regenerate_procgen_debug_map(engine);
+        },
+        [this, &engine]() {
+            m_procgen_settings.ocean_depth_weight = std::clamp(m_procgen_settings.ocean_depth_weight + 0.25f, 0.0f, 3.0f);
             regenerate_procgen_debug_map(engine);
         }
     ));
@@ -414,8 +516,8 @@ void RogueFarmGame::create_procgen_debug_ui(core::Engine& engine, const procgen:
     auto coverage = make_text("", &m_procgen_coverage_text);
     coverage->setColour(ui::Colour{38, 44, 48, 255});
     ui::SizeConstraints summary_constraints;
-    summary_constraints.preferred_width = 476.0f;
-    summary_constraints.min_width = 476.0f;
+    summary_constraints.preferred_width = 410.0f;
+    summary_constraints.min_width = 410.0f;
     coverage->setSizeConstraints(summary_constraints);
     root->addChild(std::move(coverage));
 
@@ -462,7 +564,7 @@ void RogueFarmGame::on_startup(core::Engine& engine) {
     m_procgen_settings.height = 192;
     m_procgen_settings.sea_level = 0.5f;
     const auto initial_map = procgen::generate_greater_realm(m_procgen_settings);
-    surface = create_procgen_debug_surface(initial_map);
+    surface = create_procgen_debug_surface(initial_map, m_procgen_settings.sea_level);
 #else
     surface = SDL_CreateSurface(24, 24, SDL_PIXELFORMAT_RGBA32);
 #endif
