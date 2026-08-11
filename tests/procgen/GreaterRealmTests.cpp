@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstddef>
 #include <iostream>
+#include <vector>
 
 namespace {
 
@@ -63,6 +64,7 @@ bool maps_match(const procgen::GreaterRealmMap& a, const procgen::GreaterRealmMa
         const auto& right = b.cells[i];
         if (left.x != right.x
             || left.y != right.y
+            || left.landmass_elevation != right.landmass_elevation
             || left.elevation != right.elevation
             || left.is_water != right.is_water
             || left.is_ocean != right.is_ocean
@@ -87,6 +89,84 @@ float elevation_difference_sum(const procgen::GreaterRealmMap& a, const procgen:
     return total;
 }
 
+std::size_t count_land(const procgen::GreaterRealmMap& map) {
+    std::size_t count = 0;
+    for (const auto& cell : map.cells) {
+        if (!cell.is_water) {
+            ++count;
+        }
+    }
+    return count;
+}
+
+bool topology_matches(const procgen::GreaterRealmMap& a, const procgen::GreaterRealmMap& b) {
+    if (a.width != b.width || a.height != b.height || a.cells.size() != b.cells.size()) {
+        return false;
+    }
+
+    for (std::size_t i = 0; i < a.cells.size(); ++i) {
+        if (a.cells[i].landmass_elevation != b.cells[i].landmass_elevation
+            || a.cells[i].is_water != b.cells[i].is_water
+            || a.cells[i].is_ocean != b.cells[i].is_ocean) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool ocean_flags_match_boundary_connectivity(const procgen::GreaterRealmMap& map) {
+    std::vector<bool> expected(map.cells.size(), false);
+    std::vector<std::size_t> open;
+
+    const auto enqueue = [&](std::uint32_t x, std::uint32_t y) {
+        const std::size_t index = map.index(x, y);
+        if (!map.cells[index].is_water || expected[index]) {
+            return;
+        }
+
+        expected[index] = true;
+        open.push_back(index);
+    };
+
+    for (std::uint32_t x = 0; x < map.width; ++x) {
+        enqueue(x, 0);
+        enqueue(x, map.height - 1);
+    }
+    for (std::uint32_t y = 0; y < map.height; ++y) {
+        enqueue(0, y);
+        enqueue(map.width - 1, y);
+    }
+
+    constexpr std::array<std::array<std::int32_t, 2>, 4> neighbors{{
+        {{-1, 0}},
+        {{1, 0}},
+        {{0, -1}},
+        {{0, 1}}
+    }};
+
+    while (!open.empty()) {
+        const std::size_t index = open.back();
+        open.pop_back();
+
+        const auto& cell = map.cells[index];
+        for (const auto& offset : neighbors) {
+            const std::int32_t x = cell.x + offset[0];
+            const std::int32_t y = cell.y + offset[1];
+            if (map.contains(x, y)) {
+                enqueue(static_cast<std::uint32_t>(x), static_cast<std::uint32_t>(y));
+            }
+        }
+    }
+
+    for (std::size_t i = 0; i < map.cells.size(); ++i) {
+        if (map.cells[i].is_ocean != expected[i]) {
+            return false;
+        }
+    }
+    return true;
+}
+
 bool test_generated_map_shape() {
     procgen::GreaterRealmGeneratorSettings settings;
     settings.seed = 12345;
@@ -108,12 +188,59 @@ bool test_generated_map_shape() {
     ok &= require(counts.hills + counts.highlands + counts.mountains > 0, "map contains raised terrain forms");
 
     for (const auto& cell : map.cells) {
+        ok &= require(cell.landmass_elevation >= -1.0f && cell.landmass_elevation <= 1.0f, "landmass elevation is signed and normalized");
         ok &= require(cell.elevation >= 0.0f && cell.elevation <= 1.0f, "cell elevation is normalized");
         ok &= require(cell.slope >= 0.0f, "cell slope is non-negative");
         ok &= require(cell.distance_to_coast >= 0.0f, "cell coast distance is non-negative");
+        ok &= require(!cell.is_ocean || cell.is_water, "ocean cells are water");
+
+        if (cell.is_water) {
+            ok &= require(cell.landmass_elevation <= 0.0f, "water has a non-positive landmass constraint");
+            ok &= require(cell.elevation <= settings.sea_level, "water elevation does not exceed sea level");
+        } else {
+            ok &= require(cell.landmass_elevation > 0.0f, "land has a positive landmass constraint");
+            ok &= require(cell.elevation > settings.sea_level, "land elevation exceeds sea level");
+        }
     }
 
+    ok &= require(ocean_flags_match_boundary_connectivity(map), "ocean flags match boundary-connected water");
+
     return ok;
+}
+
+bool test_inland_relief_preserves_landmass_topology() {
+    procgen::GreaterRealmGeneratorSettings settings;
+    settings.seed = 24680;
+    settings.width = 96;
+    settings.height = 72;
+
+    const auto baseline = procgen::generate_greater_realm(settings);
+
+    settings.base_elevation_weight = 0.2f;
+    settings.mountain_weight = 1.4f;
+    settings.ridge_weight = 1.2f;
+    settings.valley_weight = 0.8f;
+    settings.terrain_noise_weight = 0.6f;
+    const auto changed_relief = procgen::generate_greater_realm(settings);
+
+    bool ok = true;
+    ok &= require(topology_matches(baseline, changed_relief), "inland relief weights do not change land or ocean topology");
+    ok &= require(elevation_difference_sum(baseline, changed_relief) > 1.0f, "inland relief weights still change terrain elevation");
+    return ok;
+}
+
+bool test_sea_level_controls_landmass_topology() {
+    procgen::GreaterRealmGeneratorSettings settings;
+    settings.seed = 13579;
+    settings.width = 96;
+    settings.height = 72;
+    settings.sea_level = 0.35f;
+    const auto low_sea = procgen::generate_greater_realm(settings);
+
+    settings.sea_level = 0.65f;
+    const auto high_sea = procgen::generate_greater_realm(settings);
+
+    return require(count_land(low_sea) > count_land(high_sea), "higher sea level reduces generated land area");
 }
 
 bool test_seed_determinism() {
@@ -160,7 +287,9 @@ int main() {
     const std::array tests = {
         test_generated_map_shape,
         test_seed_determinism,
-        test_map_cell_lookup
+        test_map_cell_lookup,
+        test_inland_relief_preserves_landmass_topology,
+        test_sea_level_controls_landmass_topology
     };
 
     bool ok = true;

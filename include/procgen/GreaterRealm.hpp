@@ -23,6 +23,7 @@ enum class TerrainForm : std::uint8_t {
 struct GreaterRealmCell {
     std::int32_t x{0};
     std::int32_t y{0};
+    float landmass_elevation{0.0f};
     float elevation{0.0f};
     bool is_water{false};
     bool is_ocean{false};
@@ -49,14 +50,18 @@ struct GreaterRealmGeneratorSettings {
     float mountain_frequency{3.0f};
     float ridge_frequency{9.0f};
     float valley_frequency{6.0f};
+    float coastline_noise_frequency{14.0f};
     float terrain_noise_frequency{18.0f};
+    float ocean_noise_frequency{8.0f};
 
     float land_shape_weight{1.0f};
     float base_elevation_weight{1.0f};
     float mountain_weight{0.35f};
     float ridge_weight{0.25f};
     float valley_weight{0.25f};
+    float coastline_noise_weight{0.08f};
     float terrain_noise_weight{0.12f};
+    float ocean_depth_weight{0.20f};
 };
 
 struct GreaterRealmMap {

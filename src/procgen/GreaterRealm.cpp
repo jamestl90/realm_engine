@@ -1,7 +1,7 @@
 #include "../../include/procgen/GreaterRealm.hpp"
 #include <algorithm>
+#include <array>
 #include <cmath>
-#include <limits>
 
 namespace procgen {
 
@@ -89,6 +89,63 @@ constexpr float INF_DISTANCE = 1.0e20f;
 
 [[nodiscard]] float normalized_y(std::uint32_t y, std::uint32_t height) noexcept {
     return height > 1 ? static_cast<float>(y) / static_cast<float>(height - 1) : 0.0f;
+}
+
+[[nodiscard]] float signed_landmass_elevation(float land_shape, float sea_level) noexcept {
+    if (land_shape > sea_level) {
+        const float land_range = std::max(1.0f - sea_level, 0.0001f);
+        return clamp01((land_shape - sea_level) / land_range);
+    }
+
+    const float water_range = std::max(sea_level, 0.0001f);
+    return -clamp01((sea_level - land_shape) / water_range);
+}
+
+void classify_oceans(GreaterRealmMap& map) {
+    std::vector<std::size_t> open;
+    open.reserve(static_cast<std::size_t>(map.width) * 2 + static_cast<std::size_t>(map.height) * 2);
+
+    const auto enqueue = [&](std::uint32_t x, std::uint32_t y) {
+        auto& cell = map.cells[map.index(x, y)];
+        if (!cell.is_water || cell.is_ocean) {
+            return;
+        }
+
+        cell.is_ocean = true;
+        open.push_back(map.index(x, y));
+    };
+
+    for (std::uint32_t x = 0; x < map.width; ++x) {
+        enqueue(x, 0);
+        enqueue(x, map.height - 1);
+    }
+    for (std::uint32_t y = 0; y < map.height; ++y) {
+        enqueue(0, y);
+        enqueue(map.width - 1, y);
+    }
+
+    constexpr std::array<std::array<std::int32_t, 2>, 4> neighbors{{
+        {{-1, 0}},
+        {{1, 0}},
+        {{0, -1}},
+        {{0, 1}}
+    }};
+
+    while (!open.empty()) {
+        const std::size_t index = open.back();
+        open.pop_back();
+
+        const auto& cell = map.cells[index];
+        for (const auto& offset : neighbors) {
+            const std::int32_t neighbor_x = cell.x + offset[0];
+            const std::int32_t neighbor_y = cell.y + offset[1];
+            if (!map.contains(neighbor_x, neighbor_y)) {
+                continue;
+            }
+
+            enqueue(static_cast<std::uint32_t>(neighbor_x), static_cast<std::uint32_t>(neighbor_y));
+        }
+    }
 }
 
 void compute_coast_distance(GreaterRealmMap& map) {
@@ -263,11 +320,19 @@ GreaterRealmMap generate_greater_realm(const GreaterRealmGeneratorSettings& sett
     map.cell_size = settings.cell_size > 0.0f ? settings.cell_size : 1.0f;
     map.cells.resize(map.expected_cell_count());
 
-    std::vector<float> raw_elevations(map.cells.size(), 0.0f);
-    float min_elevation = std::numeric_limits<float>::max();
-    float max_elevation = std::numeric_limits<float>::lowest();
+    struct TerrainLayers {
+        float base_elevation{0.0f};
+        float mountain{0.0f};
+        float ridge{0.0f};
+        float valley{0.0f};
+        float terrain_noise{0.0f};
+        float ocean_noise{0.0f};
+    };
+
+    std::vector<TerrainLayers> layers(map.cells.size());
 
     const float aspect = map.height > 0 ? static_cast<float>(map.width) / static_cast<float>(map.height) : 1.0f;
+    const float sea_level = std::clamp(settings.sea_level, 0.01f, 0.99f);
 
     for (std::uint32_t y = 0; y < map.height; ++y) {
         for (std::uint32_t x = 0; x < map.width; ++x) {
@@ -280,41 +345,90 @@ GreaterRealmMap generate_greater_realm(const GreaterRealmGeneratorSettings& sett
 
             const float edge_falloff = 1.0f - smoothstep(0.58f, 1.08f, radius);
             const float land_noise = fbm(settings.seed, u, v, settings.land_shape_frequency, 11ull, 5);
-            const float land_shape = clamp01(edge_falloff * 0.9f + (land_noise - 0.5f) * 0.75f + 0.18f);
+            const float broad_land_shape = clamp01(
+                (edge_falloff * 0.9f + (land_noise - 0.5f) * 0.75f + 0.18f)
+                * std::max(settings.land_shape_weight, 0.0f)
+            );
+
+            const float coastline_noise = fbm(
+                settings.seed,
+                u,
+                v,
+                settings.coastline_noise_frequency,
+                59ull,
+                4
+            ) * 2.0f - 1.0f;
+            const float coastline_proximity = 1.0f - smoothstep(
+                0.0f,
+                0.30f,
+                std::abs(broad_land_shape - sea_level)
+            );
+            const float land_shape = clamp01(
+                broad_land_shape
+                + coastline_noise * std::max(settings.coastline_noise_weight, 0.0f) * coastline_proximity
+            );
+            const float landmass_elevation = signed_landmass_elevation(land_shape, sea_level);
 
             const float base_elevation = fbm(settings.seed, u, v, settings.base_elevation_frequency, 101ull, 5);
-            const float mountain_mask = smoothstep(0.35f, 0.95f, land_shape);
+            const float mountain_mask = smoothstep(0.05f, 0.85f, landmass_elevation);
             const float mountain_influence = std::pow(ridged_noise(settings.seed, u, v, settings.mountain_frequency, 211ull, 4), 2.0f) * mountain_mask;
             const float ridge_influence = std::pow(ridged_noise(settings.seed, u, v, settings.ridge_frequency, 307ull, 3), 3.0f) * mountain_mask;
-            const float valley_influence = std::pow(ridged_noise(settings.seed, u, v, settings.valley_frequency, 401ull, 4), 2.0f) * smoothstep(0.2f, 0.85f, land_shape);
+            const float valley_influence = std::pow(ridged_noise(settings.seed, u, v, settings.valley_frequency, 401ull, 4), 2.0f) * smoothstep(0.02f, 0.75f, landmass_elevation);
             const float terrain_noise = fbm(settings.seed, u, v, settings.terrain_noise_frequency, 503ull, 3) - 0.5f;
+            const float ocean_noise = fbm(settings.seed, u, v, settings.ocean_noise_frequency, 601ull, 3) * 2.0f - 1.0f;
 
-            const float raw_elevation =
-                land_shape * settings.land_shape_weight
-                + base_elevation * settings.base_elevation_weight
-                + mountain_influence * settings.mountain_weight
-                + ridge_influence * settings.ridge_weight
-                - valley_influence * settings.valley_weight
-                + terrain_noise * settings.terrain_noise_weight;
-
-            raw_elevations[index] = raw_elevation;
-            min_elevation = std::min(min_elevation, raw_elevation);
-            max_elevation = std::max(max_elevation, raw_elevation);
+            layers[index] = TerrainLayers{
+                base_elevation,
+                mountain_influence,
+                ridge_influence,
+                valley_influence,
+                terrain_noise,
+                ocean_noise
+            };
 
             auto& cell = map.cells[index];
             cell.x = static_cast<std::int32_t>(x);
             cell.y = static_cast<std::int32_t>(y);
+            cell.landmass_elevation = landmass_elevation;
+            cell.is_water = landmass_elevation <= 0.0f;
         }
     }
 
-    const float elevation_range = max_elevation - min_elevation;
+    const float base_weight = std::max(settings.base_elevation_weight, 0.0f);
+    const float mountain_weight = std::max(settings.mountain_weight, 0.0f);
+    const float ridge_weight = std::max(settings.ridge_weight, 0.0f);
+    const float valley_weight = std::max(settings.valley_weight, 0.0f);
+    const float terrain_noise_weight = std::max(settings.terrain_noise_weight, 0.0f);
+    const float relief_min = -valley_weight - terrain_noise_weight * 0.5f;
+    const float relief_max = base_weight + mountain_weight + ridge_weight + terrain_noise_weight * 0.5f;
+    const float relief_range = std::max(relief_max - relief_min, 0.0001f);
+
     for (std::size_t i = 0; i < map.cells.size(); ++i) {
         auto& cell = map.cells[i];
-        cell.elevation = elevation_range > 0.0f ? clamp01((raw_elevations[i] - min_elevation) / elevation_range) : 0.0f;
-        cell.is_water = cell.elevation <= settings.sea_level;
-        cell.is_ocean = cell.is_water;
+        const auto& layer = layers[i];
+
+        if (cell.is_water) {
+            const float depth_variation = 1.0f
+                + layer.ocean_noise * std::max(settings.ocean_depth_weight, 0.0f);
+            const float depth = clamp01(-cell.landmass_elevation * std::max(depth_variation, 0.0f));
+            cell.elevation = sea_level * (1.0f - depth);
+            continue;
+        }
+
+        const float raw_relief =
+            layer.base_elevation * base_weight
+            + layer.mountain * mountain_weight
+            + layer.ridge * ridge_weight
+            - layer.valley * valley_weight
+            + layer.terrain_noise * terrain_noise_weight;
+        const float relief = clamp01((raw_relief - relief_min) / relief_range);
+        const float inland_influence = smoothstep(0.0f, 0.45f, cell.landmass_elevation);
+        const float coastal_rise = 0.01f + 0.14f * clamp01(cell.landmass_elevation / 0.45f);
+        const float land_height = clamp01(lerp(coastal_rise, relief, inland_influence));
+        cell.elevation = sea_level + (1.0f - sea_level) * land_height;
     }
 
+    classify_oceans(map);
     compute_coast_distance(map);
     compute_slopes(map);
     classify_cells(map, settings);
