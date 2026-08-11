@@ -41,6 +41,16 @@ set(RFD_FONT_ASSETS
 # Automatically find all .cpp files in src directory
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS "src/*.cpp")
 
+# Procgen visualization and its application panel are omitted from normal release builds.
+set(RFD_PROCGEN_DEBUG_SOURCES
+    "${CMAKE_SOURCE_DIR}/src/procgen/GreaterRealmDebug.cpp"
+    "${CMAKE_SOURCE_DIR}/src/game/GreaterRealmDebugPanel.cpp"
+)
+list(REMOVE_ITEM SOURCES ${RFD_PROCGEN_DEBUG_SOURCES})
+if(RFD_ENABLE_PROCGEN_DEBUG_VIEW)
+    list(APPEND SOURCES ${RFD_PROCGEN_DEBUG_SOURCES})
+endif()
+
 add_executable(rfd_game ${SOURCES})
 
 # Include directories
@@ -85,6 +95,7 @@ if(RFD_BUILD_TESTS)
     add_executable(rfd_engine_tests EXCLUDE_FROM_ALL
         tests/procgen/GreaterRealmTests.cpp
         src/procgen/GreaterRealm.cpp
+        src/procgen/GreaterRealmDebug.cpp
     )
 
     target_include_directories(rfd_engine_tests PRIVATE

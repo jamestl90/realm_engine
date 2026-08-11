@@ -77,6 +77,7 @@ void Engine::shutdown() noexcept {
     // Notify game of shutdown
     if (game_) {
         game_->on_shutdown(*this);
+        ui_manager_.setRoot(nullptr);
         game_.reset();
     }
     SDL_Log("Game Shutdown");
@@ -290,13 +291,29 @@ void Engine::render(double alpha) {
     // Render ECS world sprites first
     renderer_->render(world_, alpha);
 
-    // Call game render hook for custom rendering (UI, overlays, etc.)
-    // UI should render on top of sprites
+    // Call game render hook for custom rendering between world sprites and retained UI.
     if (game_) {
         game_->on_render(*this, alpha);
     }
 
+    render_ui();
     renderer_->present();
+}
+
+void Engine::render_ui() {
+    auto* root = ui_manager_.root();
+    if (!renderer_ || !ui_renderer_ || !root) {
+        return;
+    }
+
+    renderer_->end_render_pass();
+    ui_renderer_->render(
+        renderer_->command_buffer(),
+        renderer_->swapchain_texture(),
+        root,
+        static_cast<float>(LOGICAL_W),
+        static_cast<float>(LOGICAL_H)
+    );
 }
 
 } // namespace core

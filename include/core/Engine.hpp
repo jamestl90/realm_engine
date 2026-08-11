@@ -72,6 +72,7 @@ private:
     void fixed_update(float dt);
     void update(double dt);
     void render(double alpha);
+    void render_ui();
 
     SDL_Window* window_{nullptr};
     std::unique_ptr<rendering::GPUDevice> gpu_device_;

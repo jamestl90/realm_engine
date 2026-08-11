@@ -2,9 +2,11 @@
 
 #include "Texture.hpp"
 #include <SDL3/SDL.h>
+#include <cstdint>
+#include <memory>
+#include <span>
 #include <string>
 #include <unordered_map>
-#include <memory>
 
 namespace rendering {
 
@@ -43,6 +45,14 @@ public:
 
     // Create texture from SDL surface
     [[nodiscard]] TextureID create_from_surface(SDL_Surface* surface, SDL_GPUTextureUsageFlags usage = SDL_GPU_TEXTUREUSAGE_SAMPLER);
+
+    // Create texture from tightly packed RGBA8 pixels
+    [[nodiscard]] TextureID create_from_rgba_pixels(
+        std::uint32_t width,
+        std::uint32_t height,
+        std::span<const std::uint8_t> pixels,
+        SDL_GPUTextureUsageFlags usage = SDL_GPU_TEXTUREUSAGE_SAMPLER
+    );
 
     // Define atlas region
     void define_region(TextureID texture_id, const std::string& name, const TextureRegion& region);

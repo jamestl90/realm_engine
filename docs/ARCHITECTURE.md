@@ -27,6 +27,13 @@ This engine is built on a pure Entity Component System (ECS) architecture with D
 - **Command buffers**: Decouple CPU and GPU work
 - **Transfer buffers**: Async uploads for dynamic geometry
 
+### 5. Modular Ownership
+- **Build modularly from the start**: New behavior should be placed in the module that owns it instead of accumulating in convenient application or engine entry-point files
+- **No monolith files**: Classes and source files should have cohesive responsibilities; split them when they begin coordinating unrelated systems or embedding reusable subsystem logic
+- **Application/engine boundary**: Games compose engine APIs and own game-specific policy, while reusable generation, rendering, ECS, asset, and tooling behavior belongs in engine modules
+- **Refactor continuously**: Refactor ownership and dependencies as responsibilities become clear rather than postponing all structural work until files become difficult to change
+- **Prefer meaningful modules**: Modular design does not require a separate file for every small helper; extract code when it establishes a clear boundary, reusable capability, or independently testable unit
+
 ## System Architecture
 
 ```mermaid
@@ -136,11 +143,17 @@ sequenceDiagram
 ### Core Engine (`include/core/`)
 - **Engine**: Main loop with fixed timestep and interpolation
 - **Time**: Manages game time, pause, time scale
+- **Frame composition**: Renders ECS sprites, invokes optional game-specific rendering, then renders the retained UI tree
 
 ### Rendering (`include/rendering/`)
 - **Renderer**: SDL3 GPU batch renderer with instancing
 - **Sprite**: Sprite component (texture region, layer, flip flags)
-- **Texture**: Texture atlas management and GPU upload
+- **Texture**: Texture atlas management and GPU upload, including reusable tightly packed RGBA8 uploads
+
+### Procedural Generation (`include/procgen/`)
+- **GreaterRealm**: Engine-neutral greater realm data and deterministic terrain generation
+- **GreaterRealmDebug**: Compile-gated, engine-neutral terrain statistics and RGBA debug visualization
+- **Ownership boundary**: Applications own generator settings, controls, and preview composition; procgen modules own reusable generation and visualization behavior
 
 ### Physics (`include/physics/`)
 - **SpatialPartition**: Grid-based spatial hash for broad-phase collision

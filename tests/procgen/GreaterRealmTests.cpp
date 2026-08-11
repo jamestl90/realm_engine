@@ -1,4 +1,5 @@
 #include "procgen/GreaterRealm.hpp"
+#include "procgen/GreaterRealmDebug.hpp"
 #include <array>
 #include <cmath>
 #include <cstddef>
@@ -7,15 +8,6 @@
 
 namespace {
 
-struct TerrainCounts {
-    std::size_t ocean{0};
-    std::size_t coast{0};
-    std::size_t plains{0};
-    std::size_t hills{0};
-    std::size_t highlands{0};
-    std::size_t mountains{0};
-};
-
 bool require(bool condition, const char* message) {
     if (!condition) {
         std::cerr << "FAILED: " << message << '\n';
@@ -23,35 +15,6 @@ bool require(bool condition, const char* message) {
     }
 
     return true;
-}
-
-TerrainCounts count_terrain_forms(const procgen::GreaterRealmMap& map) {
-    TerrainCounts counts;
-
-    for (const auto& cell : map.cells) {
-        switch (cell.terrain_form) {
-            case procgen::TerrainForm::Ocean:
-                ++counts.ocean;
-                break;
-            case procgen::TerrainForm::Coast:
-                ++counts.coast;
-                break;
-            case procgen::TerrainForm::Plains:
-                ++counts.plains;
-                break;
-            case procgen::TerrainForm::Hills:
-                ++counts.hills;
-                break;
-            case procgen::TerrainForm::Highlands:
-                ++counts.highlands;
-                break;
-            case procgen::TerrainForm::Mountains:
-                ++counts.mountains;
-                break;
-        }
-    }
-
-    return counts;
 }
 
 bool maps_match(const procgen::GreaterRealmMap& a, const procgen::GreaterRealmMap& b) {
@@ -205,7 +168,7 @@ bool test_generated_map_shape() {
     settings.height = 96;
 
     const auto map = procgen::generate_greater_realm(settings);
-    const auto counts = count_terrain_forms(map);
+    const auto counts = procgen::count_terrain_forms(map);
     const std::size_t land_count = map.cells.size() - counts.ocean;
 
     bool ok = true;
@@ -388,6 +351,76 @@ bool test_map_cell_lookup() {
     return ok;
 }
 
+bool test_debug_visualization_data() {
+    procgen::GreaterRealmMap map;
+    map.width = 3;
+    map.height = 2;
+    map.cells.resize(6);
+
+    constexpr std::array forms{
+        procgen::TerrainForm::Ocean,
+        procgen::TerrainForm::Coast,
+        procgen::TerrainForm::Plains,
+        procgen::TerrainForm::Hills,
+        procgen::TerrainForm::Highlands,
+        procgen::TerrainForm::Mountains
+    };
+    constexpr std::array elevations{0.1f, 0.5f, 0.58f, 0.65f, 0.75f, 0.95f};
+
+    for (std::size_t index = 0; index < map.cells.size(); ++index) {
+        map.cells[index].terrain_form = forms[index];
+        map.cells[index].elevation = elevations[index];
+    }
+
+    const auto counts = procgen::count_terrain_forms(map);
+    const auto image = procgen::build_greater_realm_debug_image(map, 0.5f);
+
+    bool ok = true;
+    ok &= require(counts.ocean == 1, "debug terrain counts include ocean cells");
+    ok &= require(counts.coast == 1, "debug terrain counts include coast cells");
+    ok &= require(counts.plains == 1, "debug terrain counts include plains cells");
+    ok &= require(counts.hills == 1, "debug terrain counts include hills cells");
+    ok &= require(counts.highlands == 1, "debug terrain counts include highland cells");
+    ok &= require(counts.mountains == 1, "debug terrain counts include mountain cells");
+    ok &= require(image.width == map.width && image.height == map.height, "debug image preserves map dimensions");
+    ok &= require(image.has_expected_byte_count(), "debug image contains one RGBA pixel per map cell");
+    ok &= require(
+        image.rgba[4] == 210 && image.rgba[5] == 190 && image.rgba[6] == 126 && image.rgba[7] == 255,
+        "debug image uses the coast palette"
+    );
+    for (std::size_t alpha = 3; alpha < image.rgba.size(); alpha += 4) {
+        ok &= require(image.rgba[alpha] == 255, "debug image pixels are opaque");
+    }
+    return ok;
+}
+
+bool test_debug_ocean_depth_shading() {
+    procgen::GreaterRealmCell deep;
+    deep.terrain_form = procgen::TerrainForm::Ocean;
+    deep.elevation = 0.0f;
+
+    procgen::GreaterRealmCell shallow = deep;
+    shallow.elevation = 0.49f;
+
+    const auto deep_colour = procgen::greater_realm_debug_colour(deep, 0.5f);
+    const auto shallow_colour = procgen::greater_realm_debug_colour(shallow, 0.5f);
+
+    bool ok = true;
+    ok &= require(deep_colour.b < shallow_colour.b, "deeper ocean cells render darker than shallow cells");
+    ok &= require(deep_colour.a == 255 && shallow_colour.a == 255, "ocean debug colours are opaque");
+    return ok;
+}
+
+bool test_debug_visualization_rejects_malformed_map() {
+    procgen::GreaterRealmMap map;
+    map.width = 2;
+    map.height = 2;
+    map.cells.resize(3);
+
+    const auto image = procgen::build_greater_realm_debug_image(map, 0.5f);
+    return require(!image.has_expected_byte_count(), "debug visualization rejects malformed map storage");
+}
+
 } // namespace
 
 int main() {
@@ -399,7 +432,10 @@ int main() {
         test_terrain_noise_changes_land_relief_only,
         test_sea_level_controls_landmass_topology,
         test_ocean_depth_preserves_topology,
-        test_island_bias_controls_topology
+        test_island_bias_controls_topology,
+        test_debug_visualization_data,
+        test_debug_ocean_depth_shading,
+        test_debug_visualization_rejects_malformed_map
     };
 
     bool ok = true;

@@ -18,8 +18,8 @@ public:
     // Use for input handling, camera updates, UI, etc.
     virtual void on_update(Engine& engine, double dt) { (void)engine; (void)dt; }
 
-    // Called once per frame for rendering (with interpolation alpha)
-    // Default implementation does nothing; engine handles ECS rendering
+    // Called once per frame after ECS rendering and before retained UI rendering
+    // Default implementation does nothing; engine handles ECS and retained UI rendering
     virtual void on_render(Engine& engine, double alpha) { (void)engine; (void)alpha; }
 
     // Called once when the engine is shutting down

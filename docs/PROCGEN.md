@@ -32,10 +32,11 @@ This follows Mapgen4's layered elevation approach while retaining the engine's c
 
 ## Debugging And Tests
 
-- A compile-gated debug view renders terrain forms as a coloured texture and shades ocean cells by relative depth.
-- Debug UI controls expose seed, sea level, land shape, island bias, coastline detail, base relief, mountain, ridge, valley, terrain noise, and ocean depth.
+- The compile-gated `GreaterRealmDebug` module counts terrain forms and converts map data into an engine-neutral RGBA image, including relative ocean-depth shading.
+- `TextureManager` uploads the RGBA output without requiring procgen code to depend on SDL or GPU APIs.
+- The application-level `GreaterRealmDebugPanel` owns the debug UI, active settings, and regeneration callbacks; `RogueFarmGame` owns preview placement and composes these pieces. The controls expose seed, sea level, land shape, island bias, coastline detail, base relief, mountain, ridge, valley, terrain noise, and ocean depth.
 - Island bias defaults to Mapgen4's `0.5`; terrain noise and ocean depth use larger tuning steps and contrast-enhanced debug shading so changes are visible.
-- Automated tests cover output shape, deterministic seeds, map lookup, signed constraints, topology stability, ocean connectivity, and sea-level response.
+- Automated tests cover output shape, deterministic seeds, map lookup, signed constraints, topology stability, ocean connectivity, sea-level response, terrain statistics, and debug-image output.
 - Test code is compiled only when `RFD_BUILD_TESTS=ON` and does not enter release builds.
 
 ## Not Yet Supported
