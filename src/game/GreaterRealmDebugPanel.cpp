@@ -47,7 +47,8 @@ std::string terrain_text(const procgen::TerrainFormCounts& counts) {
 
 std::string hydrology_text(const procgen::GreaterRealmMap& map) {
     std::ostringstream stream;
-    stream << "Rivers " << map.rivers.size() << "  Drainage " << map.drainage_order.size();
+    stream << "Peaks " << map.mountain_peaks.size() << "  Rivers " << map.rivers.size()
+           << "  Drainage " << map.drainage_order.size();
     return stream.str();
 }
 
@@ -186,7 +187,10 @@ std::unique_ptr<ui::UIElement> GreaterRealmDebugPanel::build(
     add_setting_row("Coast detail", settings.coastline_noise_weight, &m_coastline_noise_text, &procgen::GreaterRealmGeneratorSettings::coastline_noise_weight, 0.01f, 0.0f, 0.40f);
     add_setting_row("Base relief", settings.base_elevation_weight, &m_base_elevation_text, &procgen::GreaterRealmGeneratorSettings::base_elevation_weight, 0.05f, 0.0f, 2.0f);
     add_setting_row("Sea", settings.sea_level, &m_sea_text, &procgen::GreaterRealmGeneratorSettings::sea_level, 0.02f, 0.10f, 0.90f);
-    add_setting_row("Mountain", settings.mountain_weight, &m_mountain_text, &procgen::GreaterRealmGeneratorSettings::mountain_weight, 0.05f, 0.0f, 1.5f);
+    add_setting_row("Mountain strength", settings.mountain_weight, &m_mountain_text, &procgen::GreaterRealmGeneratorSettings::mountain_weight, 0.05f, 0.0f, 1.5f);
+    add_setting_row("Peak spacing", settings.mountain_peak_spacing, &m_peak_spacing_text, &procgen::GreaterRealmGeneratorSettings::mountain_peak_spacing, 4.0f, 8.0f, 80.0f);
+    add_setting_row("Peak radius", settings.mountain_peak_radius, &m_peak_radius_text, &procgen::GreaterRealmGeneratorSettings::mountain_peak_radius, 4.0f, 4.0f, 100.0f);
+    add_setting_row("Peak jaggedness", settings.mountain_peak_jaggedness, &m_peak_jaggedness_text, &procgen::GreaterRealmGeneratorSettings::mountain_peak_jaggedness, 0.10f, 0.0f, 1.0f);
     add_setting_row("Ridge", settings.ridge_weight, &m_ridge_text, &procgen::GreaterRealmGeneratorSettings::ridge_weight, 0.05f, 0.0f, 1.5f);
     add_setting_row("Valley", settings.valley_weight, &m_valley_text, &procgen::GreaterRealmGeneratorSettings::valley_weight, 0.05f, 0.0f, 1.5f);
     add_setting_row("Terrain noise", settings.terrain_noise_weight, &m_noise_text, &procgen::GreaterRealmGeneratorSettings::terrain_noise_weight, 0.10f, 0.0f, 2.0f);
@@ -290,7 +294,10 @@ void GreaterRealmDebugPanel::update(const procgen::GreaterRealmMap& map) {
     if (m_island_bias_text) m_island_bias_text->setText(setting_text("Island bias", m_settings->island_bias));
     if (m_coastline_noise_text) m_coastline_noise_text->setText(setting_text("Coast detail", m_settings->coastline_noise_weight));
     if (m_base_elevation_text) m_base_elevation_text->setText(setting_text("Base relief", m_settings->base_elevation_weight));
-    if (m_mountain_text) m_mountain_text->setText(setting_text("Mountain", m_settings->mountain_weight));
+    if (m_mountain_text) m_mountain_text->setText(setting_text("Mountain strength", m_settings->mountain_weight));
+    if (m_peak_spacing_text) m_peak_spacing_text->setText(setting_text("Peak spacing", m_settings->mountain_peak_spacing));
+    if (m_peak_radius_text) m_peak_radius_text->setText(setting_text("Peak radius", m_settings->mountain_peak_radius));
+    if (m_peak_jaggedness_text) m_peak_jaggedness_text->setText(setting_text("Peak jaggedness", m_settings->mountain_peak_jaggedness));
     if (m_ridge_text) m_ridge_text->setText(setting_text("Ridge", m_settings->ridge_weight));
     if (m_valley_text) m_valley_text->setText(setting_text("Valley", m_settings->valley_weight));
     if (m_noise_text) m_noise_text->setText(setting_text("Terrain noise", m_settings->terrain_noise_weight));

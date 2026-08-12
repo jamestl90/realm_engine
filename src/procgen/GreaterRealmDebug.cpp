@@ -118,6 +118,18 @@ DebugImage build_greater_realm_debug_image(const GreaterRealmMap& map, float sea
         }
     }
 
+    for (const auto& peak : map.mountain_peaks) {
+        if (peak.cell_index >= map.cells.size()) {
+            continue;
+        }
+        constexpr DebugColour peak_colour{232, 62, 48, 255};
+        const std::size_t pixel = static_cast<std::size_t>(peak.cell_index) * 4;
+        image.rgba[pixel] = peak_colour.r;
+        image.rgba[pixel + 1] = peak_colour.g;
+        image.rgba[pixel + 2] = peak_colour.b;
+        image.rgba[pixel + 3] = peak_colour.a;
+    }
+
     return image;
 }
 

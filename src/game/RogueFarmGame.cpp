@@ -61,7 +61,7 @@ bool RogueFarmGame::regenerate_procgen_debug_map(core::Engine& engine) {
 
     m_procgen_debug_panel.update(map);
     SDL_Log(
-        "Generated procgen debug map: seed=%llu size=%ux%u sea=%.2f island=%.2f coast=%.2f base=%.2f mountain=%.2f ridge=%.2f valley=%.2f noise=%.2f ocean=%.2f rain=%.2f rivers=%zu",
+        "Generated procgen debug map: seed=%llu size=%ux%u sea=%.2f island=%.2f coast=%.2f base=%.2f mountain=%.2f peaks=%zu ridge=%.2f valley=%.2f noise=%.2f ocean=%.2f rain=%.2f rivers=%zu",
         m_procgen_settings.seed,
         m_procgen_settings.width,
         m_procgen_settings.height,
@@ -70,6 +70,7 @@ bool RogueFarmGame::regenerate_procgen_debug_map(core::Engine& engine) {
         m_procgen_settings.coastline_noise_weight,
         m_procgen_settings.base_elevation_weight,
         m_procgen_settings.mountain_weight,
+        map.mountain_peaks.size(),
         m_procgen_settings.ridge_weight,
         m_procgen_settings.valley_weight,
         m_procgen_settings.terrain_noise_weight,

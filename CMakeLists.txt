@@ -98,6 +98,7 @@ if(RFD_BUILD_TESTS)
         src/procgen/GreaterRealm.cpp
         src/procgen/GreaterRealmDebug.cpp
         src/procgen/Hydrology.cpp
+        src/procgen/MountainPeaks.cpp
         src/procgen/TerrainConstraints.cpp
     )
 
@@ -115,6 +116,7 @@ if(RFD_BUILD_TESTS)
         src/procgen/GreaterRealm.cpp
         src/procgen/GreaterRealmDebug.cpp
         src/procgen/Hydrology.cpp
+        src/procgen/MountainPeaks.cpp
         src/procgen/TerrainConstraints.cpp
     )
 
@@ -125,6 +127,24 @@ if(RFD_BUILD_TESTS)
     target_compile_definitions(rfd_procgen_pipeline_tests PRIVATE RFD_TEST_BUILD=1)
 
     add_test(NAME procgen_hydrology_climate_constraints COMMAND rfd_procgen_pipeline_tests)
+
+    add_executable(rfd_mountain_peak_tests EXCLUDE_FROM_ALL
+        tests/procgen/MountainPeakTests.cpp
+        src/procgen/Climate.cpp
+        src/procgen/GreaterRealm.cpp
+        src/procgen/GreaterRealmDebug.cpp
+        src/procgen/Hydrology.cpp
+        src/procgen/MountainPeaks.cpp
+        src/procgen/TerrainConstraints.cpp
+    )
+
+    target_include_directories(rfd_mountain_peak_tests PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+    )
+
+    target_compile_definitions(rfd_mountain_peak_tests PRIVATE RFD_TEST_BUILD=1)
+
+    add_test(NAME procgen_mountain_peaks COMMAND rfd_mountain_peak_tests)
 
     add_executable(rfd_ecs_tests EXCLUDE_FROM_ALL
         tests/ecs/WorldLifecycleTests.cpp

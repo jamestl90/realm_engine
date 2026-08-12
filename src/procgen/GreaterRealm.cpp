@@ -1,6 +1,7 @@
 #include "../../include/procgen/GreaterRealm.hpp"
 #include "../../include/procgen/Climate.hpp"
 #include "../../include/procgen/Hydrology.hpp"
+#include "../../include/procgen/MountainPeaks.hpp"
 #include "../../include/procgen/TerrainConstraints.hpp"
 #include <algorithm>
 #include <array>
@@ -316,7 +317,6 @@ static GreaterRealmMap generate_greater_realm_impl(
 
     struct TerrainLayers {
         float base_elevation{0.0f};
-        float mountain{0.0f};
         float ridge{0.0f};
         float valley{0.0f};
         float terrain_noise{0.0f};
@@ -386,7 +386,6 @@ static GreaterRealmMap generate_greater_realm_impl(
 
             const float base_elevation = fbm(settings.seed, u, v, settings.base_elevation_frequency, 101ull, 5);
             const float mountain_mask = smoothstep(0.05f, 0.85f, landmass_elevation);
-            const float mountain_influence = std::pow(ridged_noise(settings.seed, u, v, settings.mountain_frequency, 211ull, 4), 2.0f) * mountain_mask;
             const float ridge_influence = std::pow(ridged_noise(settings.seed, u, v, settings.ridge_frequency, 307ull, 3), 3.0f) * mountain_mask;
             const float valley_influence = std::pow(ridged_noise(settings.seed, u, v, settings.valley_frequency, 401ull, 4), 2.0f) * smoothstep(0.02f, 0.75f, landmass_elevation);
             const float terrain_noise = fbm(settings.seed, u, v, settings.terrain_noise_frequency, 503ull, 3) - 0.5f;
@@ -394,7 +393,6 @@ static GreaterRealmMap generate_greater_realm_impl(
 
             layers[index] = TerrainLayers{
                 base_elevation,
-                mountain_influence,
                 ridge_influence,
                 valley_influence,
                 terrain_noise,
@@ -410,6 +408,8 @@ static GreaterRealmMap generate_greater_realm_impl(
             cell.is_water = landmass_elevation <= 0.0f;
         }
     }
+
+    generate_mountain_peak_field(map, settings);
 
     const float base_weight = std::max(settings.base_elevation_weight, 0.0f);
     const float mountain_weight = std::max(settings.mountain_weight, 0.0f);
@@ -437,7 +437,7 @@ static GreaterRealmMap generate_greater_realm_impl(
 
         const float raw_relief =
             layer.base_elevation * base_weight
-            + layer.mountain * mountain_weight
+            + cell.mountain_influence * mountain_weight
             + layer.ridge * ridge_weight
             - layer.valley * valley_weight;
         const float normalized_relief = clamp01((raw_relief - relief_min) / relief_range);

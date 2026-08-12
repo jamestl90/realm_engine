@@ -33,6 +33,9 @@ struct GreaterRealmCell {
     bool is_coastal{false};
     float distance_to_coast{0.0f};
     float slope{0.0f};
+    float mountain_distance{std::numeric_limits<float>::infinity()};
+    float mountain_influence{0.0f};
+    bool is_mountain_peak{false};
     float humidity{0.0f};
     float rainfall{0.0f};
     float moisture{0.0f};
@@ -50,6 +53,13 @@ struct GreaterRealmRiverSegment {
     float width{0.0f};
 };
 
+struct GreaterRealmMountainPeak {
+    std::uint32_t cell_index{INVALID_CELL_INDEX};
+    std::int32_t x{0};
+    std::int32_t y{0};
+    float priority{0.0f};
+};
+
 struct GreaterRealmGeneratorSettings {
     Seed seed{1};
     std::uint32_t width{256};
@@ -63,7 +73,6 @@ struct GreaterRealmGeneratorSettings {
     float hill_threshold{0.55f};
 
     float base_elevation_frequency{5.0f};
-    float mountain_frequency{3.0f};
     float ridge_frequency{9.0f};
     float valley_frequency{6.0f};
     float coastline_noise_frequency{14.0f};
@@ -73,6 +82,9 @@ struct GreaterRealmGeneratorSettings {
     float island_bias{0.5f};
     float base_elevation_weight{1.0f};
     float mountain_weight{0.35f};
+    float mountain_peak_spacing{28.0f};
+    float mountain_peak_radius{36.0f};
+    float mountain_peak_jaggedness{0.25f};
     float ridge_weight{0.25f};
     float valley_weight{0.25f};
     float coastline_noise_weight{0.08f};
@@ -97,6 +109,7 @@ struct GreaterRealmMap {
     std::vector<GreaterRealmCell> cells;
     std::vector<std::uint32_t> drainage_order;
     std::vector<GreaterRealmRiverSegment> rivers;
+    std::vector<GreaterRealmMountainPeak> mountain_peaks;
 
     [[nodiscard]] bool empty() const noexcept { return cells.empty(); }
     [[nodiscard]] std::size_t expected_cell_count() const noexcept;

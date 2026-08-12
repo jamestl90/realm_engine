@@ -43,6 +43,9 @@ private:
     ui::TextBlock* m_coastline_noise_text{nullptr};
     ui::TextBlock* m_base_elevation_text{nullptr};
     ui::TextBlock* m_mountain_text{nullptr};
+    ui::TextBlock* m_peak_spacing_text{nullptr};
+    ui::TextBlock* m_peak_radius_text{nullptr};
+    ui::TextBlock* m_peak_jaggedness_text{nullptr};
     ui::TextBlock* m_ridge_text{nullptr};
     ui::TextBlock* m_valley_text{nullptr};
     ui::TextBlock* m_noise_text{nullptr};

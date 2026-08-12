@@ -10,7 +10,9 @@ This document tracks the procedural generation capabilities currently present in
 - Combines unscaled five-octave land-shape noise at frequencies `1, 2, 4, 8, 16` with Mapgen4's square-distance island constraint and coastline-localized noise.
 - Keeps broad land/water topology independent from inland terrain weights.
 - Builds normalized final elevation with separate land-relief and water-depth paths.
-- Shapes land with base elevation, mountains, ridges, valleys, and controlled terrain noise.
+- Shapes land with base elevation, explicit mountain peaks, ridges, valleys, and controlled terrain noise.
+- Selects deterministic land-based mountain peaks with configurable spacing, then propagates a jagged distance field to form coherent mountain masses.
+- Exports peak records plus per-cell peak distance, influence, and peak flags for hydrology and tooling.
 - Applies terrain noise after base relief normalization so its weight remains independently tunable.
 - Marks boundary-connected water as ocean.
 - Computes distance to coast, explicit coastal-land boundary metadata, and local slope.
@@ -35,26 +37,28 @@ This document tracks the procedural generation capabilities currently present in
 1. Generate a signed broad landmass field from fBm and a square-distance island constraint.
 2. Apply controlled noise near the coastline.
 3. Convert the field into a signed landmass constraint at sea level.
-4. Generate base elevation and inland relief influences.
-5. Generate ocean depth separately.
-6. Assemble normalized final elevation without changing land/water topology.
-7. Classify boundary-connected water as ocean.
-8. Compute coast distance, slope, and terrain forms.
-9. Generate wind-driven humidity, rainfall, and moisture.
-10. Build priority drainage and condition depressions for flow.
-11. Accumulate moisture and export river segments.
+4. Select spaced mountain peaks and propagate their jagged distance field.
+5. Generate base elevation and the remaining inland relief influences.
+6. Generate ocean depth separately.
+7. Assemble normalized final elevation without changing land/water topology.
+8. Classify boundary-connected water as ocean.
+9. Compute coast distance, slope, and terrain forms.
+10. Generate wind-driven humidity, rainfall, and moisture.
+11. Build priority drainage and condition depressions for flow.
+12. Accumulate moisture and export river segments.
 
 This follows Mapgen4's layered elevation approach while retaining the engine's current regular-grid representation.
 
 ## Debugging And Tests
 
-- The compile-gated `GreaterRealmDebug` module counts terrain forms and coastal land independently, converts map data into an engine-neutral RGBA image, and overlays exported rivers.
+- The compile-gated `GreaterRealmDebug` module counts terrain forms and coastal land independently, converts map data into an engine-neutral RGBA image, overlays exported rivers, and marks explicit peak cells.
 - The debug image uses relative ocean-depth shading and a one-cell dark coastline accent while preserving the underlying plains, hills, highlands, or mountain colour.
 - `TextureManager` uploads the RGBA output without requiring procgen code to depend on SDL or GPU APIs.
-- The application-level `GreaterRealmDebugPanel` owns the debug UI, active settings, and regeneration callbacks; `RogueFarmGame` owns preview placement, the editable constraint field, and composition. Controls expose terrain, wind, rainfall, evaporation, river-flow, river-threshold, and coordinate-based constraint stamping settings.
+- The application-level `GreaterRealmDebugPanel` owns the debug UI, active settings, and regeneration callbacks; `RogueFarmGame` owns preview placement, the editable constraint field, and composition. Controls expose terrain, mountain strength, peak spacing/radius/jaggedness, wind, rainfall, evaporation, river-flow, river-threshold, and coordinate-based constraint stamping settings.
+- The current Constraint X/Y controls are a temporary debug harness. Unlike Mapgen4, the engine does not yet convert pointer positions on the preview into direct brush strokes; task 035 tracks removing these controls and replacing them with preview painting.
 - Island bias follows Mapgen4's `0..1` range and `0.5` default. It changes the signed landmass constraint, so it can affect both coastline topology and water elevation before the separate ocean-depth stage.
 - Terrain noise and ocean depth use larger tuning steps and contrast-enhanced debug shading so changes are visible.
-- Automated tests cover output shape, deterministic seeds, map lookup, signed constraints, topology stability, ocean connectivity, sea-level response, terrain statistics, constraint interpolation/serialization, drainage invariants, climate response, river flow/connectivity, and debug-image output.
+- Automated tests cover output shape, deterministic seeds, map lookup, signed constraints, topology stability, ocean connectivity, sea-level response, terrain statistics, peak selection/spacing/distance fields, constraint interpolation/serialization, drainage invariants, climate response, river flow/connectivity, and debug-image output.
 - Test code is compiled only when `RFD_BUILD_TESTS=ON` and does not enter release builds.
 
 ## Not Yet Supported
@@ -64,7 +68,7 @@ This follows Mapgen4's layered elevation approach while retaining the engine's c
 - Resources, settlements, factions, or object placement.
 - Local tile generation or world-region streaming.
 - Beach, cliff, rocky-shore, marsh, delta, or other detailed shoreline classification.
-- Explicit mountain peaks or peak-distance fields.
+- Direct pointer painting of terrain constraints on the debug preview.
 - Delaunay/Voronoi mesh generation.
 - Mapgen4-style folded terrain geometry or 2.5D projection.
 - Climate-influenced terrain colouring.

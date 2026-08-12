@@ -35,3 +35,7 @@ Mapgen4 separates a low-resolution signed constraint field from generated terrai
 - All six CTest targets pass.
 - Tests-disabled Debug and Release builds succeed.
 - The Debug executable passes a native startup smoke test.
+
+## Notes
+
+The Constraint X/Y and stamp buttons are a temporary test interface for the engine-owned constraint field. Mapgen4 paints constraints directly from pointer coordinates on its map; task 035 explicitly tracks removing Constraint X/Y and implementing equivalent preview painting.
