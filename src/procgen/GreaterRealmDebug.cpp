@@ -16,12 +16,13 @@ TerrainFormCounts count_terrain_forms(const GreaterRealmMap& map) noexcept {
     TerrainFormCounts counts;
 
     for (const auto& cell : map.cells) {
+        if (cell.is_coastal) {
+            ++counts.coastal_land;
+        }
+
         switch (cell.terrain_form) {
             case TerrainForm::Ocean:
                 ++counts.ocean;
-                break;
-            case TerrainForm::Coast:
-                ++counts.coast;
                 break;
             case TerrainForm::Plains:
                 ++counts.plains;
@@ -65,8 +66,6 @@ DebugColour greater_realm_debug_colour(const GreaterRealmCell& cell, float sea_l
     switch (cell.terrain_form) {
         case TerrainForm::Ocean:
             break;
-        case TerrainForm::Coast:
-            return {210, 190, 126, 255};
         case TerrainForm::Plains:
             return {scale(78), scale(150), scale(82), 255};
         case TerrainForm::Hills:
@@ -91,12 +90,32 @@ DebugImage build_greater_realm_debug_image(const GreaterRealmMap& map, float sea
 
     image.rgba.resize(image.expected_byte_count());
     for (std::size_t index = 0; index < map.cells.size(); ++index) {
-        const DebugColour colour = greater_realm_debug_colour(map.cells[index], sea_level);
+        DebugColour colour = greater_realm_debug_colour(map.cells[index], sea_level);
+        if (map.cells[index].is_coastal) {
+            constexpr float coastline_outline = 0.72f;
+            colour.r = static_cast<std::uint8_t>(static_cast<float>(colour.r) * coastline_outline);
+            colour.g = static_cast<std::uint8_t>(static_cast<float>(colour.g) * coastline_outline);
+            colour.b = static_cast<std::uint8_t>(static_cast<float>(colour.b) * coastline_outline);
+        }
         const std::size_t pixel = index * 4;
         image.rgba[pixel] = colour.r;
         image.rgba[pixel + 1] = colour.g;
         image.rgba[pixel + 2] = colour.b;
         image.rgba[pixel + 3] = colour.a;
+    }
+
+    for (const auto& river : map.rivers) {
+        constexpr DebugColour river_colour{40, 156, 224, 255};
+        for (const std::uint32_t index : {river.source_index, river.destination_index}) {
+            if (index >= map.cells.size()) {
+                continue;
+            }
+            const std::size_t pixel = static_cast<std::size_t>(index) * 4;
+            image.rgba[pixel] = river_colour.r;
+            image.rgba[pixel + 1] = river_colour.g;
+            image.rgba[pixel + 2] = river_colour.b;
+            image.rgba[pixel + 3] = river_colour.a;
+        }
     }
 
     return image;

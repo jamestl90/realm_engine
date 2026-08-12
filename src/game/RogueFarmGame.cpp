@@ -26,7 +26,7 @@ bool RogueFarmGame::regenerate_procgen_debug_map(core::Engine& engine) {
         return false;
     }
 
-    const auto map = procgen::generate_greater_realm(m_procgen_settings);
+    const auto map = procgen::generate_greater_realm(m_procgen_settings, m_procgen_constraints);
     const auto image = procgen::build_greater_realm_debug_image(map, m_procgen_settings.sea_level);
     if (!image.has_expected_byte_count()) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to build procgen debug image");
@@ -61,12 +61,11 @@ bool RogueFarmGame::regenerate_procgen_debug_map(core::Engine& engine) {
 
     m_procgen_debug_panel.update(map);
     SDL_Log(
-        "Generated procgen debug map: seed=%llu size=%ux%u sea=%.2f land=%.2f island=%.2f coast=%.2f base=%.2f mountain=%.2f ridge=%.2f valley=%.2f noise=%.2f ocean=%.2f",
+        "Generated procgen debug map: seed=%llu size=%ux%u sea=%.2f island=%.2f coast=%.2f base=%.2f mountain=%.2f ridge=%.2f valley=%.2f noise=%.2f ocean=%.2f rain=%.2f rivers=%zu",
         m_procgen_settings.seed,
         m_procgen_settings.width,
         m_procgen_settings.height,
         m_procgen_settings.sea_level,
-        m_procgen_settings.land_shape_weight,
         m_procgen_settings.island_bias,
         m_procgen_settings.coastline_noise_weight,
         m_procgen_settings.base_elevation_weight,
@@ -74,7 +73,9 @@ bool RogueFarmGame::regenerate_procgen_debug_map(core::Engine& engine) {
         m_procgen_settings.ridge_weight,
         m_procgen_settings.valley_weight,
         m_procgen_settings.terrain_noise_weight,
-        m_procgen_settings.ocean_depth_weight
+        m_procgen_settings.ocean_depth_weight,
+        m_procgen_settings.raininess,
+        map.rivers.size()
     );
     return true;
 }
@@ -104,7 +105,7 @@ void RogueFarmGame::on_startup(core::Engine& engine) {
     m_procgen_settings.width = 256;
     m_procgen_settings.height = 192;
     m_procgen_settings.sea_level = 0.5f;
-    const auto initial_map = procgen::generate_greater_realm(m_procgen_settings);
+    const auto initial_map = procgen::generate_greater_realm(m_procgen_settings, m_procgen_constraints);
     const auto initial_image = procgen::build_greater_realm_debug_image(
         initial_map,
         m_procgen_settings.sea_level
@@ -175,7 +176,15 @@ void RogueFarmGame::on_startup(core::Engine& engine) {
     ui_manager.setRoot(m_procgen_debug_panel.build(
         m_procgen_settings,
         initial_map,
-        [this, &engine]() { regenerate_procgen_debug_map(engine); }
+        [this, &engine]() { regenerate_procgen_debug_map(engine); },
+        [this, &engine](procgen::TerrainConstraintTool tool, float x, float y) {
+            m_procgen_constraints.paint(tool, x, y, 0.12f);
+            regenerate_procgen_debug_map(engine);
+        },
+        [this, &engine]() {
+            m_procgen_constraints.clear();
+            regenerate_procgen_debug_map(engine);
+        }
     ));
 #else
     auto root = std::make_unique<ui::StackPanel>(ui::Orientation::Vertical);

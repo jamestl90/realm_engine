@@ -9,7 +9,7 @@ namespace procgen {
 
 struct TerrainFormCounts {
     std::size_t ocean{0};
-    std::size_t coast{0};
+    std::size_t coastal_land{0};
     std::size_t plains{0};
     std::size_t hills{0};
     std::size_t highlands{0};

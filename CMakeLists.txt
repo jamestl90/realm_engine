@@ -94,8 +94,11 @@ if(RFD_BUILD_TESTS)
 
     add_executable(rfd_engine_tests EXCLUDE_FROM_ALL
         tests/procgen/GreaterRealmTests.cpp
+        src/procgen/Climate.cpp
         src/procgen/GreaterRealm.cpp
         src/procgen/GreaterRealmDebug.cpp
+        src/procgen/Hydrology.cpp
+        src/procgen/TerrainConstraints.cpp
     )
 
     target_include_directories(rfd_engine_tests PRIVATE
@@ -105,6 +108,23 @@ if(RFD_BUILD_TESTS)
     target_compile_definitions(rfd_engine_tests PRIVATE RFD_TEST_BUILD=1)
 
     add_test(NAME procgen_greater_realm COMMAND rfd_engine_tests)
+
+    add_executable(rfd_procgen_pipeline_tests EXCLUDE_FROM_ALL
+        tests/procgen/HydrologyClimateConstraintTests.cpp
+        src/procgen/Climate.cpp
+        src/procgen/GreaterRealm.cpp
+        src/procgen/GreaterRealmDebug.cpp
+        src/procgen/Hydrology.cpp
+        src/procgen/TerrainConstraints.cpp
+    )
+
+    target_include_directories(rfd_procgen_pipeline_tests PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+    )
+
+    target_compile_definitions(rfd_procgen_pipeline_tests PRIVATE RFD_TEST_BUILD=1)
+
+    add_test(NAME procgen_hydrology_climate_constraints COMMAND rfd_procgen_pipeline_tests)
 
     add_executable(rfd_ecs_tests EXCLUDE_FROM_ALL
         tests/ecs/WorldLifecycleTests.cpp

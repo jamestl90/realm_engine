@@ -1,4 +1,7 @@
 #include "../../include/procgen/GreaterRealm.hpp"
+#include "../../include/procgen/Climate.hpp"
+#include "../../include/procgen/Hydrology.hpp"
+#include "../../include/procgen/TerrainConstraints.hpp"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -199,7 +202,9 @@ void compute_coast_distance(GreaterRealmMap& map) {
     }
 
     for (std::size_t i = 0; i < map.cells.size(); ++i) {
-        map.cells[i].distance_to_coast = distances[i] == INF_DISTANCE ? 0.0f : distances[i];
+        auto& cell = map.cells[i];
+        cell.is_coastal = !cell.is_water && distances[i] == 0.0f;
+        cell.distance_to_coast = distances[i] == INF_DISTANCE ? 0.0f : distances[i];
     }
 }
 
@@ -228,9 +233,7 @@ void classify_cells(GreaterRealmMap& map, const GreaterRealmGeneratorSettings& s
             continue;
         }
 
-        if (cell.distance_to_coast <= settings.coast_distance) {
-            cell.terrain_form = TerrainForm::Coast;
-        } else if (cell.elevation >= settings.mountain_threshold) {
+        if (cell.elevation >= settings.mountain_threshold) {
             cell.terrain_form = TerrainForm::Mountains;
         } else if (cell.elevation >= settings.highland_threshold) {
             cell.terrain_form = TerrainForm::Highlands;
@@ -248,8 +251,6 @@ const char* to_string(TerrainForm form) noexcept {
     switch (form) {
         case TerrainForm::Ocean:
             return "ocean";
-        case TerrainForm::Coast:
-            return "coast";
         case TerrainForm::Plains:
             return "plains";
         case TerrainForm::Hills:
@@ -302,7 +303,10 @@ const GreaterRealmCell* GreaterRealmMap::cell(std::int32_t x, std::int32_t y) co
     return &cells[index(static_cast<std::uint32_t>(x), static_cast<std::uint32_t>(y))];
 }
 
-GreaterRealmMap generate_greater_realm(const GreaterRealmGeneratorSettings& settings) {
+static GreaterRealmMap generate_greater_realm_impl(
+    const GreaterRealmGeneratorSettings& settings,
+    const TerrainConstraintField* constraints
+) {
     GreaterRealmMap map;
     map.seed = settings.seed;
     map.width = std::max<std::uint32_t>(settings.width, 1);
@@ -317,12 +321,15 @@ GreaterRealmMap generate_greater_realm(const GreaterRealmGeneratorSettings& sett
         float valley{0.0f};
         float terrain_noise{0.0f};
         float ocean_noise{0.0f};
+        float constraint_elevation{0.0f};
+        float constraint_influence{0.0f};
     };
 
     std::vector<TerrainLayers> layers(map.cells.size());
 
     const float sea_level = std::clamp(settings.sea_level, 0.01f, 0.99f);
     const float sea_level_offset = (0.5f - sea_level) * 2.0f;
+    const float island_bias = std::clamp(settings.island_bias, 0.0f, 1.0f);
 
     for (std::uint32_t y = 0; y < map.height; ++y) {
         for (std::uint32_t x = 0; x < map.width; ++x) {
@@ -336,19 +343,25 @@ GreaterRealmMap generate_greater_realm(const GreaterRealmGeneratorSettings& sett
                 settings.seed,
                 centered_x,
                 centered_y,
-                settings.land_shape_frequency,
+                1.0f,
                 11ull,
                 5
             ) * 2.0f - 1.0f;
             const float island_constraint = 0.75f - 2.0f * square_distance * square_distance;
-            const float broad_constraint = std::clamp(
-                0.5f * (
-                    land_noise * std::max(settings.land_shape_weight, 0.0f)
-                    + island_constraint * std::max(settings.island_bias, 0.0f)
-                )
+            const float automatic_constraint = std::clamp(
+                0.5f * (land_noise + island_constraint * island_bias)
                 + sea_level_offset,
                 -1.0f,
                 1.0f
+            );
+            const TerrainConstraintSample authored = constraints
+                ? constraints->sample(u, v)
+                : TerrainConstraintSample{};
+            const float authored_influence = clamp01(authored.influence);
+            const float broad_constraint = lerp(
+                automatic_constraint,
+                std::clamp(authored.elevation, -1.0f, 1.0f),
+                authored_influence
             );
 
             const float coastline_noise = fbm(
@@ -385,7 +398,9 @@ GreaterRealmMap generate_greater_realm(const GreaterRealmGeneratorSettings& sett
                 ridge_influence,
                 valley_influence,
                 terrain_noise,
-                ocean_noise
+                ocean_noise,
+                authored.elevation,
+                authored_influence
             };
 
             auto& cell = map.cells[index];
@@ -426,7 +441,11 @@ GreaterRealmMap generate_greater_realm(const GreaterRealmGeneratorSettings& sett
             + layer.ridge * ridge_weight
             - layer.valley * valley_weight;
         const float normalized_relief = clamp01((raw_relief - relief_min) / relief_range);
-        const float relief = clamp01(normalized_relief + layer.terrain_noise * terrain_noise_weight);
+        float relief = clamp01(normalized_relief + layer.terrain_noise * terrain_noise_weight);
+        if (layer.constraint_influence > 0.0f) {
+            const float constrained_relief = clamp01(layer.constraint_elevation);
+            relief = lerp(relief, constrained_relief, layer.constraint_influence);
+        }
         const float inland_influence = smoothstep(0.0f, 0.45f, cell.landmass_elevation);
         const float coastal_rise = 0.01f + 0.14f * clamp01(cell.landmass_elevation / 0.45f);
         const float land_height = clamp01(lerp(coastal_rise, relief, inland_influence));
@@ -437,8 +456,22 @@ GreaterRealmMap generate_greater_realm(const GreaterRealmGeneratorSettings& sett
     compute_coast_distance(map);
     compute_slopes(map);
     classify_cells(map, settings);
+    generate_greater_realm_climate(map, settings);
+    build_greater_realm_drainage(map);
+    accumulate_greater_realm_rivers(map, settings);
 
     return map;
+}
+
+GreaterRealmMap generate_greater_realm(const GreaterRealmGeneratorSettings& settings) {
+    return generate_greater_realm_impl(settings, nullptr);
+}
+
+GreaterRealmMap generate_greater_realm(
+    const GreaterRealmGeneratorSettings& settings,
+    const TerrainConstraintField& constraints
+) {
+    return generate_greater_realm_impl(settings, &constraints);
 }
 
 } // namespace procgen

@@ -31,6 +31,7 @@ bool maps_match(const procgen::GreaterRealmMap& a, const procgen::GreaterRealmMa
             || left.elevation != right.elevation
             || left.is_water != right.is_water
             || left.is_ocean != right.is_ocean
+            || left.is_coastal != right.is_coastal
             || left.distance_to_coast != right.distance_to_coast
             || left.slope != right.slope
             || left.terrain_form != right.terrain_form) {
@@ -161,6 +162,30 @@ bool ocean_flags_match_boundary_connectivity(const procgen::GreaterRealmMap& map
     return true;
 }
 
+bool coastal_flags_match_land_water_boundary(const procgen::GreaterRealmMap& map) {
+    for (const auto& cell : map.cells) {
+        bool touches_water = false;
+        for (std::int32_t y = cell.y - 1; y <= cell.y + 1 && !touches_water; ++y) {
+            for (std::int32_t x = cell.x - 1; x <= cell.x + 1; ++x) {
+                if (x == cell.x && y == cell.y) {
+                    continue;
+                }
+
+                const auto* neighbor = map.cell(x, y);
+                if (neighbor && neighbor->is_water) {
+                    touches_water = true;
+                    break;
+                }
+            }
+        }
+
+        if (cell.is_coastal != (!cell.is_water && touches_water)) {
+            return false;
+        }
+    }
+    return true;
+}
+
 bool test_generated_map_shape() {
     procgen::GreaterRealmGeneratorSettings settings;
     settings.seed = 12345;
@@ -178,7 +203,7 @@ bool test_generated_map_shape() {
     ok &= require(map.has_expected_cell_count(), "map contains width * height cells");
     ok &= require(counts.ocean > 0, "map contains ocean");
     ok &= require(land_count > 0, "map contains land");
-    ok &= require(counts.coast > 0, "map contains coast");
+    ok &= require(counts.coastal_land > 0, "map contains coastal land");
     ok &= require(counts.hills + counts.highlands + counts.mountains > 0, "map contains raised terrain forms");
 
     for (const auto& cell : map.cells) {
@@ -187,6 +212,8 @@ bool test_generated_map_shape() {
         ok &= require(cell.slope >= 0.0f, "cell slope is non-negative");
         ok &= require(cell.distance_to_coast >= 0.0f, "cell coast distance is non-negative");
         ok &= require(!cell.is_ocean || cell.is_water, "ocean cells are water");
+        ok &= require(!cell.is_coastal || !cell.is_water, "coastal metadata applies only to land");
+        ok &= require(!cell.is_coastal || cell.distance_to_coast == 0.0f, "coastal land lies on the land-water boundary");
 
         if (cell.is_water) {
             ok &= require(cell.landmass_elevation <= 0.0f, "water has a non-positive landmass constraint");
@@ -198,6 +225,7 @@ bool test_generated_map_shape() {
     }
 
     ok &= require(ocean_flags_match_boundary_connectivity(map), "ocean flags match boundary-connected water");
+    ok &= require(coastal_flags_match_land_water_boundary(map), "coastal flags match land touching water");
 
     return ok;
 }
@@ -295,21 +323,33 @@ bool test_ocean_depth_preserves_topology() {
     return ok;
 }
 
-bool test_island_bias_controls_topology() {
+bool test_island_bias_matches_mapgen4_contract() {
     procgen::GreaterRealmGeneratorSettings settings;
     settings.seed = 86420;
     settings.width = 128;
     settings.height = 80;
     settings.coastline_noise_weight = 0.0f;
+
+    bool ok = true;
+    ok &= require(settings.island_bias == 0.5f, "island bias defaults to Mapgen4's 0.5");
+
     settings.island_bias = 0.0f;
     const auto unbiased = procgen::generate_greater_realm(settings);
 
     settings.island_bias = 1.0f;
     const auto island = procgen::generate_greater_realm(settings);
 
-    bool ok = true;
     ok &= require(topology_difference_count(unbiased, island) > 0, "island bias changes landmass topology");
     ok &= require(boundaries_are_water(island), "strong island bias keeps rectangular map boundaries underwater");
+
+    settings.island_bias = -5.0f;
+    const auto below_range = procgen::generate_greater_realm(settings);
+    settings.island_bias = 5.0f;
+    const auto above_range = procgen::generate_greater_realm(settings);
+
+    ok &= require(maps_match(unbiased, below_range), "island bias clamps values below Mapgen4's zero minimum");
+    ok &= require(maps_match(island, above_range), "island bias clamps values above Mapgen4's one maximum");
+    ok &= require(elevation_difference_sum(unbiased, island) > 1.0f, "island bias preserves signed elevation influence before ocean depth");
     return ok;
 }
 
@@ -351,6 +391,29 @@ bool test_map_cell_lookup() {
     return ok;
 }
 
+bool test_coastal_land_preserves_elevation_form() {
+    procgen::GreaterRealmGeneratorSettings settings;
+    settings.seed = 556677;
+    settings.width = 96;
+    settings.height = 72;
+    settings.mountain_threshold = settings.sea_level;
+
+    const auto map = procgen::generate_greater_realm(settings);
+    std::size_t coastal_count = 0;
+    bool all_coastal_land_is_mountain = true;
+    for (const auto& cell : map.cells) {
+        if (cell.is_coastal) {
+            ++coastal_count;
+            all_coastal_land_is_mountain &= cell.terrain_form == procgen::TerrainForm::Mountains;
+        }
+    }
+
+    bool ok = true;
+    ok &= require(coastal_count > 0, "threshold test map contains coastal land");
+    ok &= require(all_coastal_land_is_mountain, "coastal metadata does not override elevation terrain form");
+    return ok;
+}
+
 bool test_debug_visualization_data() {
     procgen::GreaterRealmMap map;
     map.width = 3;
@@ -359,34 +422,46 @@ bool test_debug_visualization_data() {
 
     constexpr std::array forms{
         procgen::TerrainForm::Ocean,
-        procgen::TerrainForm::Coast,
+        procgen::TerrainForm::Plains,
         procgen::TerrainForm::Plains,
         procgen::TerrainForm::Hills,
         procgen::TerrainForm::Highlands,
         procgen::TerrainForm::Mountains
     };
-    constexpr std::array elevations{0.1f, 0.5f, 0.58f, 0.65f, 0.75f, 0.95f};
+    constexpr std::array elevations{0.1f, 0.58f, 0.58f, 0.65f, 0.75f, 0.95f};
 
     for (std::size_t index = 0; index < map.cells.size(); ++index) {
         map.cells[index].terrain_form = forms[index];
         map.cells[index].elevation = elevations[index];
     }
+    map.cells[1].is_coastal = true;
+    map.cells[5].is_coastal = true;
 
     const auto counts = procgen::count_terrain_forms(map);
     const auto image = procgen::build_greater_realm_debug_image(map, 0.5f);
 
     bool ok = true;
     ok &= require(counts.ocean == 1, "debug terrain counts include ocean cells");
-    ok &= require(counts.coast == 1, "debug terrain counts include coast cells");
-    ok &= require(counts.plains == 1, "debug terrain counts include plains cells");
+    ok &= require(counts.coastal_land == 2, "debug terrain counts include coastal land independently");
+    ok &= require(counts.plains == 2, "debug terrain counts preserve coastal plains");
     ok &= require(counts.hills == 1, "debug terrain counts include hills cells");
     ok &= require(counts.highlands == 1, "debug terrain counts include highland cells");
     ok &= require(counts.mountains == 1, "debug terrain counts include mountain cells");
     ok &= require(image.width == map.width && image.height == map.height, "debug image preserves map dimensions");
     ok &= require(image.has_expected_byte_count(), "debug image contains one RGBA pixel per map cell");
+    const auto coastal_plain = procgen::greater_realm_debug_colour(map.cells[1], 0.5f);
+    const auto coastal_mountain = procgen::greater_realm_debug_colour(map.cells[5], 0.5f);
     ok &= require(
-        image.rgba[4] == 210 && image.rgba[5] == 190 && image.rgba[6] == 126 && image.rgba[7] == 255,
-        "debug image uses the coast palette"
+        image.rgba[4] < coastal_plain.r && image.rgba[5] < coastal_plain.g && image.rgba[6] < coastal_plain.b,
+        "debug image darkens coastal land to form a narrow outline"
+    );
+    ok &= require(
+        image.rgba[4] != image.rgba[20] || image.rgba[5] != image.rgba[21] || image.rgba[6] != image.rgba[22],
+        "coastal plains and mountains retain distinct debug colours"
+    );
+    ok &= require(
+        image.rgba[20] < coastal_mountain.r && image.rgba[21] < coastal_mountain.g && image.rgba[22] < coastal_mountain.b,
+        "coastline outline preserves the mountain palette beneath it"
     );
     for (std::size_t alpha = 3; alpha < image.rgba.size(); alpha += 4) {
         ok &= require(image.rgba[alpha] == 255, "debug image pixels are opaque");
@@ -428,11 +503,12 @@ int main() {
         test_generated_map_shape,
         test_seed_determinism,
         test_map_cell_lookup,
+        test_coastal_land_preserves_elevation_form,
         test_inland_relief_preserves_landmass_topology,
         test_terrain_noise_changes_land_relief_only,
         test_sea_level_controls_landmass_topology,
         test_ocean_depth_preserves_topology,
-        test_island_bias_controls_topology,
+        test_island_bias_matches_mapgen4_contract,
         test_debug_visualization_data,
         test_debug_ocean_depth_shading,
         test_debug_visualization_rejects_malformed_map

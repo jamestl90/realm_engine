@@ -6,6 +6,7 @@
 
 #if defined(RFD_ENABLE_PROCGEN_DEBUG_VIEW)
 #include "GreaterRealmDebugPanel.hpp"
+#include "../../include/procgen/TerrainConstraints.hpp"
 #endif
 
 namespace game {
@@ -32,6 +33,7 @@ private:
 
 #if defined(RFD_ENABLE_PROCGEN_DEBUG_VIEW)
     procgen::GreaterRealmGeneratorSettings m_procgen_settings{};
+    procgen::TerrainConstraintField m_procgen_constraints{64, 64};
     GreaterRealmDebugPanel m_procgen_debug_panel;
 #endif
 };

@@ -152,6 +152,9 @@ sequenceDiagram
 
 ### Procedural Generation (`include/procgen/`)
 - **GreaterRealm**: Engine-neutral greater realm data and deterministic terrain generation
+- **TerrainConstraints**: Resolution-independent authored terrain field, brush operations, bilinear sampling, and versioned binary serialization
+- **Climate**: Deterministic wind, humidity, rainfall, and moisture generation over completed terrain
+- **Hydrology**: Priority drainage topology, depression conditioning, flow accumulation, and engine-neutral river segments
 - **GreaterRealmDebug**: Compile-gated, engine-neutral terrain statistics and RGBA debug visualization
 - **Ownership boundary**: Applications own generator settings, controls, and preview composition; procgen modules own reusable generation and visualization behavior
 
