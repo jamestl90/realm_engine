@@ -1,6 +1,6 @@
 # Separate Engine Code from RogueFarmGame
 
-Status: testing
+Status: complete
 Area: Architecture / Procgen / Rendering
 
 ## Goal
@@ -38,6 +38,7 @@ Keep `RogueFarmGame` application-specific by moving reusable engine and procgen 
 - Tests-disabled Release build succeeds with `RFD_ENABLE_PROCGEN_DEBUG_VIEW=OFF`.
 - Release build graph contains neither `GreaterRealmDebug.cpp` nor `GreaterRealmDebugPanel.cpp`.
 - All five CTest targets pass, including procgen coverage for terrain counts, RGBA output, depth shading, and malformed map storage.
+- A native runtime smoke test initializes the sprite pipeline, procgen texture, font system, retained UI, and renderer without errors.
 - `git diff --check` passes.
 
 ## Notes
