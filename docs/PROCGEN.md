@@ -6,6 +6,7 @@ This document tracks the procedural generation capabilities currently present in
 
 - Generates deterministic greater realm maps from a seed and settings.
 - Uses a regular grid with configurable width, height, and cell size.
+- The regular grid is the deliberate canonical representation following task 032's measured dual-mesh evaluation; direct indexing, compact implicit adjacency, and local-tile handoff outweigh an authoritative irregular mesh for current engine goals.
 - Produces a signed landmass elevation field: negative values are water, positive values are land, and zero is the coastline.
 - Combines unscaled five-octave land-shape noise at frequencies `1, 2, 4, 8, 16` with Mapgen4's square-distance island constraint and coastline-localized noise.
 - Keeps broad land/water topology independent from inland terrain weights.
@@ -47,7 +48,7 @@ This document tracks the procedural generation capabilities currently present in
 11. Build priority drainage and condition depressions for flow.
 12. Accumulate moisture and export river segments.
 
-This follows Mapgen4's layered elevation approach while retaining the engine's current regular-grid representation.
+This follows Mapgen4's layered elevation approach while deliberately retaining a regular-grid representation. A future irregular or triangulated surface may be derived for rendering without replacing canonical map data.
 
 ## Debugging And Tests
 
@@ -69,6 +70,6 @@ This follows Mapgen4's layered elevation approach while retaining the engine's c
 - Local tile generation or world-region streaming.
 - Beach, cliff, rocky-shore, marsh, delta, or other detailed shoreline classification.
 - Direct pointer painting of terrain constraints on the debug preview.
-- Delaunay/Voronoi mesh generation.
+- A derived Delaunay/Voronoi render surface; task 032 rejected it as the canonical greater-realm representation.
 - Mapgen4-style folded terrain geometry or 2.5D projection.
 - Climate-influenced terrain colouring.

@@ -15,6 +15,7 @@ Mapgen4 folds its terrain mesh around coastlines, valleys, ridges, and peaks and
 
 - Task 027 for meaningful valley and drainage topology.
 - Task 031 for explicit peak geometry.
+- Task 032's decision to retain the regular grid as canonical data; any irregular geometry prototyped here must be derived render data.
 
 ## Acceptance Criteria
 

@@ -158,6 +158,7 @@ sequenceDiagram
 - **MountainPeaks**: Deterministic spaced peak selection and jagged multi-source mountain distance fields
 - **GreaterRealmDebug**: Compile-gated, engine-neutral terrain statistics and RGBA debug visualization
 - **Ownership boundary**: Applications own generator settings, controls, and preview composition; procgen modules own reusable generation and visualization behavior
+- **Canonical terrain representation**: Greater-realm generation and gameplay data remain on the regular grid. Irregular or triangulated geometry may be derived for rendering, but must not become authoritative world data without a new measured architecture decision. The task 032 record owns the grid-versus-dual-mesh evaluation.
 
 ### Physics (`include/physics/`)
 - **SpatialPartition**: Grid-based spatial hash for broad-phase collision

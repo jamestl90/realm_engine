@@ -146,6 +146,23 @@ if(RFD_BUILD_TESTS)
 
     add_test(NAME procgen_mountain_peaks COMMAND rfd_mountain_peak_tests)
 
+    add_executable(rfd_procgen_representation_tests EXCLUDE_FROM_ALL
+        tests/procgen/RepresentationEvaluationTests.cpp
+        src/procgen/Climate.cpp
+        src/procgen/GreaterRealm.cpp
+        src/procgen/Hydrology.cpp
+        src/procgen/MountainPeaks.cpp
+        src/procgen/TerrainConstraints.cpp
+    )
+
+    target_include_directories(rfd_procgen_representation_tests PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+    )
+
+    target_compile_definitions(rfd_procgen_representation_tests PRIVATE RFD_TEST_BUILD=1)
+
+    add_test(NAME procgen_representation_evaluation COMMAND rfd_procgen_representation_tests)
+
     add_executable(rfd_ecs_tests EXCLUDE_FROM_ALL
         tests/ecs/WorldLifecycleTests.cpp
         src/ecs/World.cpp
