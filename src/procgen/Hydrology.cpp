@@ -56,7 +56,7 @@ void build_greater_realm_drainage(GreaterRealmMap& map) {
         cell.downslope_index = INVALID_CELL_INDEX;
         cell.is_drainage_outlet = false;
         cell.drainage_elevation = cell.elevation;
-        cell.flow = 0.0f;
+        cell.drainage_area = 0.0f;
         if (cell.is_ocean) {
             seed_outlet(index);
         }
@@ -105,7 +105,7 @@ void build_greater_realm_drainage(GreaterRealmMap& map) {
     }
 }
 
-void accumulate_greater_realm_rivers(
+void build_greater_realm_river_channels(
     GreaterRealmMap& map,
     const GreaterRealmGeneratorSettings& settings
 ) {
@@ -114,18 +114,18 @@ void accumulate_greater_realm_rivers(
         return;
     }
 
-    const float flow_scale = std::max(settings.river_flow_scale, 0.0f);
-    const float minimum_flow = std::max(settings.river_min_flow, 0.0f);
+    const float minimum_area = std::max(settings.river_min_drainage_area, 0.0f);
     const float width_scale = std::max(settings.river_width_scale, 0.0f);
+    const float cell_area = std::max(map.cell_size * map.cell_size, 0.0f);
 
     for (auto& cell : map.cells) {
-        cell.flow = cell.is_water ? 0.0f : std::max(cell.moisture, 0.01f) * flow_scale;
+        cell.drainage_area = cell.is_water ? 0.0f : cell_area;
     }
 
     for (auto iterator = map.drainage_order.rbegin(); iterator != map.drainage_order.rend(); ++iterator) {
         auto& cell = map.cells[*iterator];
         if (cell.downslope_index != INVALID_CELL_INDEX) {
-            map.cells[cell.downslope_index].flow += cell.flow;
+            map.cells[cell.downslope_index].drainage_area += cell.drainage_area;
         }
     }
 
@@ -133,7 +133,7 @@ void accumulate_greater_realm_rivers(
         const auto& source = map.cells[source_index];
         if (source.is_water
             || source.downslope_index == INVALID_CELL_INDEX
-            || source.flow < minimum_flow) {
+            || source.drainage_area < minimum_area) {
             continue;
         }
 
@@ -145,8 +145,8 @@ void accumulate_greater_realm_rivers(
         map.rivers.push_back({
             source_index,
             source.downslope_index,
-            source.flow,
-            1.0f + std::sqrt(std::max(source.flow - minimum_flow, 0.0f)) * width_scale
+            source.drainage_area,
+            1.0f + std::sqrt(std::max(source.drainage_area - minimum_area, 0.0f)) * width_scale
         });
     }
 }

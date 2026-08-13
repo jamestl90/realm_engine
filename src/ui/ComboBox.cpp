@@ -145,17 +145,14 @@ void ComboBox::measure(float availableWidth, float availableHeight) {
 
     // Add padding and arrow space
     const float arrowWidth = 20.0f;
-    m_headerHeight = textMetrics.height + m_padding.verticalSum();
+    m_headerHeight = std::max(textMetrics.height + m_padding.verticalSum(), 24.0f);
     m_itemHeight = textMetrics.height + 12.0f;
+    m_dropdownHeight = m_isOpen
+        ? m_itemHeight * static_cast<float>(m_items.size())
+        : 0.0f;
 
     m_measuredWidth = maxTextWidth + m_padding.horizontalSum() + arrowWidth;
     m_measuredHeight = m_headerHeight;
-
-    // If open, add dropdown height
-    if (m_isOpen) {
-        m_dropdownHeight = m_itemHeight * static_cast<float>(m_items.size());
-        m_measuredHeight += m_dropdownHeight;
-    }
 
     // Apply constraints
     const auto& constraints = sizeConstraints();
@@ -168,7 +165,6 @@ void ComboBox::measure(float availableWidth, float availableHeight) {
 
     // Ensure minimum size
     m_measuredWidth = std::max(m_measuredWidth, 100.0f);
-    m_headerHeight = std::max(m_headerHeight, 24.0f);
 }
 
 void ComboBox::arrange(const Rect& finalRect) {

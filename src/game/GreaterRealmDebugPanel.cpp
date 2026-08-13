@@ -52,7 +52,7 @@ std::string terrain_text(const procgen::TerrainFormCounts& counts) {
 
 std::string hydrology_text(const procgen::GreaterRealmMap& map) {
     std::ostringstream stream;
-    stream << "Peaks " << map.mountain_peaks.size() << "  Rivers " << map.rivers.size()
+    stream << "Peaks " << map.mountain_peaks.size() << "  Channels " << map.rivers.size()
            << "  Drainage " << map.drainage_order.size();
     return stream.str();
 }
@@ -292,12 +292,7 @@ std::unique_ptr<ui::UIElement> GreaterRealmDebugPanel::build(
     add_setting_row(*left_settings, "Valley", settings.valley_weight, &m_valley_text, &procgen::GreaterRealmGeneratorSettings::valley_weight, 0.05f, 0.0f, 1.5f);
     add_setting_row(*right_settings, "Terrain noise", settings.terrain_noise_weight, &m_noise_text, &procgen::GreaterRealmGeneratorSettings::terrain_noise_weight, 0.10f, 0.0f, 2.0f);
     add_setting_row(*right_settings, "Ocean depth", settings.ocean_depth_weight, &m_ocean_depth_text, &procgen::GreaterRealmGeneratorSettings::ocean_depth_weight, 0.25f, 0.0f, 3.0f);
-    add_setting_row(*right_settings, "Wind angle", settings.wind_angle_degrees, &m_wind_angle_text, &procgen::GreaterRealmGeneratorSettings::wind_angle_degrees, 15.0f, 0.0f, 360.0f);
-    add_setting_row(*right_settings, "Raininess", settings.raininess, &m_raininess_text, &procgen::GreaterRealmGeneratorSettings::raininess, 0.10f, 0.0f, 2.0f);
-    add_setting_row(*right_settings, "Rain shadow", settings.rain_shadow, &m_rain_shadow_text, &procgen::GreaterRealmGeneratorSettings::rain_shadow, 0.10f, 0.0f, 2.0f);
-    add_setting_row(*right_settings, "Evaporation", settings.evaporation, &m_evaporation_text, &procgen::GreaterRealmGeneratorSettings::evaporation, 0.10f, 0.0f, 1.0f);
-    add_setting_row(*right_settings, "River flow", settings.river_flow_scale, &m_river_flow_text, &procgen::GreaterRealmGeneratorSettings::river_flow_scale, 0.05f, 0.0f, 1.0f);
-    add_setting_row(*right_settings, "River threshold", settings.river_min_flow, &m_river_threshold_text, &procgen::GreaterRealmGeneratorSettings::river_min_flow, 2.0f, 0.0f, 100.0f);
+    add_setting_row(*right_settings, "Channel threshold", settings.river_min_drainage_area, &m_channel_threshold_text, &procgen::GreaterRealmGeneratorSettings::river_min_drainage_area, 10.0f, 0.0f, 500.0f);
 
     const auto add_constraint_coordinate = [this, &right_settings](
         const char* label,
@@ -403,12 +398,7 @@ void GreaterRealmDebugPanel::update(const procgen::GreaterRealmMap& map) {
     if (m_valley_text) m_valley_text->setText(setting_text("Valley", m_settings->valley_weight));
     if (m_noise_text) m_noise_text->setText(setting_text("Terrain noise", m_settings->terrain_noise_weight));
     if (m_ocean_depth_text) m_ocean_depth_text->setText(setting_text("Ocean depth", m_settings->ocean_depth_weight));
-    if (m_wind_angle_text) m_wind_angle_text->setText(setting_text("Wind angle", m_settings->wind_angle_degrees));
-    if (m_raininess_text) m_raininess_text->setText(setting_text("Raininess", m_settings->raininess));
-    if (m_rain_shadow_text) m_rain_shadow_text->setText(setting_text("Rain shadow", m_settings->rain_shadow));
-    if (m_evaporation_text) m_evaporation_text->setText(setting_text("Evaporation", m_settings->evaporation));
-    if (m_river_flow_text) m_river_flow_text->setText(setting_text("River flow", m_settings->river_flow_scale));
-    if (m_river_threshold_text) m_river_threshold_text->setText(setting_text("River threshold", m_settings->river_min_flow));
+    if (m_channel_threshold_text) m_channel_threshold_text->setText(setting_text("Channel threshold", m_settings->river_min_drainage_area));
     if (m_constraint_x_text) m_constraint_x_text->setText(setting_text("Constraint X", m_constraint_x));
     if (m_constraint_y_text) m_constraint_y_text->setText(setting_text("Constraint Y", m_constraint_y));
 

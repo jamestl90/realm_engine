@@ -24,3 +24,7 @@ Inspect different greater-realm data layers at runtime without regenerating the 
 - Debug and Release game targets build successfully.
 - Live interaction produced texture refreshes without procgen-stage or generated-map logs.
 - Captured 1982x1190 window verification confirms all controls and summaries fit without overlap.
+
+## Current State
+
+Task 039 later removed generated weather fields and replaced the climate and drainage-flow views with terrain-only catchment area. This task remains the historical record for the debug-view selection mechanism.

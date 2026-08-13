@@ -1,5 +1,4 @@
 set(RFD_PROCGEN_SOURCES
-    Climate.cpp
     GreaterRealm.cpp
     Hydrology.cpp
     MountainPeaks.cpp

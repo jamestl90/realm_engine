@@ -58,12 +58,7 @@ private:
     ui::TextBlock* m_valley_text{nullptr};
     ui::TextBlock* m_noise_text{nullptr};
     ui::TextBlock* m_ocean_depth_text{nullptr};
-    ui::TextBlock* m_wind_angle_text{nullptr};
-    ui::TextBlock* m_raininess_text{nullptr};
-    ui::TextBlock* m_rain_shadow_text{nullptr};
-    ui::TextBlock* m_evaporation_text{nullptr};
-    ui::TextBlock* m_river_flow_text{nullptr};
-    ui::TextBlock* m_river_threshold_text{nullptr};
+    ui::TextBlock* m_channel_threshold_text{nullptr};
     ui::TextBlock* m_constraint_x_text{nullptr};
     ui::TextBlock* m_constraint_y_text{nullptr};
     ui::TextBlock* m_coverage_text{nullptr};

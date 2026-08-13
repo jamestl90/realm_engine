@@ -47,7 +47,6 @@ set(RFD_PROCGEN_DEBUG_SOURCES
     "${CMAKE_SOURCE_DIR}/src/game/GreaterRealmDebugPanel.cpp"
 )
 set(RFD_PROCGEN_RUNTIME_SOURCES
-    "${CMAKE_SOURCE_DIR}/src/procgen/Climate.cpp"
     "${CMAKE_SOURCE_DIR}/src/procgen/GreaterRealm.cpp"
     "${CMAKE_SOURCE_DIR}/src/procgen/GreaterRealmDebug.cpp"
     "${CMAKE_SOURCE_DIR}/src/procgen/Hydrology.cpp"
@@ -115,7 +114,6 @@ if(RFD_BUILD_TESTS)
 
     add_executable(rfd_engine_tests EXCLUDE_FROM_ALL
         tests/procgen/GreaterRealmTests.cpp
-        src/procgen/Climate.cpp
         src/procgen/GreaterRealm.cpp
         src/procgen/GreaterRealmDebug.cpp
         src/procgen/Hydrology.cpp
@@ -132,8 +130,7 @@ if(RFD_BUILD_TESTS)
     add_test(NAME procgen_greater_realm COMMAND rfd_engine_tests)
 
     add_executable(rfd_procgen_pipeline_tests EXCLUDE_FROM_ALL
-        tests/procgen/HydrologyClimateConstraintTests.cpp
-        src/procgen/Climate.cpp
+        tests/procgen/HydrologyConstraintTests.cpp
         src/procgen/GreaterRealm.cpp
         src/procgen/GreaterRealmDebug.cpp
         src/procgen/Hydrology.cpp
@@ -147,11 +144,10 @@ if(RFD_BUILD_TESTS)
 
     target_compile_definitions(rfd_procgen_pipeline_tests PRIVATE RFD_TEST_BUILD=1)
 
-    add_test(NAME procgen_hydrology_climate_constraints COMMAND rfd_procgen_pipeline_tests)
+    add_test(NAME procgen_hydrology_constraints COMMAND rfd_procgen_pipeline_tests)
 
     add_executable(rfd_mountain_peak_tests EXCLUDE_FROM_ALL
         tests/procgen/MountainPeakTests.cpp
-        src/procgen/Climate.cpp
         src/procgen/GreaterRealm.cpp
         src/procgen/GreaterRealmDebug.cpp
         src/procgen/Hydrology.cpp
@@ -169,7 +165,6 @@ if(RFD_BUILD_TESTS)
 
     add_executable(rfd_procgen_representation_tests EXCLUDE_FROM_ALL
         tests/procgen/RepresentationEvaluationTests.cpp
-        src/procgen/Climate.cpp
         src/procgen/GreaterRealm.cpp
         src/procgen/Hydrology.cpp
         src/procgen/MountainPeaks.cpp

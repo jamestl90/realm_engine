@@ -23,23 +23,6 @@ bool require(bool condition, const char* message) {
     return true;
 }
 
-float sum_rainfall(const procgen::GreaterRealmMap& map) {
-    float total = 0.0f;
-    for (const auto& cell : map.cells) {
-        total += cell.rainfall;
-    }
-    return total;
-}
-
-float climate_difference(const procgen::GreaterRealmMap& a, const procgen::GreaterRealmMap& b) {
-    float total = 0.0f;
-    for (std::size_t index = 0; index < std::min(a.cells.size(), b.cells.size()); ++index) {
-        total += std::abs(a.cells[index].rainfall - b.cells[index].rainfall);
-        total += std::abs(a.cells[index].moisture - b.cells[index].moisture);
-    }
-    return total;
-}
-
 bool complete_maps_match(const procgen::GreaterRealmMap& a, const procgen::GreaterRealmMap& b) {
     if (a.seed != b.seed
         || a.width != b.width
@@ -55,11 +38,8 @@ bool complete_maps_match(const procgen::GreaterRealmMap& a, const procgen::Great
         const auto& right = b.cells[index];
         if (left.landmass_elevation != right.landmass_elevation
             || left.elevation != right.elevation
-            || left.humidity != right.humidity
-            || left.rainfall != right.rainfall
-            || left.moisture != right.moisture
             || left.drainage_elevation != right.drainage_elevation
-            || left.flow != right.flow
+            || left.drainage_area != right.drainage_area
             || left.downslope_index != right.downslope_index
             || left.is_drainage_outlet != right.is_drainage_outlet) {
             return false;
@@ -71,7 +51,7 @@ bool complete_maps_match(const procgen::GreaterRealmMap& a, const procgen::Great
         const auto& right = b.rivers[index];
         if (left.source_index != right.source_index
             || left.destination_index != right.destination_index
-            || left.flow != right.flow
+            || left.drainage_area != right.drainage_area
             || left.width != right.width) {
             return false;
         }
@@ -189,32 +169,31 @@ bool test_drainage_is_complete_acyclic_and_downhill() {
     return require(valid, "priority drainage exports unique, adjacent, acyclic downhill paths to outlets");
 }
 
-bool test_climate_ranges_and_parameter_response() {
+bool test_catchment_area_accumulates_without_weather() {
     procgen::GreaterRealmGeneratorSettings settings;
     settings.seed = 161803;
     settings.width = 96;
     settings.height = 72;
-    settings.raininess = 0.0f;
-    const auto dry = procgen::generate_greater_realm(settings);
+    settings.cell_size = 2.0f;
+    const auto map = procgen::generate_greater_realm(settings);
+    const float cell_area = settings.cell_size * settings.cell_size;
 
-    settings.raininess = 1.8f;
-    const auto wet = procgen::generate_greater_realm(settings);
-    settings.wind_angle_degrees = 180.0f;
-    const auto reverse_wind = procgen::generate_greater_realm(settings);
-
-    bool ranges_valid = true;
-    for (const auto& cell : wet.cells) {
-        ranges_valid &= cell.humidity >= 0.0f && cell.humidity <= 1.0f;
-        ranges_valid &= cell.rainfall >= 0.0f && cell.rainfall <= 1.0f;
-        ranges_valid &= cell.moisture >= 0.0f && cell.moisture <= 1.0f;
+    bool valid = true;
+    float maximum_area = 0.0f;
+    for (const auto& cell : map.cells) {
+        valid &= cell.drainage_area >= 0.0f;
+        if (!cell.is_water) {
+            valid &= cell.drainage_area >= cell_area;
+        }
+        maximum_area = std::max(maximum_area, cell.drainage_area);
+        if (cell.downslope_index != procgen::INVALID_CELL_INDEX) {
+            valid &= map.cells[cell.downslope_index].drainage_area >= cell.drainage_area;
+        }
     }
 
     bool ok = true;
-    ok &= require(ranges_valid, "climate fields remain normalized");
-    ok &= require(sum_rainfall(dry) == 0.0f, "zero raininess produces no rainfall");
-    ok &= require(sum_rainfall(wet) > sum_rainfall(dry), "raininess increases total rainfall");
-    ok &= require(climate_difference(wet, reverse_wind) > 1.0f, "wind direction changes climate distribution");
-    ok &= require(topology_matches(dry, wet) && topology_matches(wet, reverse_wind), "climate settings do not change terrain topology");
+    ok &= require(valid, "terrain area accumulates monotonically along drainage paths");
+    ok &= require(maximum_area > cell_area, "catchments combine contributions from multiple cells");
     return ok;
 }
 
@@ -223,10 +202,10 @@ bool test_river_accumulation_connectivity_and_thresholding() {
     settings.seed = 141421;
     settings.width = 128;
     settings.height = 96;
-    settings.river_min_flow = 0.5f;
+    settings.river_min_drainage_area = 1.0f;
     const auto rivers = procgen::generate_greater_realm(settings);
 
-    settings.river_min_flow = 1000000.0f;
+    settings.river_min_drainage_area = 1000000.0f;
     const auto hidden = procgen::generate_greater_realm(settings);
 
     bool valid = !rivers.rivers.empty();
@@ -239,16 +218,16 @@ bool test_river_accumulation_connectivity_and_thresholding() {
         const auto& source = rivers.cells[river.source_index];
         const auto& destination = rivers.cells[river.destination_index];
         valid &= source.downslope_index == river.destination_index;
-        valid &= destination.flow >= source.flow;
+        valid &= destination.drainage_area >= source.drainage_area;
         valid &= destination.drainage_elevation <= source.drainage_elevation;
-        valid &= river.flow == source.flow && river.width >= 1.0f;
+        valid &= river.drainage_area == source.drainage_area && river.width >= 1.0f;
     }
 
     bool ok = true;
-    ok &= require(valid, "river segments follow connected accumulated downhill drainage");
-    ok &= require(hidden.rivers.empty(), "minimum-flow threshold can suppress all exported river segments");
-    ok &= require(topology_matches(rivers, hidden), "river visualization parameters do not alter generated terrain");
-    ok &= require(rivers.drainage_order == hidden.drainage_order, "river threshold does not alter drainage topology");
+    ok &= require(valid, "potential river channels follow connected accumulated downhill drainage");
+    ok &= require(hidden.rivers.empty(), "catchment threshold can suppress all exported channels");
+    ok &= require(topology_matches(rivers, hidden), "channel visualization parameters do not alter generated terrain");
+    ok &= require(rivers.drainage_order == hidden.drainage_order, "channel threshold does not alter drainage topology");
     return ok;
 }
 
@@ -257,9 +236,13 @@ bool test_rivers_reach_debug_visualization() {
     settings.seed = 173205;
     settings.width = 96;
     settings.height = 72;
-    settings.river_min_flow = 0.5f;
+    settings.river_min_drainage_area = 1.0f;
     const auto map = procgen::generate_greater_realm(settings);
-    const auto image = procgen::build_greater_realm_debug_image(map, settings.sea_level);
+    procgen::GreaterRealmDebugOptions options;
+    options.show_coastline = false;
+    options.show_mountain_peaks = false;
+    options.show_drainage_directions = false;
+    const auto image = procgen::build_greater_realm_debug_image(map, settings.sea_level, options);
 
     bool ok = true;
     ok &= require(!map.rivers.empty(), "river visualization test map exports river segments");
@@ -281,7 +264,7 @@ int main() {
         test_constraint_tools_sampling_and_serialization,
         test_constraints_have_local_deterministic_influence,
         test_drainage_is_complete_acyclic_and_downhill,
-        test_climate_ranges_and_parameter_response,
+        test_catchment_area_accumulates_without_weather,
         test_river_accumulation_connectivity_and_thresholding,
         test_rivers_reach_debug_visualization
     };
@@ -294,6 +277,6 @@ int main() {
         return 1;
     }
 
-    std::cout << "Hydrology, climate, and constraint tests passed.\n";
+    std::cout << "Hydrology and constraint tests passed.\n";
     return 0;
 }

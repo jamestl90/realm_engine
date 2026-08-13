@@ -45,8 +45,8 @@ float scalar_maximum_for_view(const GreaterRealmMap& map, GreaterRealmDebugView 
             case GreaterRealmDebugView::CoastDistance:
                 maximum = std::max(maximum, cell.distance_to_coast);
                 break;
-            case GreaterRealmDebugView::DrainageFlow:
-                maximum = std::max(maximum, cell.flow);
+            case GreaterRealmDebugView::CatchmentArea:
+                maximum = std::max(maximum, cell.drainage_area);
                 break;
             default:
                 return 1.0f;
@@ -114,10 +114,7 @@ const char* to_string(GreaterRealmDebugView view) noexcept {
         case GreaterRealmDebugView::MountainInfluence: return "Mountain influence";
         case GreaterRealmDebugView::Slope: return "Slope";
         case GreaterRealmDebugView::CoastDistance: return "Coast distance";
-        case GreaterRealmDebugView::Humidity: return "Humidity";
-        case GreaterRealmDebugView::Rainfall: return "Rainfall";
-        case GreaterRealmDebugView::Moisture: return "Moisture";
-        case GreaterRealmDebugView::DrainageFlow: return "Drainage flow";
+        case GreaterRealmDebugView::CatchmentArea: return "Catchment area";
         case GreaterRealmDebugView::Count: break;
     }
     return "Unknown";
@@ -165,30 +162,9 @@ DebugColour greater_realm_debug_colour(
                 {94, 112, 166, 255},
                 {40, 24, 70, 255}
             );
-        case GreaterRealmDebugView::Humidity:
-            return three_colour_gradient(
-                cell.humidity,
-                {82, 54, 42, 255},
-                {122, 160, 148, 255},
-                {210, 242, 244, 255}
-            );
-        case GreaterRealmDebugView::Rainfall:
-            return three_colour_gradient(
-                cell.rainfall,
-                {56, 46, 42, 255},
-                {74, 138, 174, 255},
-                {198, 232, 250, 255}
-            );
-        case GreaterRealmDebugView::Moisture:
-            return three_colour_gradient(
-                cell.moisture,
-                {116, 72, 42, 255},
-                {112, 156, 76, 255},
-                {42, 112, 88, 255}
-            );
-        case GreaterRealmDebugView::DrainageFlow: {
+        case GreaterRealmDebugView::CatchmentArea: {
             const float maximum = std::max(scalar_maximum, 0.0001f);
-            const float normalized = std::log1p(std::max(cell.flow, 0.0f)) / std::log1p(maximum);
+            const float normalized = std::log1p(std::max(cell.drainage_area, 0.0f)) / std::log1p(maximum);
             return three_colour_gradient(
                 normalized,
                 {18, 20, 28, 255},

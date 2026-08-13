@@ -1,6 +1,6 @@
 # Add Rainfall And Moisture Fields
 
-Status: testing
+Status: complete (superseded)
 Area: Procgen / Climate
 
 ## Goal
@@ -38,3 +38,7 @@ Mapgen4 models wind ordering, evaporation, raininess, and rain shadow. The engin
 - All six CTest targets pass.
 - Tests-disabled Debug and Release builds succeed.
 - The Debug executable passes a native startup smoke test.
+
+## Superseded
+
+Task 039 removed these generated weather fields after rainfall was reassigned to runtime weather simulation. This record is retained as implementation history; the capability is no longer part of the engine.

@@ -14,10 +14,7 @@ enum class GreaterRealmDebugView : std::uint8_t {
     MountainInfluence,
     Slope,
     CoastDistance,
-    Humidity,
-    Rainfall,
-    Moisture,
-    DrainageFlow,
+    CatchmentArea,
     Count
 };
 

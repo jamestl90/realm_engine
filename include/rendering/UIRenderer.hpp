@@ -105,6 +105,7 @@ private:
     void collectButtonCommands(ui::Button* button);
     void collectTextBoxCommands(ui::TextBox* textBox);
     void collectComboBoxCommands(ui::ComboBox* comboBox);
+    void collectComboBoxDropdownCommands(ui::ComboBox* comboBox);
     void collectRectangleCommands(ui::Rectangle* rect);
     void collectTextBlockCommands(ui::TextBlock* text);
     void collectImageCommands(ui::Image* image);
@@ -141,6 +142,7 @@ private:
     FontID m_defaultFont{INVALID_FONT_ID};
     TTF_TextEngine* m_textEngine{nullptr};
     std::vector<UIRenderCommand> m_commands;
+    std::vector<ui::ComboBox*> m_openComboBoxes;
 
     // Vertex/index buffers for UI rendering
     std::vector<SpriteVertex> m_vertices;

@@ -5,7 +5,7 @@
 namespace procgen {
 
 void build_greater_realm_drainage(GreaterRealmMap& map);
-void accumulate_greater_realm_rivers(
+void build_greater_realm_river_channels(
     GreaterRealmMap& map,
     const GreaterRealmGeneratorSettings& settings
 );

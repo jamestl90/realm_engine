@@ -153,8 +153,8 @@ sequenceDiagram
 ### Procedural Generation (`include/procgen/`)
 - **GreaterRealm**: Engine-neutral greater realm data and deterministic terrain generation
 - **TerrainConstraints**: Resolution-independent authored terrain field, brush operations, bilinear sampling, and versioned binary serialization
-- **Climate**: Deterministic wind, humidity, rainfall, and moisture generation over completed terrain
-- **Hydrology**: Priority drainage topology, depression conditioning, flow accumulation, and engine-neutral river segments
+- **Hydrology**: Priority drainage topology, depression conditioning, terrain-only catchment accumulation, and engine-neutral potential river channels
+- **Weather boundary**: Rainfall, humidity, soil moisture, runoff, and active river discharge are runtime world-simulation state. Procgen exports stable terrain and drainage data for those systems but does not predetermine weather events.
 - **MountainPeaks**: Deterministic spaced peak selection and jagged multi-source mountain distance fields
 - **GreaterRealmDebug**: Compile-gated, engine-neutral terrain statistics and RGBA debug visualization
 - **Ownership boundary**: Applications own generator settings, controls, and preview composition; procgen modules own reusable generation and visualization behavior

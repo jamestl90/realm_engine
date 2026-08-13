@@ -85,6 +85,7 @@ UIRenderer& UIRenderer::operator=(UIRenderer&& other) noexcept {
         m_defaultFont = other.m_defaultFont;
         m_textEngine = other.m_textEngine;
         m_commands = std::move(other.m_commands);
+        m_openComboBoxes.clear();
         m_vertices = std::move(other.m_vertices);
         m_indices = std::move(other.m_indices);
         m_vertexBuffer = other.m_vertexBuffer;
@@ -180,7 +181,14 @@ void UIRenderer::render(
 
     // Clear and collect commands
     m_commands.clear();
+    m_openComboBoxes.clear();
     collectCommands(root);
+
+    // Popup content renders after the normal tree so later siblings cannot
+    // cover an open dropdown.
+    for (auto* comboBox : m_openComboBoxes) {
+        collectComboBoxDropdownCommands(comboBox);
+    }
 
     if (m_commands.empty()) {
         return;
@@ -495,69 +503,86 @@ void UIRenderer::collectComboBoxCommands(ui::ComboBox* comboBox) {
     arrowCmd.a = textColour.a;
     m_commands.push_back(arrowCmd);
 
-    // Render dropdown if open
     if (comboBox->isOpen() && !comboBox->items().empty()) {
-        const float itemHeight = static_cast<float>(textHeight) + 12.0f;
-        float dropdownHeight = itemHeight * static_cast<float>(comboBox->items().size());
+        m_openComboBoxes.push_back(comboBox);
+    }
+}
 
-        // Dropdown background
-        UIRenderCommand dropdownBgCmd;
-        dropdownBgCmd.type = UICommandType::Rectangle;
-        dropdownBgCmd.x = bounds.x;
-        dropdownBgCmd.y = bounds.y + headerHeight;
-        dropdownBgCmd.width = bounds.width;
-        dropdownBgCmd.height = dropdownHeight;
-        const auto& dropdownBg = comboBox->dropdownBackgroundColour();
-        dropdownBgCmd.r = dropdownBg.r;
-        dropdownBgCmd.g = dropdownBg.g;
-        dropdownBgCmd.b = dropdownBg.b;
-        dropdownBgCmd.a = dropdownBg.a;
-        dropdownBgCmd.borderThickness = comboBox->borderThickness();
-        dropdownBgCmd.borderR = border.r;
-        dropdownBgCmd.borderG = border.g;
-        dropdownBgCmd.borderB = border.b;
-        dropdownBgCmd.borderA = border.a;
-        m_commands.push_back(dropdownBgCmd);
+void UIRenderer::collectComboBoxDropdownCommands(ui::ComboBox* comboBox) {
+    if (!comboBox || !comboBox->isOpen() || comboBox->items().empty()) {
+        return;
+    }
 
-        // Render each item
-        float itemY = bounds.y + headerHeight;
-        int itemIndex = 0;
-        for (const auto& item : comboBox->items()) {
-            // Item background (if hovered)
-            if (itemIndex == comboBox->hoveredItemIndex()) {
-                UIRenderCommand itemBgCmd;
-                itemBgCmd.type = UICommandType::Rectangle;
-                itemBgCmd.x = bounds.x;
-                itemBgCmd.y = itemY;
-                itemBgCmd.width = bounds.width;
-                itemBgCmd.height = itemHeight;
-                const auto& itemHoverColour = comboBox->itemHoverColour();
-                itemBgCmd.r = itemHoverColour.r;
-                itemBgCmd.g = itemHoverColour.g;
-                itemBgCmd.b = itemHoverColour.b;
-                itemBgCmd.a = itemHoverColour.a;
-                m_commands.push_back(itemBgCmd);
-            }
+    const auto& bounds = comboBox->bounds();
+    const auto& padding = comboBox->padding();
+    int sampleWidth = 0;
+    int textHeight = 0;
+    if (!measureText("Mg", INVALID_FONT_ID, comboBox->fontSize(), &sampleWidth, &textHeight)) {
+        textHeight = static_cast<int>(comboBox->fontSize() * 1.2f);
+    }
 
-            // Item text
-            UIRenderCommand itemTextCmd;
-            itemTextCmd.type = UICommandType::Text;
-            itemTextCmd.text = item;
-            itemTextCmd.fontSize = comboBox->fontSize();
-            itemTextCmd.x = bounds.x + padding.left;
-            int itemTextWidth = 0;
-            int itemTextHeight = 0;
-            measureText(item, itemTextCmd.fontId, itemTextCmd.fontSize, &itemTextWidth, &itemTextHeight);
-            itemTextCmd.y = itemY + (itemHeight - static_cast<float>(itemTextHeight)) * 0.5f;
-            itemTextCmd.r = textColour.r;
-            itemTextCmd.g = textColour.g;
-            itemTextCmd.b = textColour.b;
-            itemTextCmd.a = textColour.a;
-            m_commands.push_back(itemTextCmd);
+    const float headerHeight = std::max(
+        static_cast<float>(textHeight) + padding.verticalSum(),
+        24.0f
+    );
+    const float itemHeight = static_cast<float>(textHeight) + 12.0f;
+    const float dropdownHeight = itemHeight * static_cast<float>(comboBox->items().size());
+    const auto& border = comboBox->borderColour();
+    const auto& textColour = comboBox->textColour();
 
-            itemY += itemHeight;
-            itemIndex++;
+    UIRenderCommand dropdownBgCmd;
+    dropdownBgCmd.type = UICommandType::Rectangle;
+    dropdownBgCmd.x = bounds.x;
+    dropdownBgCmd.y = bounds.y + headerHeight;
+    dropdownBgCmd.width = bounds.width;
+    dropdownBgCmd.height = dropdownHeight;
+    const auto& dropdownBg = comboBox->dropdownBackgroundColour();
+    dropdownBgCmd.r = dropdownBg.r;
+    dropdownBgCmd.g = dropdownBg.g;
+    dropdownBgCmd.b = dropdownBg.b;
+    dropdownBgCmd.a = dropdownBg.a;
+    dropdownBgCmd.borderThickness = comboBox->borderThickness();
+    dropdownBgCmd.borderR = border.r;
+    dropdownBgCmd.borderG = border.g;
+    dropdownBgCmd.borderB = border.b;
+    dropdownBgCmd.borderA = border.a;
+    m_commands.push_back(dropdownBgCmd);
+
+    float itemY = bounds.y + headerHeight;
+    int itemIndex = 0;
+    for (const auto& item : comboBox->items()) {
+        if (itemIndex == comboBox->hoveredItemIndex()) {
+            UIRenderCommand itemBgCmd;
+            itemBgCmd.type = UICommandType::Rectangle;
+            itemBgCmd.x = bounds.x;
+            itemBgCmd.y = itemY;
+            itemBgCmd.width = bounds.width;
+            itemBgCmd.height = itemHeight;
+            const auto& itemHoverColour = comboBox->itemHoverColour();
+            itemBgCmd.r = itemHoverColour.r;
+            itemBgCmd.g = itemHoverColour.g;
+            itemBgCmd.b = itemHoverColour.b;
+            itemBgCmd.a = itemHoverColour.a;
+            m_commands.push_back(itemBgCmd);
         }
+
+        UIRenderCommand itemTextCmd;
+        itemTextCmd.type = UICommandType::Text;
+        itemTextCmd.text = item;
+        itemTextCmd.fontSize = comboBox->fontSize();
+        itemTextCmd.x = bounds.x + padding.left;
+        int itemTextWidth = 0;
+        int itemTextHeight = 0;
+        measureText(item, itemTextCmd.fontId, itemTextCmd.fontSize, &itemTextWidth, &itemTextHeight);
+        itemTextCmd.y = itemY + (itemHeight - static_cast<float>(itemTextHeight)) * 0.5f;
+        itemTextCmd.r = textColour.r;
+        itemTextCmd.g = textColour.g;
+        itemTextCmd.b = textColour.b;
+        itemTextCmd.a = textColour.a;
+        m_commands.push_back(itemTextCmd);
+
+        itemY += itemHeight;
+        ++itemIndex;
     }
 }
 

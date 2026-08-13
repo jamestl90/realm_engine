@@ -59,5 +59,5 @@ This document tracks the UI system features currently present in the engine. It 
 
 - Corner radius values exist on some controls/primitives, but current rendering uses rectangular quads.
 - `TextBlock::fontFamily` is stored, but per-element font-face selection is not yet connected; UI text currently uses size variants of the renderer's default font face.
-- The combo box dropdown is rendered internally by `UIRenderer`, not as child UI elements.
+- The combo box dropdown is rendered internally by `UIRenderer` in a final popup pass, above normal UI tree content and without contributing to parent layout size.
 - The current sample UI in `RogueFarmGame` demonstrates a button, text box, and combo box wired to window resizing.

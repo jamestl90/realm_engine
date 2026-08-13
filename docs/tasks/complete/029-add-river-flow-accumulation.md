@@ -1,6 +1,6 @@
 # Add River Flow Accumulation
 
-Status: testing
+Status: complete (superseded)
 Area: Procgen / Hydrology
 
 ## Goal
@@ -39,3 +39,7 @@ Mapgen4 accumulates moisture in drainage order and derives river width from flow
 - All six CTest targets pass.
 - Tests-disabled Debug and Release builds succeed.
 - The Debug executable passes a native startup smoke test.
+
+## Superseded
+
+Task 039 replaced moisture-derived flow with terrain-only catchment area and potential river channels. Active discharge will belong to future runtime weather and runoff simulation.

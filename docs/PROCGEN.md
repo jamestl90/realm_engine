@@ -21,10 +21,10 @@ This document tracks the procedural generation capabilities currently present in
 - Treats coastline proximity independently from terrain form so coastal relief is not replaced by a generic beach classification.
 - Accepts an optional, lower-resolution authored constraint field with ocean, shallow-water, valley, and mountain tools.
 - Bilinearly samples authored constraints and blends them into the automatic signed terrain field.
-- Generates normalized humidity, rainfall, and moisture from wind direction, raininess, rain shadow, evaporation, ocean sources, and terrain elevation.
 - Builds a deterministic priority drainage topology with a downslope target or outlet for every cell.
 - Exports a hydrologically conditioned elevation so drainage remains acyclic and downhill through depressions without changing visual terrain elevation.
-- Accumulates terrain moisture downstream and exports renderer-independent river segments with flow and width.
+- Accumulates terrain-only contributing area downstream and exports renderer-independent potential river channels with catchment area and a derived display width.
+- Does not generate rainfall, humidity, soil moisture, runoff, or current river discharge. Those values belong to future runtime weather and world simulation.
 
 ## Terrain Constraints
 
@@ -44,9 +44,8 @@ This document tracks the procedural generation capabilities currently present in
 7. Assemble normalized final elevation without changing land/water topology.
 8. Classify boundary-connected water as ocean.
 9. Compute coast distance, slope, and terrain forms.
-10. Generate wind-driven humidity, rainfall, and moisture.
-11. Build priority drainage and condition depressions for flow.
-12. Accumulate moisture and export river segments.
+10. Build priority drainage and condition depressions for downhill routing.
+11. Accumulate contributing terrain area and export potential river channels.
 
 This follows Mapgen4's layered elevation approach while deliberately retaining a regular-grid representation. A future irregular or triangulated surface may be derived for rendering without replacing canonical map data.
 
@@ -54,28 +53,28 @@ This follows Mapgen4's layered elevation approach while deliberately retaining a
 
 - The compile-gated `GreaterRealmDebug` module counts terrain forms and coastal land independently, converts map data into an engine-neutral RGBA image, overlays exported rivers, and marks explicit peak cells.
 - The debug image uses relative ocean-depth shading and a one-cell dark coastline accent while preserving the underlying plains, hills, highlands, or mountain colour.
-- Runtime base views expose terrain forms, elevation, signed landmass, mountain influence, slope, coast distance, humidity, rainfall, moisture, and drainage flow.
+- Runtime base views expose terrain forms, elevation, signed landmass, mountain influence, slope, coast distance, and catchment area.
 - Coastlines, mountain peaks, rivers, and sampled drainage directions are independent overlays. Terrain with coastlines, peaks, and rivers enabled remains the default view.
 - Changing a base view or overlay rebuilds only the RGBA image and preview texture from the retained map; it does not regenerate procedural data.
 - `TextureManager` uploads the RGBA output without requiring procgen code to depend on SDL or GPU APIs.
-- The application-level `GreaterRealmDebugPanel` owns the debug UI, active settings, and regeneration callbacks; `RogueFarmGame` owns preview placement, the editable constraint field, and composition. Controls expose terrain, mountain strength, peak spacing/radius/jaggedness, wind, rainfall, evaporation, river-flow, river-threshold, and coordinate-based constraint stamping settings.
+- The application-level `GreaterRealmDebugPanel` owns the debug UI, active settings, and regeneration callbacks; `RogueFarmGame` owns preview placement, the editable constraint field, and composition. Controls expose terrain, mountain strength, peak spacing/radius/jaggedness, potential-channel catchment threshold, and coordinate-based constraint stamping settings.
 - The current Constraint X/Y controls are a temporary debug harness. Unlike Mapgen4, the engine does not yet convert pointer positions on the preview into direct brush strokes; task 035 tracks removing these controls and replacing them with preview painting.
 - Island bias follows Mapgen4's `0..1` range and `0.5` default. It changes the signed landmass constraint, so it can affect both coastline topology and water elevation before the separate ocean-depth stage.
 - Terrain noise and ocean depth use larger tuning steps and contrast-enhanced debug shading so changes are visible.
 - Debug builds report per-stage generation timings plus end-to-end control-to-preview timing through the Debug-only `RFD_ENABLE_PROCGEN_PROFILING` definition; profiling code is compiled out of production builds.
 - `RFD_OPTIMIZE_PROCGEN_DEBUG` defaults to `ON`, compiling the interactive procgen runtime with optimization in Debug builds while dedicated test targets retain their normal Debug checks. Disable it when stepping through procgen at instruction level is more important than interactive tuning speed.
-- Automated tests cover output shape, deterministic seeds, map lookup, signed constraints, topology stability, ocean connectivity, sea-level response, terrain statistics, peak selection/spacing/distance fields, constraint interpolation/serialization, drainage invariants, climate response, river flow/connectivity, and debug-image output.
+- Automated tests cover output shape, deterministic seeds, map lookup, signed constraints, topology stability, ocean connectivity, sea-level response, terrain statistics, peak selection/spacing/distance fields, constraint interpolation/serialization, drainage invariants, catchment accumulation, channel connectivity, and debug-image output.
 - Test code is compiled only when `RFD_BUILD_TESTS=ON` and does not enter release builds.
 
 ## Not Yet Supported
 
 - Lakes as a classified terrain form, river erosion, deltas, or watershed metadata.
-- Biomes or weather simulation beyond the current static rainfall and moisture fields.
+- Runtime weather, precipitation, runoff, soil moisture, or active river discharge; task 040 tracks this future simulation layer.
 - Resources, settlements, factions, or object placement.
 - Local tile generation or world-region streaming.
 - Beach, cliff, rocky-shore, marsh, delta, or other detailed shoreline classification.
 - Direct pointer painting of terrain constraints on the debug preview.
 - A derived Delaunay/Voronoi render surface; task 032 rejected it as the canonical greater-realm representation.
 - Mapgen4-style folded terrain geometry or 2.5D projection.
-- Climate-influenced terrain colouring.
+- Continuous elevation-informed terrain colouring.
 - Dependency-aware partial regeneration and in-place debug texture updates; task 036 tracks avoiding full-pipeline work for every control change.

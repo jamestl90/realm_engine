@@ -499,10 +499,7 @@ bool test_debug_base_views() {
     low.mountain_influence = 0.0f;
     low.slope = 0.0f;
     low.distance_to_coast = 0.0f;
-    low.humidity = 0.0f;
-    low.rainfall = 0.0f;
-    low.moisture = 0.0f;
-    low.flow = 0.0f;
+    low.drainage_area = 0.0f;
 
     auto& high = map.cells[1];
     high.terrain_form = procgen::TerrainForm::Mountains;
@@ -511,10 +508,7 @@ bool test_debug_base_views() {
     high.mountain_influence = 1.0f;
     high.slope = 2.0f;
     high.distance_to_coast = 20.0f;
-    high.humidity = 1.0f;
-    high.rainfall = 1.0f;
-    high.moisture = 1.0f;
-    high.flow = 100.0f;
+    high.drainage_area = 100.0f;
 
     procgen::GreaterRealmDebugOptions options;
     options.show_coastline = false;

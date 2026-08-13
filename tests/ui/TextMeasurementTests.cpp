@@ -70,6 +70,26 @@ bool test_text_controls_use_measured_line_height() {
         && require(nearly_equal(comboBox.measuredWidth(), 216.0f), "ComboBox width uses its longest measured item");
 }
 
+bool test_combo_box_dropdown_does_not_change_layout_size() {
+    ui::ComboBox comboBox;
+    comboBox.addItem("First item");
+    comboBox.addItem("Second item");
+    comboBox.setTextMeasurer([](const std::string&, float) {
+        return ui::TextMetrics{100.0f, 20.0f};
+    });
+
+    comboBox.measure(500.0f, 500.0f);
+    const float closedHeight = comboBox.measuredHeight();
+    comboBox.open();
+    comboBox.measure(500.0f, 500.0f);
+
+    return require(comboBox.isOpen(), "ComboBox opens when it has items")
+        && require(
+            nearly_equal(comboBox.measuredHeight(), closedHeight),
+            "ComboBox dropdown behaves as a popup outside normal layout"
+        );
+}
+
 } // namespace
 
 int main() {
@@ -77,6 +97,7 @@ int main() {
     ok &= test_text_block_uses_font_metrics();
     ok &= test_button_includes_measured_text_and_padding();
     ok &= test_text_controls_use_measured_line_height();
+    ok &= test_combo_box_dropdown_does_not_change_layout_size();
 
     if (!ok) {
         return 1;

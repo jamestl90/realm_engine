@@ -1,5 +1,4 @@
 #include "../../include/procgen/GreaterRealm.hpp"
-#include "../../include/procgen/Climate.hpp"
 #include "../../include/procgen/Hydrology.hpp"
 #include "../../include/procgen/MountainPeaks.hpp"
 #include "../../include/procgen/TerrainConstraints.hpp"
@@ -490,19 +489,13 @@ static GreaterRealmMap generate_greater_realm_impl(
     const double classification_ms = profile_stage();
 #endif
 
-    generate_greater_realm_climate(map, settings);
-
-#if defined(RFD_ENABLE_PROCGEN_PROFILING)
-    const double climate_ms = profile_stage();
-#endif
-
     build_greater_realm_drainage(map);
 
 #if defined(RFD_ENABLE_PROCGEN_PROFILING)
     const double drainage_ms = profile_stage();
 #endif
 
-    accumulate_greater_realm_rivers(map, settings);
+    build_greater_realm_river_channels(map, settings);
 
 #if defined(RFD_ENABLE_PROCGEN_PROFILING)
     const double rivers_ms = profile_stage();
@@ -511,12 +504,11 @@ static GreaterRealmMap generate_greater_realm_impl(
     ).count();
     std::fprintf(
         stderr,
-        "DEBUG: Procgen stages: fields=%.2fms peaks=%.2fms relief=%.2fms classify=%.2fms climate=%.2fms drainage=%.2fms rivers=%.2fms total=%.2fms\n",
+        "DEBUG: Procgen stages: fields=%.2fms peaks=%.2fms relief=%.2fms classify=%.2fms drainage=%.2fms channels=%.2fms total=%.2fms\n",
         terrain_fields_ms,
         mountain_peaks_ms,
         relief_ms,
         classification_ms,
-        climate_ms,
         drainage_ms,
         rivers_ms,
         total_ms

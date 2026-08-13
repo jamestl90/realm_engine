@@ -36,11 +36,8 @@ struct GreaterRealmCell {
     float mountain_distance{std::numeric_limits<float>::infinity()};
     float mountain_influence{0.0f};
     bool is_mountain_peak{false};
-    float humidity{0.0f};
-    float rainfall{0.0f};
-    float moisture{0.0f};
     float drainage_elevation{0.0f};
-    float flow{0.0f};
+    float drainage_area{0.0f};
     std::uint32_t downslope_index{INVALID_CELL_INDEX};
     bool is_drainage_outlet{false};
     TerrainForm terrain_form{TerrainForm::Ocean};
@@ -49,7 +46,7 @@ struct GreaterRealmCell {
 struct GreaterRealmRiverSegment {
     std::uint32_t source_index{INVALID_CELL_INDEX};
     std::uint32_t destination_index{INVALID_CELL_INDEX};
-    float flow{0.0f};
+    float drainage_area{0.0f};
     float width{0.0f};
 };
 
@@ -91,14 +88,8 @@ struct GreaterRealmGeneratorSettings {
     float terrain_noise_weight{0.12f};
     float ocean_depth_weight{1.0f};
 
-    float wind_angle_degrees{0.0f};
-    float raininess{0.9f};
-    float rain_shadow{0.5f};
-    float evaporation{0.5f};
-
-    float river_flow_scale{0.2f};
-    float river_min_flow{12.0f};
-    float river_width_scale{0.5f};
+    float river_min_drainage_area{60.0f};
+    float river_width_scale{0.25f};
 };
 
 struct GreaterRealmMap {

@@ -9,14 +9,13 @@ Reuse unaffected greater-realm generation stages when a tuning control changes i
 
 ## Context
 
-The 256x192 generator meets the immediate sub-50 ms target when the interactive procgen runtime is optimized, but every control currently regenerates terrain fields, mountain peaks, relief, classification, climate, drainage, rivers, the debug image, and a new texture. Many settings affect only a subset of those stages.
+The 256x192 generator meets the immediate sub-50 ms target when the interactive procgen runtime is optimized, but every control currently regenerates terrain fields, mountain peaks, relief, classification, drainage, channels, the debug image, and a new texture. Many settings affect only a subset of those stages.
 
 ## Acceptance Criteria
 
-- Define explicit dependencies and dirty states for terrain fields, peaks, relief, classification, climate, drainage, rivers, debug image, and texture upload.
+- Define explicit dependencies and dirty states for terrain fields, peaks, relief, classification, drainage, channels, debug image, and texture upload.
 - Regenerate the full pipeline for seed, dimensions, broad landmass, sea-level, and authored-constraint changes where required.
-- Reuse upstream results for mountain, relief, climate, and river-only settings.
-- Avoid sorting wind-order data again when dimensions and wind direction are unchanged.
+- Reuse upstream results for mountain, relief, drainage, and channel-only settings.
 - Avoid rebuilding drainage when the conditioned elevation and water topology are unchanged.
 - Update the existing debug texture in place, without creating a new texture or waiting for global GPU idle on each change.
 - Preserve deterministic output and current engine-neutral procgen boundaries.
