@@ -13,14 +13,14 @@ Extend ECS regression coverage beyond entity and component lifecycle behavior.
 - Test enabled and disabled system behavior.
 - Test system removal.
 - Test world resource set, get, replacement, and removal behavior.
-- Keep the tests in an isolated target available only when `RFD_BUILD_TESTS=ON`.
+- Keep the tests in an isolated target available only when `REALM_BUILD_TESTS=ON`.
 
 ## Verification
 
 - `ecs_system_resources` passes in an explicit tests-enabled build.
 - All four current test suites pass together.
-- A fresh tests-disabled configuration builds `rfd_game` without creating or compiling test targets.
-- ECS test sources require the test-only `RFD_TEST_BUILD` definition.
+- A fresh tests-disabled configuration builds `realm_engine` without creating or compiling test targets.
+- ECS test sources require the test-only `REALM_TEST_BUILD` definition.
 
 ## Notes
 

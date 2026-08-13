@@ -8,8 +8,8 @@
       "binaryDir": "${sourceDir}/out/build/debug-no-tests",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
-        "RFD_BUILD_TESTS": "OFF",
-        "RFD_ENABLE_PROCGEN_DEBUG_VIEW": "ON"
+        "REALM_BUILD_TESTS": "OFF",
+        "REALM_ENABLE_PROCGEN_DEBUG_VIEW": "ON"
       }
     },
     {
@@ -19,8 +19,8 @@
       "binaryDir": "${sourceDir}/out/build/release-no-tests",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
-        "RFD_BUILD_TESTS": "OFF",
-        "RFD_ENABLE_PROCGEN_DEBUG_VIEW": "OFF"
+        "REALM_BUILD_TESTS": "OFF",
+        "REALM_ENABLE_PROCGEN_DEBUG_VIEW": "OFF"
       }
     },
     {
@@ -30,8 +30,8 @@
       "binaryDir": "${sourceDir}/out/build/debug-with-tests",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
-        "RFD_BUILD_TESTS": "ON",
-        "RFD_ENABLE_PROCGEN_DEBUG_VIEW": "ON"
+        "REALM_BUILD_TESTS": "ON",
+        "REALM_ENABLE_PROCGEN_DEBUG_VIEW": "ON"
       }
     }
   ],
@@ -40,14 +40,14 @@
       "name": "debug-no-tests",
       "configurePreset": "debug-no-tests",
       "targets": [
-        "rfd_game"
+        "realm_engine"
       ]
     },
     {
       "name": "release-no-tests",
       "configurePreset": "release-no-tests",
       "targets": [
-        "rfd_game"
+        "realm_engine"
       ]
     },
     {

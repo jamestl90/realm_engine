@@ -61,10 +61,10 @@ This follows Mapgen4's layered elevation approach while deliberately retaining a
 - The current Constraint X/Y controls are a temporary debug harness. Unlike Mapgen4, the engine does not yet convert pointer positions on the preview into direct brush strokes; task 035 tracks removing these controls and replacing them with preview painting.
 - Island bias follows Mapgen4's `0..1` range and `0.5` default. It changes the signed landmass constraint, so it can affect both coastline topology and water elevation before the separate ocean-depth stage.
 - Terrain noise and ocean depth use larger tuning steps and contrast-enhanced debug shading so changes are visible.
-- Debug builds report per-stage generation timings plus end-to-end control-to-preview timing through the Debug-only `RFD_ENABLE_PROCGEN_PROFILING` definition; profiling code is compiled out of production builds.
-- `RFD_OPTIMIZE_PROCGEN_DEBUG` defaults to `ON`, compiling the interactive procgen runtime with optimization in Debug builds while dedicated test targets retain their normal Debug checks. Disable it when stepping through procgen at instruction level is more important than interactive tuning speed.
+- Debug builds report per-stage generation timings plus end-to-end control-to-preview timing through the Debug-only `REALM_ENABLE_PROCGEN_PROFILING` definition; profiling code is compiled out of production builds.
+- `REALM_OPTIMIZE_PROCGEN_DEBUG` defaults to `ON`, compiling the interactive procgen runtime with optimization in Debug builds while dedicated test targets retain their normal Debug checks. Disable it when stepping through procgen at instruction level is more important than interactive tuning speed.
 - Automated tests cover output shape, deterministic seeds, map lookup, signed constraints, topology stability, ocean connectivity, sea-level response, terrain statistics, peak selection/spacing/distance fields, constraint interpolation/serialization, drainage invariants, catchment accumulation, channel connectivity, and debug-image output.
-- Test code is compiled only when `RFD_BUILD_TESTS=ON` and does not enter release builds.
+- Test code is compiled only when `REALM_BUILD_TESTS=ON` and does not enter release builds.
 
 ## Not Yet Supported
 

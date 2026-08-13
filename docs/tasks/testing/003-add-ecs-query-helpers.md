@@ -26,7 +26,7 @@ Systems previously accessed component arrays directly. That was efficient, but r
 - `ecs_component_queries` passes in the explicit tests-enabled build.
 - All five current test suites pass together.
 - Tests-disabled Debug and Release game builds compile the renderer through the query API.
-- Query tests remain isolated behind `RFD_BUILD_TESTS=ON` and `RFD_TEST_BUILD=1`.
+- Query tests remain isolated behind `REALM_BUILD_TESTS=ON` and `REALM_TEST_BUILD=1`.
 
 ## Notes
 

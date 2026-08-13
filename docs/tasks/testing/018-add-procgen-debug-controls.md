@@ -15,7 +15,7 @@ The generated map can now be rendered, but tuning requires code edits and rebuil
 
 ## Acceptance Criteria
 
-- Add compile-gated debug controls behind `RFD_ENABLE_PROCGEN_DEBUG_VIEW`.
+- Add compile-gated debug controls behind `REALM_ENABLE_PROCGEN_DEBUG_VIEW`.
 - Allow changing seed, sea level, land shape, island bias, coastline detail, base relief, mountain weight, ridge weight, valley weight, terrain noise, and ocean depth.
 - Keep the expanded panel compact enough to fit comfortably within the logical viewport.
 - Regenerate the debug map texture from the UI.
@@ -25,8 +25,8 @@ The generated map can now be rendered, but tuning requires code edits and rebuil
 
 ## Verification
 
-- The expanded panel builds in a Debug configuration with `RFD_BUILD_TESTS=OFF`.
-- `RFD_ENABLE_PROCGEN_DEBUG_VIEW=ON` is present on the game target.
+- The expanded panel builds in a Debug configuration with `REALM_BUILD_TESTS=OFF`.
+- `REALM_ENABLE_PROCGEN_DEBUG_VIEW=ON` is present on the game target.
 - The panel uses eleven compact control rows within the logical viewport.
 
 ## Notes

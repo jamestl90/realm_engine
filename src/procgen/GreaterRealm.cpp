@@ -6,7 +6,7 @@
 #include <array>
 #include <cmath>
 
-#if defined(RFD_ENABLE_PROCGEN_PROFILING)
+#if defined(REALM_ENABLE_PROCGEN_PROFILING)
 #include <chrono>
 #include <cstdio>
 #endif
@@ -312,7 +312,7 @@ static GreaterRealmMap generate_greater_realm_impl(
     const GreaterRealmGeneratorSettings& settings,
     const TerrainConstraintField* constraints
 ) {
-#if defined(RFD_ENABLE_PROCGEN_PROFILING)
+#if defined(REALM_ENABLE_PROCGEN_PROFILING)
     using ProfileClock = std::chrono::steady_clock;
     const auto profile_started_at = ProfileClock::now();
     auto profile_last_mark = profile_started_at;
@@ -425,13 +425,13 @@ static GreaterRealmMap generate_greater_realm_impl(
         }
     }
 
-#if defined(RFD_ENABLE_PROCGEN_PROFILING)
+#if defined(REALM_ENABLE_PROCGEN_PROFILING)
     const double terrain_fields_ms = profile_stage();
 #endif
 
     generate_mountain_peak_field(map, settings);
 
-#if defined(RFD_ENABLE_PROCGEN_PROFILING)
+#if defined(REALM_ENABLE_PROCGEN_PROFILING)
     const double mountain_peaks_ms = profile_stage();
 #endif
 
@@ -476,7 +476,7 @@ static GreaterRealmMap generate_greater_realm_impl(
         cell.elevation = sea_level + (1.0f - sea_level) * land_height;
     }
 
-#if defined(RFD_ENABLE_PROCGEN_PROFILING)
+#if defined(REALM_ENABLE_PROCGEN_PROFILING)
     const double relief_ms = profile_stage();
 #endif
 
@@ -485,19 +485,19 @@ static GreaterRealmMap generate_greater_realm_impl(
     compute_slopes(map);
     classify_cells(map, settings);
 
-#if defined(RFD_ENABLE_PROCGEN_PROFILING)
+#if defined(REALM_ENABLE_PROCGEN_PROFILING)
     const double classification_ms = profile_stage();
 #endif
 
     build_greater_realm_drainage(map);
 
-#if defined(RFD_ENABLE_PROCGEN_PROFILING)
+#if defined(REALM_ENABLE_PROCGEN_PROFILING)
     const double drainage_ms = profile_stage();
 #endif
 
     build_greater_realm_river_channels(map, settings);
 
-#if defined(RFD_ENABLE_PROCGEN_PROFILING)
+#if defined(REALM_ENABLE_PROCGEN_PROFILING)
     const double rivers_ms = profile_stage();
     const double total_ms = std::chrono::duration<double, std::milli>(
         ProfileClock::now() - profile_started_at

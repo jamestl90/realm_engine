@@ -1,4 +1,4 @@
-#if !defined(RFD_TEST_BUILD)
+#if !defined(REALM_TEST_BUILD)
 #error This test module must only be compiled in test builds.
 #endif
 

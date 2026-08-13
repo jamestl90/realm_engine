@@ -5,7 +5,7 @@
 #include "../../include/ui/Layout.hpp"
 #include "../../include/ui/Primitives.hpp"
 #include <algorithm>
-#if defined(RFD_ENABLE_PROCGEN_PROFILING)
+#if defined(REALM_ENABLE_PROCGEN_PROFILING)
 #include <SDL3/SDL.h>
 #include <chrono>
 #endif
@@ -412,11 +412,11 @@ void GreaterRealmDebugPanel::update(const procgen::GreaterRealmMap& map) {
 
 void GreaterRealmDebugPanel::regenerate() {
     if (m_on_regenerate) {
-#if defined(RFD_ENABLE_PROCGEN_PROFILING)
+#if defined(REALM_ENABLE_PROCGEN_PROFILING)
         const auto started_at = std::chrono::steady_clock::now();
 #endif
         m_on_regenerate();
-#if defined(RFD_ENABLE_PROCGEN_PROFILING)
+#if defined(REALM_ENABLE_PROCGEN_PROFILING)
         const auto elapsed = std::chrono::duration<double, std::milli>(
             std::chrono::steady_clock::now() - started_at
         );

@@ -10,26 +10,26 @@
 #include "../../include/ui/Layout.hpp"
 #include "../../include/ui/Primitives.hpp"
 #include <SDL3/SDL.h>
-#if defined(RFD_ENABLE_PROCGEN_PROFILING)
+#if defined(REALM_ENABLE_PROCGEN_PROFILING)
 #include <chrono>
 #endif
 #include <vector>
 
-#if defined(RFD_ENABLE_PROCGEN_DEBUG_VIEW)
+#if defined(REALM_ENABLE_PROCGEN_DEBUG_VIEW)
 #include "../../include/procgen/GreaterRealmDebug.hpp"
 #endif
 
 namespace game {
 
-#if defined(RFD_ENABLE_PROCGEN_DEBUG_VIEW)
+#if defined(REALM_ENABLE_PROCGEN_DEBUG_VIEW)
 bool RogueFarmGame::regenerate_procgen_debug_map(core::Engine& engine) {
-#if defined(RFD_ENABLE_PROCGEN_PROFILING)
+#if defined(REALM_ENABLE_PROCGEN_PROFILING)
     using ProfileClock = std::chrono::steady_clock;
     const auto started_at = ProfileClock::now();
 #endif
 
     m_procgen_map = procgen::generate_greater_realm(m_procgen_settings, m_procgen_constraints);
-#if defined(RFD_ENABLE_PROCGEN_PROFILING)
+#if defined(REALM_ENABLE_PROCGEN_PROFILING)
     const auto generated_at = ProfileClock::now();
 #endif
     const auto image = procgen::build_greater_realm_debug_image(
@@ -37,7 +37,7 @@ bool RogueFarmGame::regenerate_procgen_debug_map(core::Engine& engine) {
         m_procgen_settings.sea_level,
         m_procgen_debug_options
     );
-#if defined(RFD_ENABLE_PROCGEN_PROFILING)
+#if defined(REALM_ENABLE_PROCGEN_PROFILING)
     const auto image_built_at = ProfileClock::now();
 #endif
     if (!image.has_expected_byte_count()) {
@@ -48,12 +48,12 @@ bool RogueFarmGame::regenerate_procgen_debug_map(core::Engine& engine) {
     if (!replace_procgen_debug_texture(engine, image)) {
         return false;
     }
-#if defined(RFD_ENABLE_PROCGEN_PROFILING)
+#if defined(REALM_ENABLE_PROCGEN_PROFILING)
     const auto texture_uploaded_at = ProfileClock::now();
 #endif
 
     m_procgen_debug_panel.update(m_procgen_map);
-#if defined(RFD_ENABLE_PROCGEN_PROFILING)
+#if defined(REALM_ENABLE_PROCGEN_PROFILING)
     const auto finished_at = ProfileClock::now();
     const auto elapsed_ms = [](auto start, auto finish) {
         return std::chrono::duration<double, std::milli>(finish - start).count();
@@ -163,7 +163,7 @@ void RogueFarmGame::on_startup(core::Engine& engine) {
         }
     }
 
-#if defined(RFD_ENABLE_PROCGEN_DEBUG_VIEW)
+#if defined(REALM_ENABLE_PROCGEN_DEBUG_VIEW)
     m_procgen_settings.seed = 8675309;
     m_procgen_settings.width = 256;
     m_procgen_settings.height = 192;
@@ -193,7 +193,7 @@ void RogueFarmGame::on_startup(core::Engine& engine) {
         return;
     }
 
-#if defined(RFD_ENABLE_PROCGEN_DEBUG_VIEW)
+#if defined(REALM_ENABLE_PROCGEN_DEBUG_VIEW)
     m_test_texture = texture_manager->create_from_rgba_pixels(
         initial_image.width,
         initial_image.height,
@@ -216,7 +216,7 @@ void RogueFarmGame::on_startup(core::Engine& engine) {
     const int logical_h = core::Engine::LOGICAL_H;
 
     rendering::Transform transform;
-#if defined(RFD_ENABLE_PROCGEN_DEBUG_VIEW)
+#if defined(REALM_ENABLE_PROCGEN_DEBUG_VIEW)
     transform.x = static_cast<float>(logical_w) * 0.65f;
     transform.y = static_cast<float>(logical_h) * 0.50f;
 #else
@@ -229,14 +229,14 @@ void RogueFarmGame::on_startup(core::Engine& engine) {
     rendering::Sprite sprite;
     sprite.texture_id = m_test_texture;
     sprite.layer = 0;
-#if defined(RFD_ENABLE_PROCGEN_DEBUG_VIEW)
+#if defined(REALM_ENABLE_PROCGEN_DEBUG_VIEW)
     sprite.scale_x = 4.0f;
     sprite.scale_y = 4.0f;
 #endif
     engine.world().add_component(m_test_entity, sprite);
 
     auto& ui_manager = engine.ui_manager();
-#if defined(RFD_ENABLE_PROCGEN_DEBUG_VIEW)
+#if defined(REALM_ENABLE_PROCGEN_DEBUG_VIEW)
     ui_manager.setRoot(m_procgen_debug_panel.build(
         m_procgen_settings,
         m_procgen_debug_options,

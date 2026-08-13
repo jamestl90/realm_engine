@@ -4,7 +4,7 @@
 #include "../../include/ecs/Entity.hpp"
 #include "../../include/rendering/Texture.hpp"
 
-#if defined(RFD_ENABLE_PROCGEN_DEBUG_VIEW)
+#if defined(REALM_ENABLE_PROCGEN_DEBUG_VIEW)
 #include "GreaterRealmDebugPanel.hpp"
 #include "../../include/procgen/TerrainConstraints.hpp"
 #endif
@@ -24,7 +24,7 @@ public:
     void on_resized(core::Engine& engine, int width, int height) override;
 
 private:
-#if defined(RFD_ENABLE_PROCGEN_DEBUG_VIEW)
+#if defined(REALM_ENABLE_PROCGEN_DEBUG_VIEW)
     bool regenerate_procgen_debug_map(core::Engine& engine);
     bool refresh_procgen_debug_view(core::Engine& engine);
     bool replace_procgen_debug_texture(core::Engine& engine, const procgen::DebugImage& image);
@@ -33,7 +33,7 @@ private:
     ecs::Entity m_test_entity;
     rendering::TextureID m_test_texture{rendering::INVALID_TEXTURE_ID};
 
-#if defined(RFD_ENABLE_PROCGEN_DEBUG_VIEW)
+#if defined(REALM_ENABLE_PROCGEN_DEBUG_VIEW)
     procgen::GreaterRealmGeneratorSettings m_procgen_settings{};
     procgen::TerrainConstraintField m_procgen_constraints{64, 64};
     procgen::GreaterRealmMap m_procgen_map;

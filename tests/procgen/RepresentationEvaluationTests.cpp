@@ -1,4 +1,4 @@
-#if !defined(RFD_TEST_BUILD)
+#if !defined(REALM_TEST_BUILD)
 #error This evaluation harness must only be compiled in test builds.
 #endif
 

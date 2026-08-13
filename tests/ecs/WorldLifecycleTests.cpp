@@ -1,7 +1,7 @@
 #include "ecs/World.hpp"
 #include <iostream>
 
-#if !defined(RFD_TEST_BUILD)
+#if !defined(REALM_TEST_BUILD)
 #error "ECS tests must be compiled through a test-only target"
 #endif
 

@@ -34,7 +34,7 @@ Mapgen4 starts from signed elevation constraints, perturbs the coastline near th
 - All five isolated test suites pass together.
 - The procgen debug game target builds with tests enabled.
 - Tests-disabled Debug and Release game targets build successfully.
-- Test code remains isolated behind `RFD_BUILD_TESTS=ON` and does not enter release builds.
+- Test code remains isolated behind `REALM_BUILD_TESTS=ON` and does not enter release builds.
 
 ## Notes
 

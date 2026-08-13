@@ -70,7 +70,7 @@ No new implementation task is justified. Task 033 already owns the only promisin
 
 ## Verification
 
-- The evaluation harness is compiled only with `RFD_BUILD_TESTS=ON`.
+- The evaluation harness is compiled only with `REALM_BUILD_TESTS=ON`.
 - It verifies direct grid indexing, exact rectangular extraction, dual topology counts, storage accounting, spatial-index requirements, and both traversal paths.
 - Measurements were collected from optimized and Debug builds without adding Delaunay dependencies or release code.
 - All eight CTest targets pass.

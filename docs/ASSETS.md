@@ -50,7 +50,7 @@ This document tracks asset-system features currently present in the engine. It i
 ## Source And Build Bundling
 
 - `assets/` is the authoritative source directory for runtime content.
-- CMake copies an explicit allowlist of runtime shaders, fonts, and font license files beside `rfd_game` after each Debug or Release build.
+- CMake copies an explicit allowlist of runtime shaders, fonts, and font license files beside `realm_engine` after each Debug or Release build.
 - Generated build copies are disposable; assets should never be maintained directly under `out/build/`.
 - Test tile sheets and unused font variants are not included in runtime output bundles.
 - Compiled sprite shader artifacts live in `assets/Shaders`; editable HLSL sources and shader compilation scripts remain in `shaders/`.

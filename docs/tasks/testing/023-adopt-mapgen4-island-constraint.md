@@ -31,7 +31,7 @@ Mapgen4 combines five-octave fBm with an island term based on `max(abs(x), abs(y
 
 - `procgen_greater_realm` passes with strong-bias boundary and island-bias topology coverage.
 - All five isolated test suites pass together.
-- The game builds with `CMAKE_BUILD_TYPE=Debug`, `RFD_BUILD_TESTS=OFF`, and `RFD_ENABLE_PROCGEN_DEBUG_VIEW=ON`.
+- The game builds with `CMAKE_BUILD_TYPE=Debug`, `REALM_BUILD_TESTS=OFF`, and `REALM_ENABLE_PROCGEN_DEBUG_VIEW=ON`.
 - The compact debug panel exposes Island bias alongside the other layered controls.
 
 ## Notes

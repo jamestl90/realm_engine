@@ -19,7 +19,7 @@ Keep `RogueFarmGame` application-specific by moving reusable engine and procgen 
 - Extract reusable texture, sprite, or UI render-pass lifecycle behavior where the audit shows it is engine-wide.
 - Keep procgen settings ownership, control layout, labels, callbacks, and preview composition in application or demo code.
 - Avoid introducing an abstraction for behavior that is genuinely unique to this application.
-- Preserve the `RFD_ENABLE_PROCGEN_DEBUG_VIEW` compile gate and keep debug visualization code out of release builds by default.
+- Preserve the `REALM_ENABLE_PROCGEN_DEBUG_VIEW` compile gate and keep debug visualization code out of release builds by default.
 - Add focused tests for extracted engine-neutral logic and verify tests-disabled Debug and Release builds.
 - Update architecture and procgen documentation to record the resulting ownership boundary.
 
@@ -34,8 +34,8 @@ Keep `RogueFarmGame` application-specific by moving reusable engine and procgen 
 
 ## Verification
 
-- Tests-disabled Debug build succeeds with `RFD_ENABLE_PROCGEN_DEBUG_VIEW=ON`.
-- Tests-disabled Release build succeeds with `RFD_ENABLE_PROCGEN_DEBUG_VIEW=OFF`.
+- Tests-disabled Debug build succeeds with `REALM_ENABLE_PROCGEN_DEBUG_VIEW=ON`.
+- Tests-disabled Release build succeeds with `REALM_ENABLE_PROCGEN_DEBUG_VIEW=OFF`.
 - Release build graph contains neither `GreaterRealmDebug.cpp` nor `GreaterRealmDebugPanel.cpp`.
 - All five CTest targets pass, including procgen coverage for terrain counts, RGBA output, depth shading, and malformed map storage.
 - A native runtime smoke test initializes the sprite pipeline, procgen texture, font system, retained UI, and renderer without errors.
