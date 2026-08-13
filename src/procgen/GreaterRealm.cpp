@@ -7,6 +7,11 @@
 #include <array>
 #include <cmath>
 
+#if defined(RFD_ENABLE_PROCGEN_PROFILING)
+#include <chrono>
+#include <cstdio>
+#endif
+
 namespace procgen {
 
 namespace {
@@ -308,6 +313,18 @@ static GreaterRealmMap generate_greater_realm_impl(
     const GreaterRealmGeneratorSettings& settings,
     const TerrainConstraintField* constraints
 ) {
+#if defined(RFD_ENABLE_PROCGEN_PROFILING)
+    using ProfileClock = std::chrono::steady_clock;
+    const auto profile_started_at = ProfileClock::now();
+    auto profile_last_mark = profile_started_at;
+    const auto profile_stage = [&profile_last_mark]() {
+        const auto now = ProfileClock::now();
+        const double elapsed_ms = std::chrono::duration<double, std::milli>(now - profile_last_mark).count();
+        profile_last_mark = now;
+        return elapsed_ms;
+    };
+#endif
+
     GreaterRealmMap map;
     map.seed = settings.seed;
     map.width = std::max<std::uint32_t>(settings.width, 1);
@@ -409,7 +426,15 @@ static GreaterRealmMap generate_greater_realm_impl(
         }
     }
 
+#if defined(RFD_ENABLE_PROCGEN_PROFILING)
+    const double terrain_fields_ms = profile_stage();
+#endif
+
     generate_mountain_peak_field(map, settings);
+
+#if defined(RFD_ENABLE_PROCGEN_PROFILING)
+    const double mountain_peaks_ms = profile_stage();
+#endif
 
     const float base_weight = std::max(settings.base_elevation_weight, 0.0f);
     const float mountain_weight = std::max(settings.mountain_weight, 0.0f);
@@ -452,13 +477,51 @@ static GreaterRealmMap generate_greater_realm_impl(
         cell.elevation = sea_level + (1.0f - sea_level) * land_height;
     }
 
+#if defined(RFD_ENABLE_PROCGEN_PROFILING)
+    const double relief_ms = profile_stage();
+#endif
+
     classify_oceans(map);
     compute_coast_distance(map);
     compute_slopes(map);
     classify_cells(map, settings);
+
+#if defined(RFD_ENABLE_PROCGEN_PROFILING)
+    const double classification_ms = profile_stage();
+#endif
+
     generate_greater_realm_climate(map, settings);
+
+#if defined(RFD_ENABLE_PROCGEN_PROFILING)
+    const double climate_ms = profile_stage();
+#endif
+
     build_greater_realm_drainage(map);
+
+#if defined(RFD_ENABLE_PROCGEN_PROFILING)
+    const double drainage_ms = profile_stage();
+#endif
+
     accumulate_greater_realm_rivers(map, settings);
+
+#if defined(RFD_ENABLE_PROCGEN_PROFILING)
+    const double rivers_ms = profile_stage();
+    const double total_ms = std::chrono::duration<double, std::milli>(
+        ProfileClock::now() - profile_started_at
+    ).count();
+    std::fprintf(
+        stderr,
+        "DEBUG: Procgen stages: fields=%.2fms peaks=%.2fms relief=%.2fms classify=%.2fms climate=%.2fms drainage=%.2fms rivers=%.2fms total=%.2fms\n",
+        terrain_fields_ms,
+        mountain_peaks_ms,
+        relief_ms,
+        classification_ms,
+        climate_ms,
+        drainage_ms,
+        rivers_ms,
+        total_ms
+    );
+#endif
 
     return map;
 }

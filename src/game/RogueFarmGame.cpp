@@ -10,6 +10,9 @@
 #include "../../include/ui/Layout.hpp"
 #include "../../include/ui/Primitives.hpp"
 #include <SDL3/SDL.h>
+#if defined(RFD_ENABLE_PROCGEN_PROFILING)
+#include <chrono>
+#endif
 #include <vector>
 
 #if defined(RFD_ENABLE_PROCGEN_DEBUG_VIEW)
@@ -20,6 +23,11 @@ namespace game {
 
 #if defined(RFD_ENABLE_PROCGEN_DEBUG_VIEW)
 bool RogueFarmGame::regenerate_procgen_debug_map(core::Engine& engine) {
+#if defined(RFD_ENABLE_PROCGEN_PROFILING)
+    using ProfileClock = std::chrono::steady_clock;
+    const auto started_at = ProfileClock::now();
+#endif
+
     auto* texture_manager = engine.texture_manager();
     if (!texture_manager) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Texture manager is null!");
@@ -27,7 +35,13 @@ bool RogueFarmGame::regenerate_procgen_debug_map(core::Engine& engine) {
     }
 
     const auto map = procgen::generate_greater_realm(m_procgen_settings, m_procgen_constraints);
+#if defined(RFD_ENABLE_PROCGEN_PROFILING)
+    const auto generated_at = ProfileClock::now();
+#endif
     const auto image = procgen::build_greater_realm_debug_image(map, m_procgen_settings.sea_level);
+#if defined(RFD_ENABLE_PROCGEN_PROFILING)
+    const auto image_built_at = ProfileClock::now();
+#endif
     if (!image.has_expected_byte_count()) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to build procgen debug image");
         return false;
@@ -38,6 +52,9 @@ bool RogueFarmGame::regenerate_procgen_debug_map(core::Engine& engine) {
         image.height,
         image.rgba
     );
+#if defined(RFD_ENABLE_PROCGEN_PROFILING)
+    const auto texture_uploaded_at = ProfileClock::now();
+#endif
     if (new_texture == rendering::INVALID_TEXTURE_ID) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create procgen debug texture: %s", SDL_GetError());
         return false;
@@ -60,6 +77,20 @@ bool RogueFarmGame::regenerate_procgen_debug_map(core::Engine& engine) {
     }
 
     m_procgen_debug_panel.update(map);
+#if defined(RFD_ENABLE_PROCGEN_PROFILING)
+    const auto finished_at = ProfileClock::now();
+    const auto elapsed_ms = [](auto start, auto finish) {
+        return std::chrono::duration<double, std::milli>(finish - start).count();
+    };
+    SDL_Log(
+        "Procgen end-to-end stages: generation=%.2fms image=%.2fms texture=%.2fms scene/UI=%.2fms total=%.2fms",
+        elapsed_ms(started_at, generated_at),
+        elapsed_ms(generated_at, image_built_at),
+        elapsed_ms(image_built_at, texture_uploaded_at),
+        elapsed_ms(texture_uploaded_at, finished_at),
+        elapsed_ms(started_at, finished_at)
+    );
+#endif
     SDL_Log(
         "Generated procgen debug map: seed=%llu size=%ux%u sea=%.2f island=%.2f coast=%.2f base=%.2f mountain=%.2f peaks=%zu ridge=%.2f valley=%.2f noise=%.2f ocean=%.2f rain=%.2f rivers=%zu",
         m_procgen_settings.seed,

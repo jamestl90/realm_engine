@@ -12,6 +12,7 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
     set(RFD_ENABLE_PROCGEN_DEBUG_VIEW_DEFAULT OFF)
 endif()
 option(RFD_ENABLE_PROCGEN_DEBUG_VIEW "Build the procgen debug map view into the game executable" ${RFD_ENABLE_PROCGEN_DEBUG_VIEW_DEFAULT})
+option(RFD_OPTIMIZE_PROCGEN_DEBUG "Optimize procgen sources in Debug builds for interactive tooling" ON)
 
 # MSVC: Force synchronous PDB writes to avoid C1041 errors during parallel builds
 if(MSVC)
@@ -43,15 +44,31 @@ file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS "src/*.cpp")
 
 # Procgen visualization and its application panel are omitted from normal release builds.
 set(RFD_PROCGEN_DEBUG_SOURCES
-    "${CMAKE_SOURCE_DIR}/src/procgen/GreaterRealmDebug.cpp"
     "${CMAKE_SOURCE_DIR}/src/game/GreaterRealmDebugPanel.cpp"
 )
-list(REMOVE_ITEM SOURCES ${RFD_PROCGEN_DEBUG_SOURCES})
+set(RFD_PROCGEN_RUNTIME_SOURCES
+    "${CMAKE_SOURCE_DIR}/src/procgen/Climate.cpp"
+    "${CMAKE_SOURCE_DIR}/src/procgen/GreaterRealm.cpp"
+    "${CMAKE_SOURCE_DIR}/src/procgen/GreaterRealmDebug.cpp"
+    "${CMAKE_SOURCE_DIR}/src/procgen/Hydrology.cpp"
+    "${CMAKE_SOURCE_DIR}/src/procgen/MountainPeaks.cpp"
+    "${CMAKE_SOURCE_DIR}/src/procgen/TerrainConstraints.cpp"
+)
+list(REMOVE_ITEM SOURCES ${RFD_PROCGEN_DEBUG_SOURCES} ${RFD_PROCGEN_RUNTIME_SOURCES})
 if(RFD_ENABLE_PROCGEN_DEBUG_VIEW)
     list(APPEND SOURCES ${RFD_PROCGEN_DEBUG_SOURCES})
 endif()
 
-add_executable(rfd_game ${SOURCES})
+add_subdirectory(src/procgen)
+add_executable(rfd_game ${SOURCES} $<TARGET_OBJECTS:rfd_procgen_runtime>)
+
+if(RFD_OPTIMIZE_PROCGEN_DEBUG AND MSVC)
+    # Procgen data crosses the object-target boundary in STL containers, so the
+    # executable must use the same iterator ABI. Test targets remain checked.
+    target_compile_definitions(rfd_game PRIVATE
+        "$<$<CONFIG:Debug>:_ITERATOR_DEBUG_LEVEL=0>"
+    )
+endif()
 
 # Include directories
 target_include_directories(rfd_game PRIVATE 
@@ -71,6 +88,10 @@ target_link_libraries(rfd_game PRIVATE SDL3 SDL3_ttf)
 if(RFD_ENABLE_PROCGEN_DEBUG_VIEW)
     target_compile_definitions(rfd_game PRIVATE RFD_ENABLE_PROCGEN_DEBUG_VIEW=1)
 endif()
+
+target_compile_definitions(rfd_game PRIVATE
+    "$<$<CONFIG:Debug>:RFD_ENABLE_PROCGEN_PROFILING=1>"
+)
 
 # Bundle runtime dependencies and the explicit runtime asset allowlist.
 add_custom_command(TARGET rfd_game POST_BUILD
