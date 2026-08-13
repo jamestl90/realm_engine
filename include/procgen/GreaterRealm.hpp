@@ -88,7 +88,7 @@ struct GreaterRealmGeneratorSettings {
     float terrain_noise_weight{0.12f};
     float ocean_depth_weight{1.0f};
 
-    float river_min_drainage_area{80.0f};
+    float river_min_drainage_area{800.0f};
     float river_width_scale{0.25f};
 };
 

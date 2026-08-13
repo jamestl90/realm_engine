@@ -203,9 +203,9 @@ bool test_river_accumulation_connectivity_and_thresholding() {
     settings.width = 128;
     settings.height = 96;
 
-    settings.river_min_drainage_area = 60.0f;
-    const auto previous_default = procgen::generate_greater_realm(settings);
     settings.river_min_drainage_area = 80.0f;
+    const auto previous_default = procgen::generate_greater_realm(settings);
+    settings.river_min_drainage_area = 800.0f;
     const auto tuned_default = procgen::generate_greater_realm(settings);
 
     settings.river_min_drainage_area = 1.0f;
@@ -230,7 +230,8 @@ bool test_river_accumulation_connectivity_and_thresholding() {
     }
 
     bool ok = true;
-    ok &= require(tuned_default.rivers.size() < previous_default.rivers.size(), "higher default catchment threshold reduces exported channel density");
+    ok &= require(tuned_default.rivers.size() * 4 < previous_default.rivers.size(), "retuned catchment threshold substantially reduces exported channel density");
+    ok &= require(!tuned_default.rivers.empty(), "retuned default preserves a visible potential river network");
     ok &= require(topology_matches(previous_default, tuned_default), "default channel tuning does not alter generated terrain");
     ok &= require(previous_default.drainage_order == tuned_default.drainage_order, "default channel tuning does not alter drainage topology");
     ok &= require(valid, "potential river channels follow connected accumulated downhill drainage");

@@ -292,7 +292,7 @@ std::unique_ptr<ui::UIElement> GreaterRealmDebugPanel::build(
     add_setting_row(*left_settings, "Valley", settings.valley_weight, &m_valley_text, &procgen::GreaterRealmGeneratorSettings::valley_weight, 0.05f, 0.0f, 1.5f);
     add_setting_row(*right_settings, "Terrain noise", settings.terrain_noise_weight, &m_noise_text, &procgen::GreaterRealmGeneratorSettings::terrain_noise_weight, 0.10f, 0.0f, 2.0f);
     add_setting_row(*right_settings, "Ocean depth", settings.ocean_depth_weight, &m_ocean_depth_text, &procgen::GreaterRealmGeneratorSettings::ocean_depth_weight, 0.25f, 0.0f, 3.0f);
-    add_setting_row(*right_settings, "Channel threshold", settings.river_min_drainage_area, &m_channel_threshold_text, &procgen::GreaterRealmGeneratorSettings::river_min_drainage_area, 10.0f, 0.0f, 500.0f);
+    add_setting_row(*right_settings, "Channel threshold", settings.river_min_drainage_area, &m_channel_threshold_text, &procgen::GreaterRealmGeneratorSettings::river_min_drainage_area, 100.0f, 0.0f, 2000.0f);
 
     const auto add_constraint_coordinate = [this, &right_settings](
         const char* label,

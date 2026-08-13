@@ -29,3 +29,7 @@ The default minimum catchment area of `60` produces slightly too many visible ri
 - A fixed-seed regression check confirms `80` exports strictly fewer channels than `60` while terrain and drainage topology remain identical.
 - A tests-disabled Debug game build succeeds in `out/build/debug-river-density-verify`.
 - The standard Debug executable could not be overwritten because it was running; its source objects compiled successfully before the linker encountered the Windows file lock.
+
+## Current State
+
+Task 042 later superseded the `80` default after full-size preview measurements showed it remained too dense.
