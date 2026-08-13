@@ -54,6 +54,9 @@ This follows Mapgen4's layered elevation approach while deliberately retaining a
 
 - The compile-gated `GreaterRealmDebug` module counts terrain forms and coastal land independently, converts map data into an engine-neutral RGBA image, overlays exported rivers, and marks explicit peak cells.
 - The debug image uses relative ocean-depth shading and a one-cell dark coastline accent while preserving the underlying plains, hills, highlands, or mountain colour.
+- Runtime base views expose terrain forms, elevation, signed landmass, mountain influence, slope, coast distance, humidity, rainfall, moisture, and drainage flow.
+- Coastlines, mountain peaks, rivers, and sampled drainage directions are independent overlays. Terrain with coastlines, peaks, and rivers enabled remains the default view.
+- Changing a base view or overlay rebuilds only the RGBA image and preview texture from the retained map; it does not regenerate procedural data.
 - `TextureManager` uploads the RGBA output without requiring procgen code to depend on SDL or GPU APIs.
 - The application-level `GreaterRealmDebugPanel` owns the debug UI, active settings, and regeneration callbacks; `RogueFarmGame` owns preview placement, the editable constraint field, and composition. Controls expose terrain, mountain strength, peak spacing/radius/jaggedness, wind, rainfall, evaporation, river-flow, river-threshold, and coordinate-based constraint stamping settings.
 - The current Constraint X/Y controls are a temporary debug harness. Unlike Mapgen4, the engine does not yet convert pointer positions on the preview into direct brush strokes; task 035 tracks removing these controls and replacing them with preview painting.

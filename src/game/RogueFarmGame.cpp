@@ -28,17 +28,15 @@ bool RogueFarmGame::regenerate_procgen_debug_map(core::Engine& engine) {
     const auto started_at = ProfileClock::now();
 #endif
 
-    auto* texture_manager = engine.texture_manager();
-    if (!texture_manager) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Texture manager is null!");
-        return false;
-    }
-
-    const auto map = procgen::generate_greater_realm(m_procgen_settings, m_procgen_constraints);
+    m_procgen_map = procgen::generate_greater_realm(m_procgen_settings, m_procgen_constraints);
 #if defined(RFD_ENABLE_PROCGEN_PROFILING)
     const auto generated_at = ProfileClock::now();
 #endif
-    const auto image = procgen::build_greater_realm_debug_image(map, m_procgen_settings.sea_level);
+    const auto image = procgen::build_greater_realm_debug_image(
+        m_procgen_map,
+        m_procgen_settings.sea_level,
+        m_procgen_debug_options
+    );
 #if defined(RFD_ENABLE_PROCGEN_PROFILING)
     const auto image_built_at = ProfileClock::now();
 #endif
@@ -47,36 +45,14 @@ bool RogueFarmGame::regenerate_procgen_debug_map(core::Engine& engine) {
         return false;
     }
 
-    const rendering::TextureID new_texture = texture_manager->create_from_rgba_pixels(
-        image.width,
-        image.height,
-        image.rgba
-    );
+    if (!replace_procgen_debug_texture(engine, image)) {
+        return false;
+    }
 #if defined(RFD_ENABLE_PROCGEN_PROFILING)
     const auto texture_uploaded_at = ProfileClock::now();
 #endif
-    if (new_texture == rendering::INVALID_TEXTURE_ID) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create procgen debug texture: %s", SDL_GetError());
-        return false;
-    }
 
-    if (m_test_texture != rendering::INVALID_TEXTURE_ID) {
-        texture_manager->destroy(m_test_texture);
-    }
-    m_test_texture = new_texture;
-
-    if (auto* sprite = engine.world().get_component<rendering::Sprite>(m_test_entity)) {
-        sprite->texture_id = m_test_texture;
-        sprite->scale_x = 4.0f;
-        sprite->scale_y = 4.0f;
-    }
-
-    if (auto* transform = engine.world().get_component<rendering::Transform>(m_test_entity)) {
-        transform->x = static_cast<float>(core::Engine::LOGICAL_W) * 0.65f;
-        transform->y = static_cast<float>(core::Engine::LOGICAL_H) * 0.50f;
-    }
-
-    m_procgen_debug_panel.update(map);
+    m_procgen_debug_panel.update(m_procgen_map);
 #if defined(RFD_ENABLE_PROCGEN_PROFILING)
     const auto finished_at = ProfileClock::now();
     const auto elapsed_ms = [](auto start, auto finish) {
@@ -101,14 +77,69 @@ bool RogueFarmGame::regenerate_procgen_debug_map(core::Engine& engine) {
         m_procgen_settings.coastline_noise_weight,
         m_procgen_settings.base_elevation_weight,
         m_procgen_settings.mountain_weight,
-        map.mountain_peaks.size(),
+        m_procgen_map.mountain_peaks.size(),
         m_procgen_settings.ridge_weight,
         m_procgen_settings.valley_weight,
         m_procgen_settings.terrain_noise_weight,
         m_procgen_settings.ocean_depth_weight,
         m_procgen_settings.raininess,
-        map.rivers.size()
+        m_procgen_map.rivers.size()
     );
+    return true;
+}
+
+bool RogueFarmGame::refresh_procgen_debug_view(core::Engine& engine) {
+    if (!m_procgen_map.has_expected_cell_count()) {
+        return false;
+    }
+
+    const auto image = procgen::build_greater_realm_debug_image(
+        m_procgen_map,
+        m_procgen_settings.sea_level,
+        m_procgen_debug_options
+    );
+    return replace_procgen_debug_texture(engine, image);
+}
+
+bool RogueFarmGame::replace_procgen_debug_texture(
+    core::Engine& engine,
+    const procgen::DebugImage& image
+) {
+    auto* texture_manager = engine.texture_manager();
+    if (!texture_manager) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Texture manager is null!");
+        return false;
+    }
+    if (!image.has_expected_byte_count()) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to build procgen debug image");
+        return false;
+    }
+
+    const rendering::TextureID new_texture = texture_manager->create_from_rgba_pixels(
+        image.width,
+        image.height,
+        image.rgba
+    );
+    if (new_texture == rendering::INVALID_TEXTURE_ID) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create procgen debug texture: %s", SDL_GetError());
+        return false;
+    }
+
+    if (m_test_texture != rendering::INVALID_TEXTURE_ID) {
+        texture_manager->destroy(m_test_texture);
+    }
+    m_test_texture = new_texture;
+
+    if (auto* sprite = engine.world().get_component<rendering::Sprite>(m_test_entity)) {
+        sprite->texture_id = m_test_texture;
+        sprite->scale_x = 4.0f;
+        sprite->scale_y = 4.0f;
+    }
+
+    if (auto* transform = engine.world().get_component<rendering::Transform>(m_test_entity)) {
+        transform->x = static_cast<float>(core::Engine::LOGICAL_W) * 0.65f;
+        transform->y = static_cast<float>(core::Engine::LOGICAL_H) * 0.50f;
+    }
     return true;
 }
 #endif
@@ -137,10 +168,11 @@ void RogueFarmGame::on_startup(core::Engine& engine) {
     m_procgen_settings.width = 256;
     m_procgen_settings.height = 192;
     m_procgen_settings.sea_level = 0.5f;
-    const auto initial_map = procgen::generate_greater_realm(m_procgen_settings, m_procgen_constraints);
+    m_procgen_map = procgen::generate_greater_realm(m_procgen_settings, m_procgen_constraints);
     const auto initial_image = procgen::build_greater_realm_debug_image(
-        initial_map,
-        m_procgen_settings.sea_level
+        m_procgen_map,
+        m_procgen_settings.sea_level,
+        m_procgen_debug_options
     );
 #else
     constexpr std::uint32_t test_texture_width = 24;
@@ -207,7 +239,8 @@ void RogueFarmGame::on_startup(core::Engine& engine) {
 #if defined(RFD_ENABLE_PROCGEN_DEBUG_VIEW)
     ui_manager.setRoot(m_procgen_debug_panel.build(
         m_procgen_settings,
-        initial_map,
+        m_procgen_debug_options,
+        m_procgen_map,
         [this, &engine]() { regenerate_procgen_debug_map(engine); },
         [this, &engine](procgen::TerrainConstraintTool tool, float x, float y) {
             m_procgen_constraints.paint(tool, x, y, 0.12f);
@@ -216,7 +249,8 @@ void RogueFarmGame::on_startup(core::Engine& engine) {
         [this, &engine]() {
             m_procgen_constraints.clear();
             regenerate_procgen_debug_map(engine);
-        }
+        },
+        [this, &engine]() { refresh_procgen_debug_view(engine); }
     ));
 #else
     auto root = std::make_unique<ui::StackPanel>(ui::Orientation::Vertical);

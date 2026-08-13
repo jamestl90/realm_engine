@@ -7,6 +7,28 @@
 
 namespace procgen {
 
+enum class GreaterRealmDebugView : std::uint8_t {
+    Terrain,
+    Elevation,
+    Landmass,
+    MountainInfluence,
+    Slope,
+    CoastDistance,
+    Humidity,
+    Rainfall,
+    Moisture,
+    DrainageFlow,
+    Count
+};
+
+struct GreaterRealmDebugOptions {
+    GreaterRealmDebugView view{GreaterRealmDebugView::Terrain};
+    bool show_coastline{true};
+    bool show_mountain_peaks{true};
+    bool show_rivers{true};
+    bool show_drainage_directions{false};
+};
+
 struct TerrainFormCounts {
     std::size_t ocean{0};
     std::size_t coastal_land{0};
@@ -35,13 +57,21 @@ struct DebugImage {
 };
 
 [[nodiscard]] TerrainFormCounts count_terrain_forms(const GreaterRealmMap& map) noexcept;
+[[nodiscard]] const char* to_string(GreaterRealmDebugView view) noexcept;
 [[nodiscard]] DebugColour greater_realm_debug_colour(
     const GreaterRealmCell& cell,
-    float sea_level
+    float sea_level,
+    GreaterRealmDebugView view = GreaterRealmDebugView::Terrain,
+    float scalar_maximum = 1.0f
 ) noexcept;
 [[nodiscard]] DebugImage build_greater_realm_debug_image(
     const GreaterRealmMap& map,
     float sea_level
+);
+[[nodiscard]] DebugImage build_greater_realm_debug_image(
+    const GreaterRealmMap& map,
+    float sea_level,
+    const GreaterRealmDebugOptions& options
 );
 
 } // namespace procgen

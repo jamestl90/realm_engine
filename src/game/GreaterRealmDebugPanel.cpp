@@ -1,6 +1,7 @@
 #include "GreaterRealmDebugPanel.hpp"
 #include "../../include/procgen/GreaterRealmDebug.hpp"
 #include "../../include/ui/Button.hpp"
+#include "../../include/ui/ComboBox.hpp"
 #include "../../include/ui/Layout.hpp"
 #include "../../include/ui/Primitives.hpp"
 #include <algorithm>
@@ -69,7 +70,8 @@ std::unique_ptr<ui::TextBlock> make_text(const std::string& text, ui::TextBlock*
 std::unique_ptr<ui::Button> make_debug_button(
     const std::string& text,
     ui::Button::ClickCallback callback,
-    float min_width = 38.0f
+    float min_width = 38.0f,
+    ui::Button** out = nullptr
 ) {
     auto button = std::make_unique<ui::Button>(text);
     button->setBackgroundColour(ui::Colour{54, 88, 128, 255});
@@ -81,6 +83,9 @@ std::unique_ptr<ui::Button> make_debug_button(
     button->setFontSize(14.0f);
     button->setPadding(ui::Thickness(8.0f, 4.0f));
     button->setOnClick(std::move(callback));
+    if (out) {
+        *out = button.get();
+    }
 
     ui::SizeConstraints constraints;
     constraints.min_width = min_width;
@@ -98,8 +103,8 @@ std::unique_ptr<ui::StackPanel> make_control_row(
     row->setSpacing(4.0f);
 
     ui::SizeConstraints label_constraints;
-    label_constraints.preferred_width = 210.0f;
-    label_constraints.min_width = 210.0f;
+    label_constraints.preferred_width = 190.0f;
+    label_constraints.min_width = 190.0f;
     label->setSizeConstraints(label_constraints);
 
     row->addChild(std::move(label));
@@ -112,15 +117,19 @@ std::unique_ptr<ui::StackPanel> make_control_row(
 
 std::unique_ptr<ui::UIElement> GreaterRealmDebugPanel::build(
     procgen::GreaterRealmGeneratorSettings& settings,
+    procgen::GreaterRealmDebugOptions& debug_options,
     const procgen::GreaterRealmMap& map,
     RegenerateCallback on_regenerate,
     PaintConstraintCallback on_paint_constraint,
-    ClearConstraintsCallback on_clear_constraints
+    ClearConstraintsCallback on_clear_constraints,
+    ViewChangedCallback on_view_changed
 ) {
     m_settings = &settings;
+    m_debug_options = &debug_options;
     m_on_regenerate = std::move(on_regenerate);
     m_on_paint_constraint = std::move(on_paint_constraint);
     m_on_clear_constraints = std::move(on_clear_constraints);
+    m_on_view_changed = std::move(on_view_changed);
 
     auto root = std::make_unique<ui::StackPanel>(ui::Orientation::Vertical);
     root->setPadding(ui::Thickness(10.0f));
@@ -128,14 +137,90 @@ std::unique_ptr<ui::UIElement> GreaterRealmDebugPanel::build(
     root->setBackgroundColour(ui::Colour{238, 242, 238, 240});
 
     ui::SizeConstraints root_constraints;
-    root_constraints.preferred_width = 430.0f;
-    root_constraints.min_width = 430.0f;
+    root_constraints.preferred_width = 620.0f;
+    root_constraints.min_width = 620.0f;
     root->setSizeConstraints(root_constraints);
 
     auto title = make_text("Greater Realm Debug");
     title->setFontSize(20.0f);
     title->setColour(ui::Colour{10, 18, 24, 255});
     root->addChild(std::move(title));
+
+    auto view_selector = std::make_unique<ui::ComboBox>();
+    for (std::uint8_t index = 0;
+         index < static_cast<std::uint8_t>(procgen::GreaterRealmDebugView::Count);
+         ++index) {
+        view_selector->addItem(procgen::to_string(static_cast<procgen::GreaterRealmDebugView>(index)));
+    }
+    view_selector->setSelectedIndex(static_cast<int>(debug_options.view));
+    view_selector->setBackgroundColour(ui::Colour{250, 252, 250, 255});
+    view_selector->setTextColour(ui::Colour{20, 24, 30, 255});
+    view_selector->setBorderColour(ui::Colour{108, 122, 128, 255});
+    view_selector->setHoverColour(ui::Colour{226, 234, 230, 255});
+    view_selector->setDropdownBackgroundColour(ui::Colour{250, 252, 250, 255});
+    view_selector->setItemHoverColour(ui::Colour{204, 220, 214, 255});
+    view_selector->setBorderThickness(1.0f);
+    view_selector->setFontSize(14.0f);
+    ui::SizeConstraints view_constraints;
+    view_constraints.preferred_width = 600.0f;
+    view_constraints.min_width = 600.0f;
+    view_constraints.min_height = 30.0f;
+    view_selector->setSizeConstraints(view_constraints);
+    view_selector->setOnSelectionChanged([this](const std::string& selected) {
+        if (!m_debug_options) {
+            return;
+        }
+        for (std::uint8_t index = 0;
+             index < static_cast<std::uint8_t>(procgen::GreaterRealmDebugView::Count);
+             ++index) {
+            const auto view = static_cast<procgen::GreaterRealmDebugView>(index);
+            if (selected == procgen::to_string(view)) {
+                m_debug_options->view = view;
+                notify_view_changed();
+                return;
+            }
+        }
+    });
+    root->addChild(std::move(view_selector));
+
+    const auto toggle_overlay = [this](bool procgen::GreaterRealmDebugOptions::* member) {
+        return [this, member]() {
+            if (!m_debug_options) {
+                return;
+            }
+            m_debug_options->*member = !(m_debug_options->*member);
+            update_overlay_buttons();
+            notify_view_changed();
+        };
+    };
+    auto overlay_row = std::make_unique<ui::StackPanel>(ui::Orientation::Horizontal);
+    overlay_row->setSpacing(6.0f);
+    overlay_row->addChild(make_debug_button(
+        "Coast",
+        toggle_overlay(&procgen::GreaterRealmDebugOptions::show_coastline),
+        145.0f,
+        &m_coastline_button
+    ));
+    overlay_row->addChild(make_debug_button(
+        "Peaks",
+        toggle_overlay(&procgen::GreaterRealmDebugOptions::show_mountain_peaks),
+        145.0f,
+        &m_peaks_button
+    ));
+    overlay_row->addChild(make_debug_button(
+        "Rivers",
+        toggle_overlay(&procgen::GreaterRealmDebugOptions::show_rivers),
+        145.0f,
+        &m_rivers_button
+    ));
+    overlay_row->addChild(make_debug_button(
+        "Drain",
+        toggle_overlay(&procgen::GreaterRealmDebugOptions::show_drainage_directions),
+        145.0f,
+        &m_drainage_button
+    ));
+    root->addChild(std::move(overlay_row));
+    update_overlay_buttons();
 
     const auto adjust = [this](
         float procgen::GreaterRealmGeneratorSettings::* member,
@@ -153,7 +238,14 @@ std::unique_ptr<ui::UIElement> GreaterRealmDebugPanel::build(
         };
     };
 
-    root->addChild(make_control_row(
+    auto tuning_columns = std::make_unique<ui::StackPanel>(ui::Orientation::Horizontal);
+    tuning_columns->setSpacing(10.0f);
+    auto left_settings = std::make_unique<ui::StackPanel>(ui::Orientation::Vertical);
+    left_settings->setSpacing(5.0f);
+    auto right_settings = std::make_unique<ui::StackPanel>(ui::Orientation::Vertical);
+    right_settings->setSpacing(5.0f);
+
+    left_settings->addChild(make_control_row(
         make_text(seed_text(settings.seed), &m_seed_text),
         [this]() {
             if (m_settings) {
@@ -171,7 +263,8 @@ std::unique_ptr<ui::UIElement> GreaterRealmDebugPanel::build(
         }
     ));
 
-    const auto add_setting_row = [&root, &adjust](
+    const auto add_setting_row = [&adjust](
+        ui::StackPanel& target,
         const char* label,
         float value,
         ui::TextBlock** text,
@@ -180,38 +273,38 @@ std::unique_ptr<ui::UIElement> GreaterRealmDebugPanel::build(
         float minimum,
         float maximum
     ) {
-        root->addChild(make_control_row(
+        target.addChild(make_control_row(
             make_text(setting_text(label, value), text),
             adjust(member, -step, minimum, maximum),
             adjust(member, step, minimum, maximum)
         ));
     };
 
-    add_setting_row("Island bias", settings.island_bias, &m_island_bias_text, &procgen::GreaterRealmGeneratorSettings::island_bias, 0.05f, 0.0f, 1.0f);
-    add_setting_row("Coast detail", settings.coastline_noise_weight, &m_coastline_noise_text, &procgen::GreaterRealmGeneratorSettings::coastline_noise_weight, 0.01f, 0.0f, 0.40f);
-    add_setting_row("Base relief", settings.base_elevation_weight, &m_base_elevation_text, &procgen::GreaterRealmGeneratorSettings::base_elevation_weight, 0.05f, 0.0f, 2.0f);
-    add_setting_row("Sea", settings.sea_level, &m_sea_text, &procgen::GreaterRealmGeneratorSettings::sea_level, 0.02f, 0.10f, 0.90f);
-    add_setting_row("Mountain strength", settings.mountain_weight, &m_mountain_text, &procgen::GreaterRealmGeneratorSettings::mountain_weight, 0.05f, 0.0f, 1.5f);
-    add_setting_row("Peak spacing", settings.mountain_peak_spacing, &m_peak_spacing_text, &procgen::GreaterRealmGeneratorSettings::mountain_peak_spacing, 4.0f, 8.0f, 80.0f);
-    add_setting_row("Peak radius", settings.mountain_peak_radius, &m_peak_radius_text, &procgen::GreaterRealmGeneratorSettings::mountain_peak_radius, 4.0f, 4.0f, 100.0f);
-    add_setting_row("Peak jaggedness", settings.mountain_peak_jaggedness, &m_peak_jaggedness_text, &procgen::GreaterRealmGeneratorSettings::mountain_peak_jaggedness, 0.10f, 0.0f, 1.0f);
-    add_setting_row("Ridge", settings.ridge_weight, &m_ridge_text, &procgen::GreaterRealmGeneratorSettings::ridge_weight, 0.05f, 0.0f, 1.5f);
-    add_setting_row("Valley", settings.valley_weight, &m_valley_text, &procgen::GreaterRealmGeneratorSettings::valley_weight, 0.05f, 0.0f, 1.5f);
-    add_setting_row("Terrain noise", settings.terrain_noise_weight, &m_noise_text, &procgen::GreaterRealmGeneratorSettings::terrain_noise_weight, 0.10f, 0.0f, 2.0f);
-    add_setting_row("Ocean depth", settings.ocean_depth_weight, &m_ocean_depth_text, &procgen::GreaterRealmGeneratorSettings::ocean_depth_weight, 0.25f, 0.0f, 3.0f);
-    add_setting_row("Wind angle", settings.wind_angle_degrees, &m_wind_angle_text, &procgen::GreaterRealmGeneratorSettings::wind_angle_degrees, 15.0f, 0.0f, 360.0f);
-    add_setting_row("Raininess", settings.raininess, &m_raininess_text, &procgen::GreaterRealmGeneratorSettings::raininess, 0.10f, 0.0f, 2.0f);
-    add_setting_row("Rain shadow", settings.rain_shadow, &m_rain_shadow_text, &procgen::GreaterRealmGeneratorSettings::rain_shadow, 0.10f, 0.0f, 2.0f);
-    add_setting_row("Evaporation", settings.evaporation, &m_evaporation_text, &procgen::GreaterRealmGeneratorSettings::evaporation, 0.10f, 0.0f, 1.0f);
-    add_setting_row("River flow", settings.river_flow_scale, &m_river_flow_text, &procgen::GreaterRealmGeneratorSettings::river_flow_scale, 0.05f, 0.0f, 1.0f);
-    add_setting_row("River threshold", settings.river_min_flow, &m_river_threshold_text, &procgen::GreaterRealmGeneratorSettings::river_min_flow, 2.0f, 0.0f, 100.0f);
+    add_setting_row(*left_settings, "Island bias", settings.island_bias, &m_island_bias_text, &procgen::GreaterRealmGeneratorSettings::island_bias, 0.05f, 0.0f, 1.0f);
+    add_setting_row(*left_settings, "Coast detail", settings.coastline_noise_weight, &m_coastline_noise_text, &procgen::GreaterRealmGeneratorSettings::coastline_noise_weight, 0.01f, 0.0f, 0.40f);
+    add_setting_row(*left_settings, "Base relief", settings.base_elevation_weight, &m_base_elevation_text, &procgen::GreaterRealmGeneratorSettings::base_elevation_weight, 0.05f, 0.0f, 2.0f);
+    add_setting_row(*left_settings, "Sea", settings.sea_level, &m_sea_text, &procgen::GreaterRealmGeneratorSettings::sea_level, 0.02f, 0.10f, 0.90f);
+    add_setting_row(*left_settings, "Mountain strength", settings.mountain_weight, &m_mountain_text, &procgen::GreaterRealmGeneratorSettings::mountain_weight, 0.05f, 0.0f, 1.5f);
+    add_setting_row(*left_settings, "Peak spacing", settings.mountain_peak_spacing, &m_peak_spacing_text, &procgen::GreaterRealmGeneratorSettings::mountain_peak_spacing, 4.0f, 8.0f, 80.0f);
+    add_setting_row(*left_settings, "Peak radius", settings.mountain_peak_radius, &m_peak_radius_text, &procgen::GreaterRealmGeneratorSettings::mountain_peak_radius, 4.0f, 4.0f, 100.0f);
+    add_setting_row(*left_settings, "Peak jaggedness", settings.mountain_peak_jaggedness, &m_peak_jaggedness_text, &procgen::GreaterRealmGeneratorSettings::mountain_peak_jaggedness, 0.10f, 0.0f, 1.0f);
+    add_setting_row(*left_settings, "Ridge", settings.ridge_weight, &m_ridge_text, &procgen::GreaterRealmGeneratorSettings::ridge_weight, 0.05f, 0.0f, 1.5f);
+    add_setting_row(*left_settings, "Valley", settings.valley_weight, &m_valley_text, &procgen::GreaterRealmGeneratorSettings::valley_weight, 0.05f, 0.0f, 1.5f);
+    add_setting_row(*right_settings, "Terrain noise", settings.terrain_noise_weight, &m_noise_text, &procgen::GreaterRealmGeneratorSettings::terrain_noise_weight, 0.10f, 0.0f, 2.0f);
+    add_setting_row(*right_settings, "Ocean depth", settings.ocean_depth_weight, &m_ocean_depth_text, &procgen::GreaterRealmGeneratorSettings::ocean_depth_weight, 0.25f, 0.0f, 3.0f);
+    add_setting_row(*right_settings, "Wind angle", settings.wind_angle_degrees, &m_wind_angle_text, &procgen::GreaterRealmGeneratorSettings::wind_angle_degrees, 15.0f, 0.0f, 360.0f);
+    add_setting_row(*right_settings, "Raininess", settings.raininess, &m_raininess_text, &procgen::GreaterRealmGeneratorSettings::raininess, 0.10f, 0.0f, 2.0f);
+    add_setting_row(*right_settings, "Rain shadow", settings.rain_shadow, &m_rain_shadow_text, &procgen::GreaterRealmGeneratorSettings::rain_shadow, 0.10f, 0.0f, 2.0f);
+    add_setting_row(*right_settings, "Evaporation", settings.evaporation, &m_evaporation_text, &procgen::GreaterRealmGeneratorSettings::evaporation, 0.10f, 0.0f, 1.0f);
+    add_setting_row(*right_settings, "River flow", settings.river_flow_scale, &m_river_flow_text, &procgen::GreaterRealmGeneratorSettings::river_flow_scale, 0.05f, 0.0f, 1.0f);
+    add_setting_row(*right_settings, "River threshold", settings.river_min_flow, &m_river_threshold_text, &procgen::GreaterRealmGeneratorSettings::river_min_flow, 2.0f, 0.0f, 100.0f);
 
-    const auto add_constraint_coordinate = [this, &root](
+    const auto add_constraint_coordinate = [this, &right_settings](
         const char* label,
         float* value,
         ui::TextBlock** text
     ) {
-        root->addChild(make_control_row(
+        right_settings->addChild(make_control_row(
             make_text(setting_text(label, *value), text),
             [value, text, label]() {
                 *value = std::clamp(*value - 0.05f, 0.0f, 1.0f);
@@ -229,6 +322,10 @@ std::unique_ptr<ui::UIElement> GreaterRealmDebugPanel::build(
     };
     add_constraint_coordinate("Constraint X", &m_constraint_x, &m_constraint_x_text);
     add_constraint_coordinate("Constraint Y", &m_constraint_y, &m_constraint_y_text);
+
+    tuning_columns->addChild(std::move(left_settings));
+    tuning_columns->addChild(std::move(right_settings));
+    root->addChild(std::move(tuning_columns));
 
     const auto paint = [this](procgen::TerrainConstraintTool tool) {
         return [this, tool]() {
@@ -266,8 +363,8 @@ std::unique_ptr<ui::UIElement> GreaterRealmDebugPanel::build(
     root->addChild(std::move(button_row));
 
     ui::SizeConstraints summary_constraints;
-    summary_constraints.preferred_width = 410.0f;
-    summary_constraints.min_width = 410.0f;
+    summary_constraints.preferred_width = 600.0f;
+    summary_constraints.min_width = 600.0f;
 
     auto coverage = make_text("", &m_coverage_text);
     coverage->setColour(ui::Colour{38, 44, 48, 255});
@@ -339,6 +436,41 @@ void GreaterRealmDebugPanel::regenerate() {
         );
 #endif
     }
+}
+
+void GreaterRealmDebugPanel::notify_view_changed() {
+    if (m_on_view_changed) {
+        m_on_view_changed();
+    }
+}
+
+void GreaterRealmDebugPanel::update_overlay_buttons() {
+    if (!m_debug_options) {
+        return;
+    }
+
+    const auto update_button = [](ui::Button* button, const char* label, bool enabled) {
+        if (!button) {
+            return;
+        }
+        button->setText(std::string(label) + (enabled ? " On" : " Off"));
+        if (enabled) {
+            button->setBackgroundColour(ui::Colour{46, 112, 86, 255});
+            button->setHoverColour(ui::Colour{58, 134, 102, 255});
+            button->setPressedColour(ui::Colour{34, 86, 66, 255});
+            button->setBorderColour(ui::Colour{28, 72, 54, 255});
+        } else {
+            button->setBackgroundColour(ui::Colour{82, 90, 98, 255});
+            button->setHoverColour(ui::Colour{104, 112, 120, 255});
+            button->setPressedColour(ui::Colour{62, 68, 74, 255});
+            button->setBorderColour(ui::Colour{54, 60, 66, 255});
+        }
+    };
+
+    update_button(m_coastline_button, "Coast", m_debug_options->show_coastline);
+    update_button(m_peaks_button, "Peaks", m_debug_options->show_mountain_peaks);
+    update_button(m_rivers_button, "Rivers", m_debug_options->show_rivers);
+    update_button(m_drainage_button, "Drain", m_debug_options->show_drainage_directions);
 }
 
 } // namespace game

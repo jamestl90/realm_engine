@@ -486,6 +486,148 @@ bool test_debug_ocean_depth_shading() {
     return ok;
 }
 
+bool test_debug_base_views() {
+    procgen::GreaterRealmMap map;
+    map.width = 2;
+    map.height = 1;
+    map.cells.resize(2);
+
+    auto& low = map.cells[0];
+    low.terrain_form = procgen::TerrainForm::Plains;
+    low.elevation = 0.55f;
+    low.landmass_elevation = -0.8f;
+    low.mountain_influence = 0.0f;
+    low.slope = 0.0f;
+    low.distance_to_coast = 0.0f;
+    low.humidity = 0.0f;
+    low.rainfall = 0.0f;
+    low.moisture = 0.0f;
+    low.flow = 0.0f;
+
+    auto& high = map.cells[1];
+    high.terrain_form = procgen::TerrainForm::Mountains;
+    high.elevation = 0.95f;
+    high.landmass_elevation = 0.8f;
+    high.mountain_influence = 1.0f;
+    high.slope = 2.0f;
+    high.distance_to_coast = 20.0f;
+    high.humidity = 1.0f;
+    high.rainfall = 1.0f;
+    high.moisture = 1.0f;
+    high.flow = 100.0f;
+
+    procgen::GreaterRealmDebugOptions options;
+    options.show_coastline = false;
+    options.show_mountain_peaks = false;
+    options.show_rivers = false;
+
+    bool ok = true;
+    for (std::uint8_t index = 0;
+         index < static_cast<std::uint8_t>(procgen::GreaterRealmDebugView::Count);
+         ++index) {
+        options.view = static_cast<procgen::GreaterRealmDebugView>(index);
+        const auto image = procgen::build_greater_realm_debug_image(map, 0.5f, options);
+        ok &= require(image.has_expected_byte_count(), "every debug base view produces a complete image");
+        ok &= require(
+            image.rgba[0] != image.rgba[4]
+                || image.rgba[1] != image.rgba[5]
+                || image.rgba[2] != image.rgba[6],
+            "every debug base view visualizes differing source values"
+        );
+        ok &= require(
+            image.rgba[3] == 255 && image.rgba[7] == 255,
+            "every debug base view remains opaque"
+        );
+    }
+    return ok;
+}
+
+bool test_debug_overlay_options() {
+    procgen::GreaterRealmMap map;
+    map.width = 8;
+    map.height = 8;
+    map.cells.resize(64);
+    for (auto& cell : map.cells) {
+        cell.terrain_form = procgen::TerrainForm::Plains;
+        cell.elevation = 0.6f;
+    }
+
+    constexpr std::uint32_t coastline_index = 1;
+    constexpr std::uint32_t peak_index = 2;
+    constexpr std::uint32_t river_index = 3;
+    constexpr std::uint32_t drainage_index = 36;
+    constexpr std::uint32_t drainage_destination = 37;
+    map.cells[coastline_index].is_coastal = true;
+    map.cells[drainage_index].downslope_index = drainage_destination;
+    map.mountain_peaks.push_back({peak_index, 2, 0, 1.0f});
+    map.rivers.push_back({river_index, 4, 20.0f, 1.0f});
+
+    procgen::GreaterRealmDebugOptions none;
+    none.show_coastline = false;
+    none.show_mountain_peaks = false;
+    none.show_rivers = false;
+    none.show_drainage_directions = false;
+    const auto base = procgen::build_greater_realm_debug_image(map, 0.5f, none);
+
+    const auto pixel_differs = [&base](const procgen::DebugImage& image, std::size_t index) {
+        const std::size_t pixel = index * 4;
+        return image.rgba[pixel] != base.rgba[pixel]
+            || image.rgba[pixel + 1] != base.rgba[pixel + 1]
+            || image.rgba[pixel + 2] != base.rgba[pixel + 2];
+    };
+
+    bool ok = true;
+    auto selected = none;
+    selected.show_coastline = true;
+    ok &= require(
+        pixel_differs(procgen::build_greater_realm_debug_image(map, 0.5f, selected), coastline_index),
+        "coastline overlay can be enabled independently"
+    );
+
+    selected = none;
+    selected.show_mountain_peaks = true;
+    ok &= require(
+        pixel_differs(procgen::build_greater_realm_debug_image(map, 0.5f, selected), peak_index),
+        "mountain peak overlay can be enabled independently"
+    );
+
+    selected = none;
+    selected.show_rivers = true;
+    ok &= require(
+        pixel_differs(procgen::build_greater_realm_debug_image(map, 0.5f, selected), river_index),
+        "river overlay can be enabled independently"
+    );
+
+    selected = none;
+    selected.show_drainage_directions = true;
+    ok &= require(
+        pixel_differs(procgen::build_greater_realm_debug_image(map, 0.5f, selected), drainage_index),
+        "drainage direction overlay can be enabled independently"
+    );
+    return ok;
+}
+
+bool test_debug_default_options_preserve_existing_image() {
+    procgen::GreaterRealmGeneratorSettings settings;
+    settings.seed = 314159;
+    settings.width = 48;
+    settings.height = 32;
+    const auto map = procgen::generate_greater_realm(settings);
+
+    const auto legacy = procgen::build_greater_realm_debug_image(map, settings.sea_level);
+    const auto configured = procgen::build_greater_realm_debug_image(
+        map,
+        settings.sea_level,
+        procgen::GreaterRealmDebugOptions{}
+    );
+    return require(
+        legacy.width == configured.width
+            && legacy.height == configured.height
+            && legacy.rgba == configured.rgba,
+        "default debug options preserve the existing terrain image byte for byte"
+    );
+}
+
 bool test_debug_visualization_rejects_malformed_map() {
     procgen::GreaterRealmMap map;
     map.width = 2;
@@ -511,6 +653,9 @@ int main() {
         test_island_bias_matches_mapgen4_contract,
         test_debug_visualization_data,
         test_debug_ocean_depth_shading,
+        test_debug_base_views,
+        test_debug_overlay_options,
+        test_debug_default_options_preserve_existing_image,
         test_debug_visualization_rejects_malformed_map
     };
 

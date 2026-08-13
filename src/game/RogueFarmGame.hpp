@@ -26,6 +26,8 @@ public:
 private:
 #if defined(RFD_ENABLE_PROCGEN_DEBUG_VIEW)
     bool regenerate_procgen_debug_map(core::Engine& engine);
+    bool refresh_procgen_debug_view(core::Engine& engine);
+    bool replace_procgen_debug_texture(core::Engine& engine, const procgen::DebugImage& image);
 #endif
 
     ecs::Entity m_test_entity;
@@ -34,6 +36,8 @@ private:
 #if defined(RFD_ENABLE_PROCGEN_DEBUG_VIEW)
     procgen::GreaterRealmGeneratorSettings m_procgen_settings{};
     procgen::TerrainConstraintField m_procgen_constraints{64, 64};
+    procgen::GreaterRealmMap m_procgen_map;
+    procgen::GreaterRealmDebugOptions m_procgen_debug_options;
     GreaterRealmDebugPanel m_procgen_debug_panel;
 #endif
 };
