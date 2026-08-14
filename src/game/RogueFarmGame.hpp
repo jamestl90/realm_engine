@@ -6,6 +6,7 @@
 
 #if defined(REALM_ENABLE_PROCGEN_DEBUG_VIEW)
 #include "GreaterRealmDebugPanel.hpp"
+#include "../../include/procgen/TerrainConstraintPainting.hpp"
 #include "../../include/procgen/TerrainConstraints.hpp"
 #endif
 
@@ -20,6 +21,7 @@ public:
     // Lifecycle hooks
     void on_startup(core::Engine& engine) override;
     void on_update(core::Engine& engine, double dt) override;
+    void on_event(core::Engine& engine, const SDL_Event& event, bool ui_consumed) override;
     void on_shutdown(core::Engine& engine) override;
     void on_resized(core::Engine& engine, int width, int height) override;
 
@@ -28,6 +30,8 @@ private:
     bool regenerate_procgen_debug_map(core::Engine& engine);
     bool refresh_procgen_debug_view(core::Engine& engine);
     bool replace_procgen_debug_texture(core::Engine& engine, const procgen::DebugImage& image);
+    [[nodiscard]] procgen::TerrainPreviewBounds procgen_preview_bounds(core::Engine& engine) const noexcept;
+    void apply_procgen_paint_sample(const procgen::TerrainConstraintPaintSample& sample) noexcept;
 #endif
 
     ecs::Entity m_test_entity;
@@ -38,7 +42,9 @@ private:
     procgen::TerrainConstraintField m_procgen_constraints{64, 64};
     procgen::GreaterRealmMap m_procgen_map;
     procgen::GreaterRealmDebugOptions m_procgen_debug_options;
+    procgen::TerrainConstraintPaintSession m_procgen_paint_session;
     GreaterRealmDebugPanel m_procgen_debug_panel;
+    bool m_procgen_paint_dirty{false};
 #endif
 };
 

@@ -6,7 +6,10 @@ set(REALM_PROCGEN_SOURCES
 )
 
 if(REALM_ENABLE_PROCGEN_DEBUG_VIEW)
-    list(APPEND REALM_PROCGEN_SOURCES GreaterRealmDebug.cpp)
+    list(APPEND REALM_PROCGEN_SOURCES
+        GreaterRealmDebug.cpp
+        TerrainConstraintPainting.cpp
+    )
 endif()
 
 # MSVC's runtime checks cannot coexist with optimization. Keep this adjustment

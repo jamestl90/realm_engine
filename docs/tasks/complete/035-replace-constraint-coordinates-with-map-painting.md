@@ -1,6 +1,6 @@
 # Replace Constraint Coordinates With Map Painting
 
-Status: todo
+Status: complete
 Area: Procgen / Debug Tooling
 
 ## Goal
@@ -33,3 +33,21 @@ Direct pointer painting on the greater-realm preview must be implemented and ver
 ## Notes
 
 This task changes debug tooling only. The serialized constraint format and generator integration from task 030 should remain unchanged.
+
+## Implementation
+
+- Removed the temporary Constraint X/Y rows and one-shot stamp behavior.
+- Added selectable Ocean, Shallow, Valley, and Mountain brush buttons with visible selected state.
+- Added the compile-gated, engine-neutral `TerrainConstraintPainting` module for preview-coordinate conversion, tool selection, duplicate suppression, and drag lifecycle.
+- Added UI-aware game event delivery so preview painting ignores consumed UI input while mouse release still reliably ends a stroke.
+- Composed paint samples with the existing `TerrainConstraintField` in `RogueFarmGame` without changing constraint serialization or generator integration.
+- Batched paint-triggered generation so multiple pointer samples regenerate at most once per frame.
+- Cancelled active strokes on pointer release, window focus loss, and window mouse leave.
+
+## Verification
+
+- Dedicated compile-gated tests cover preview corners and center, invalid/outside coordinates, selected tools, blocked UI input, drag state, duplicate suppression, release behavior, and constraint-field integration.
+- All nine freshly configured test suites pass.
+- Tests-disabled Debug and Release builds succeed.
+- Release excludes the debug paint module and application behavior.
+- Source audit confirms Constraint X/Y remains only in the historical task 030 context and its supersession note.

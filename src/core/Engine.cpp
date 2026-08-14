@@ -234,7 +234,11 @@ void Engine::process_events() {
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
         // Let UI manager handle the event first
-        if (ui_manager_.handleEvent(event)) {
+        const bool ui_consumed = ui_manager_.handleEvent(event);
+        if (game_) {
+            game_->on_event(*this, event, ui_consumed);
+        }
+        if (ui_consumed) {
             continue; // Event was consumed by UI
         }
 

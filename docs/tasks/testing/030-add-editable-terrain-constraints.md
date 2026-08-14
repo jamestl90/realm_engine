@@ -39,3 +39,7 @@ Mapgen4 separates a low-resolution signed constraint field from generated terrai
 ## Notes
 
 The Constraint X/Y and stamp buttons are a temporary test interface for the engine-owned constraint field. Mapgen4 paints constraints directly from pointer coordinates on its map; task 035 explicitly tracks removing Constraint X/Y and implementing equivalent preview painting.
+
+## Current State
+
+Task 035 later replaced the temporary Constraint X/Y harness with selectable tools and direct continuous painting on the greater-realm preview.

@@ -10,6 +10,7 @@
 #include "../../include/ui/Layout.hpp"
 #include "../../include/ui/Primitives.hpp"
 #include <SDL3/SDL.h>
+#include <cmath>
 #if defined(REALM_ENABLE_PROCGEN_PROFILING)
 #include <chrono>
 #endif
@@ -23,6 +24,7 @@ namespace game {
 
 #if defined(REALM_ENABLE_PROCGEN_DEBUG_VIEW)
 bool RogueFarmGame::regenerate_procgen_debug_map(core::Engine& engine) {
+    m_procgen_paint_dirty = false;
 #if defined(REALM_ENABLE_PROCGEN_PROFILING)
     using ProfileClock = std::chrono::steady_clock;
     const auto started_at = ProfileClock::now();
@@ -142,6 +144,37 @@ bool RogueFarmGame::replace_procgen_debug_texture(
     }
     return true;
 }
+
+procgen::TerrainPreviewBounds RogueFarmGame::procgen_preview_bounds(
+    core::Engine& engine
+) const noexcept {
+    const auto* sprite = engine.world().get_component<rendering::Sprite>(m_test_entity);
+    const auto* transform = engine.world().get_component<rendering::Transform>(m_test_entity);
+    if (!sprite || !transform || !m_procgen_map.has_expected_cell_count()) {
+        return {};
+    }
+
+    const float width = static_cast<float>(m_procgen_map.width) * std::abs(sprite->scale_x);
+    const float height = static_cast<float>(m_procgen_map.height) * std::abs(sprite->scale_y);
+    return {
+        transform->x - width * 0.5f,
+        transform->y - height * 0.5f,
+        width,
+        height
+    };
+}
+
+void RogueFarmGame::apply_procgen_paint_sample(
+    const procgen::TerrainConstraintPaintSample& sample
+) noexcept {
+    m_procgen_constraints.paint(
+        sample.tool,
+        sample.normalized_x,
+        sample.normalized_y,
+        0.12f
+    );
+    m_procgen_paint_dirty = true;
+}
 #endif
 
 void RogueFarmGame::on_startup(core::Engine& engine) {
@@ -242,11 +275,12 @@ void RogueFarmGame::on_startup(core::Engine& engine) {
         m_procgen_debug_options,
         m_procgen_map,
         [this, &engine]() { regenerate_procgen_debug_map(engine); },
-        [this, &engine](procgen::TerrainConstraintTool tool, float x, float y) {
-            m_procgen_constraints.paint(tool, x, y, 0.12f);
-            regenerate_procgen_debug_map(engine);
+        [this](procgen::TerrainConstraintTool tool) {
+            m_procgen_paint_session.select_tool(tool);
         },
         [this, &engine]() {
+            m_procgen_paint_session.cancel();
+            m_procgen_paint_dirty = false;
             m_procgen_constraints.clear();
             regenerate_procgen_debug_map(engine);
         },
@@ -312,8 +346,61 @@ void RogueFarmGame::on_startup(core::Engine& engine) {
 }
 
 void RogueFarmGame::on_update(core::Engine& engine, double dt) {
-    (void)engine;
     (void)dt;
+#if defined(REALM_ENABLE_PROCGEN_DEBUG_VIEW)
+    if (m_procgen_paint_dirty) {
+        regenerate_procgen_debug_map(engine);
+    }
+#else
+    (void)engine;
+#endif
+}
+
+void RogueFarmGame::on_event(core::Engine& engine, const SDL_Event& event, bool ui_consumed) {
+#if defined(REALM_ENABLE_PROCGEN_DEBUG_VIEW)
+    if (event.type == SDL_EVENT_WINDOW_FOCUS_LOST
+        || event.type == SDL_EVENT_WINDOW_MOUSE_LEAVE) {
+        m_procgen_paint_session.cancel();
+        return;
+    }
+
+    if (event.type == SDL_EVENT_MOUSE_BUTTON_UP && event.button.button == SDL_BUTTON_LEFT) {
+        m_procgen_paint_session.pointer_up();
+        return;
+    }
+
+    float screen_x = 0.0f;
+    float screen_y = 0.0f;
+    bool is_pointer_down = false;
+    if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN && event.button.button == SDL_BUTTON_LEFT) {
+        screen_x = event.button.x;
+        screen_y = event.button.y;
+        is_pointer_down = true;
+    } else if (event.type == SDL_EVENT_MOUSE_MOTION) {
+        screen_x = event.motion.x;
+        screen_y = event.motion.y;
+    } else {
+        return;
+    }
+
+    float logical_x = 0.0f;
+    float logical_y = 0.0f;
+    if (!engine.screen_to_logical(screen_x, screen_y, logical_x, logical_y)) {
+        return;
+    }
+
+    const auto bounds = procgen_preview_bounds(engine);
+    const auto sample = is_pointer_down
+        ? m_procgen_paint_session.pointer_down(bounds, logical_x, logical_y, ui_consumed)
+        : m_procgen_paint_session.pointer_move(bounds, logical_x, logical_y, ui_consumed);
+    if (sample) {
+        apply_procgen_paint_sample(*sample);
+    }
+#else
+    (void)engine;
+    (void)event;
+    (void)ui_consumed;
+#endif
 }
 
 void RogueFarmGame::on_shutdown(core::Engine& engine) {

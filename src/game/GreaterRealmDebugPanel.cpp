@@ -120,14 +120,14 @@ std::unique_ptr<ui::UIElement> GreaterRealmDebugPanel::build(
     procgen::GreaterRealmDebugOptions& debug_options,
     const procgen::GreaterRealmMap& map,
     RegenerateCallback on_regenerate,
-    PaintConstraintCallback on_paint_constraint,
+    ToolChangedCallback on_tool_changed,
     ClearConstraintsCallback on_clear_constraints,
     ViewChangedCallback on_view_changed
 ) {
     m_settings = &settings;
     m_debug_options = &debug_options;
     m_on_regenerate = std::move(on_regenerate);
-    m_on_paint_constraint = std::move(on_paint_constraint);
+    m_on_tool_changed = std::move(on_tool_changed);
     m_on_clear_constraints = std::move(on_clear_constraints);
     m_on_view_changed = std::move(on_view_changed);
 
@@ -294,48 +294,26 @@ std::unique_ptr<ui::UIElement> GreaterRealmDebugPanel::build(
     add_setting_row(*right_settings, "Ocean depth", settings.ocean_depth_weight, &m_ocean_depth_text, &procgen::GreaterRealmGeneratorSettings::ocean_depth_weight, 0.25f, 0.0f, 3.0f);
     add_setting_row(*right_settings, "Channel threshold", settings.river_min_drainage_area, &m_channel_threshold_text, &procgen::GreaterRealmGeneratorSettings::river_min_drainage_area, 100.0f, 0.0f, 2000.0f);
 
-    const auto add_constraint_coordinate = [this, &right_settings](
-        const char* label,
-        float* value,
-        ui::TextBlock** text
-    ) {
-        right_settings->addChild(make_control_row(
-            make_text(setting_text(label, *value), text),
-            [value, text, label]() {
-                *value = std::clamp(*value - 0.05f, 0.0f, 1.0f);
-                if (*text) {
-                    (*text)->setText(setting_text(label, *value));
-                }
-            },
-            [value, text, label]() {
-                *value = std::clamp(*value + 0.05f, 0.0f, 1.0f);
-                if (*text) {
-                    (*text)->setText(setting_text(label, *value));
-                }
-            }
-        ));
-    };
-    add_constraint_coordinate("Constraint X", &m_constraint_x, &m_constraint_x_text);
-    add_constraint_coordinate("Constraint Y", &m_constraint_y, &m_constraint_y_text);
-
     tuning_columns->addChild(std::move(left_settings));
     tuning_columns->addChild(std::move(right_settings));
     root->addChild(std::move(tuning_columns));
 
-    const auto paint = [this](procgen::TerrainConstraintTool tool) {
+    const auto select_tool = [this](procgen::TerrainConstraintTool tool) {
         return [this, tool]() {
-            if (m_on_paint_constraint) {
-                m_on_paint_constraint(tool, m_constraint_x, m_constraint_y);
-            }
+            select_constraint_tool(tool);
         };
     };
     auto constraint_row_one = std::make_unique<ui::StackPanel>(ui::Orientation::Horizontal);
     constraint_row_one->setSpacing(6.0f);
-    constraint_row_one->addChild(make_debug_button("Ocean", paint(procgen::TerrainConstraintTool::Ocean), 96.0f));
-    constraint_row_one->addChild(make_debug_button("Shallow", paint(procgen::TerrainConstraintTool::ShallowWater), 96.0f));
-    constraint_row_one->addChild(make_debug_button("Valley", paint(procgen::TerrainConstraintTool::Valley), 96.0f));
-    constraint_row_one->addChild(make_debug_button("Mountain", paint(procgen::TerrainConstraintTool::Mountain), 96.0f));
+    constraint_row_one->addChild(make_debug_button("Ocean", select_tool(procgen::TerrainConstraintTool::Ocean), 96.0f, &m_ocean_tool_button));
+    constraint_row_one->addChild(make_debug_button("Shallow", select_tool(procgen::TerrainConstraintTool::ShallowWater), 96.0f, &m_shallow_tool_button));
+    constraint_row_one->addChild(make_debug_button("Valley", select_tool(procgen::TerrainConstraintTool::Valley), 96.0f, &m_valley_tool_button));
+    constraint_row_one->addChild(make_debug_button("Mountain", select_tool(procgen::TerrainConstraintTool::Mountain), 96.0f, &m_mountain_tool_button));
     root->addChild(std::move(constraint_row_one));
+    update_constraint_tool_buttons();
+    if (m_on_tool_changed) {
+        m_on_tool_changed(m_selected_tool);
+    }
 
     auto constraint_row_two = std::make_unique<ui::StackPanel>(ui::Orientation::Horizontal);
     constraint_row_two->setSpacing(6.0f);
@@ -399,8 +377,6 @@ void GreaterRealmDebugPanel::update(const procgen::GreaterRealmMap& map) {
     if (m_noise_text) m_noise_text->setText(setting_text("Terrain noise", m_settings->terrain_noise_weight));
     if (m_ocean_depth_text) m_ocean_depth_text->setText(setting_text("Ocean depth", m_settings->ocean_depth_weight));
     if (m_channel_threshold_text) m_channel_threshold_text->setText(setting_text("Channel threshold", m_settings->river_min_drainage_area));
-    if (m_constraint_x_text) m_constraint_x_text->setText(setting_text("Constraint X", m_constraint_x));
-    if (m_constraint_y_text) m_constraint_y_text->setText(setting_text("Constraint Y", m_constraint_y));
 
     if (m_coverage_text || m_terrain_text || m_hydrology_text) {
         const auto counts = procgen::count_terrain_forms(map);
@@ -461,6 +437,37 @@ void GreaterRealmDebugPanel::update_overlay_buttons() {
     update_button(m_peaks_button, "Peaks", m_debug_options->show_mountain_peaks);
     update_button(m_rivers_button, "Rivers", m_debug_options->show_rivers);
     update_button(m_drainage_button, "Drain", m_debug_options->show_drainage_directions);
+}
+
+void GreaterRealmDebugPanel::select_constraint_tool(procgen::TerrainConstraintTool tool) {
+    m_selected_tool = tool;
+    update_constraint_tool_buttons();
+    if (m_on_tool_changed) {
+        m_on_tool_changed(tool);
+    }
+}
+
+void GreaterRealmDebugPanel::update_constraint_tool_buttons() {
+    const auto update_button = [this](
+        ui::Button* button,
+        procgen::TerrainConstraintTool tool
+    ) {
+        if (!button) {
+            return;
+        }
+        const bool selected = tool == m_selected_tool;
+        button->setBackgroundColour(selected
+            ? ui::Colour{42, 116, 82, 255}
+            : ui::Colour{54, 88, 128, 255});
+        button->setBorderColour(selected
+            ? ui::Colour{24, 76, 52, 255}
+            : ui::Colour{28, 52, 78, 255});
+    };
+
+    update_button(m_ocean_tool_button, procgen::TerrainConstraintTool::Ocean);
+    update_button(m_shallow_tool_button, procgen::TerrainConstraintTool::ShallowWater);
+    update_button(m_valley_tool_button, procgen::TerrainConstraintTool::Valley);
+    update_button(m_mountain_tool_button, procgen::TerrainConstraintTool::Mountain);
 }
 
 } // namespace game

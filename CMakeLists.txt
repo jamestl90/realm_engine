@@ -52,6 +52,7 @@ set(REALM_PROCGEN_RUNTIME_SOURCES
     "${CMAKE_SOURCE_DIR}/src/procgen/Hydrology.cpp"
     "${CMAKE_SOURCE_DIR}/src/procgen/MountainPeaks.cpp"
     "${CMAKE_SOURCE_DIR}/src/procgen/TerrainConstraints.cpp"
+    "${CMAKE_SOURCE_DIR}/src/procgen/TerrainConstraintPainting.cpp"
 )
 list(REMOVE_ITEM SOURCES ${REALM_PROCGEN_DEBUG_SOURCES} ${REALM_PROCGEN_RUNTIME_SOURCES})
 if(REALM_ENABLE_PROCGEN_DEBUG_VIEW)
@@ -145,6 +146,20 @@ if(REALM_BUILD_TESTS)
     target_compile_definitions(realm_procgen_pipeline_tests PRIVATE REALM_TEST_BUILD=1)
 
     add_test(NAME procgen_hydrology_constraints COMMAND realm_procgen_pipeline_tests)
+
+    add_executable(realm_procgen_paint_tests EXCLUDE_FROM_ALL
+        tests/procgen/TerrainConstraintPaintingTests.cpp
+        src/procgen/TerrainConstraintPainting.cpp
+        src/procgen/TerrainConstraints.cpp
+    )
+
+    target_include_directories(realm_procgen_paint_tests PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+    )
+
+    target_compile_definitions(realm_procgen_paint_tests PRIVATE REALM_TEST_BUILD=1)
+
+    add_test(NAME procgen_constraint_painting COMMAND realm_procgen_paint_tests)
 
     add_executable(realm_mountain_peak_tests EXCLUDE_FROM_ALL
         tests/procgen/MountainPeakTests.cpp

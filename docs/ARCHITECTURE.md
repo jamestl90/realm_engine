@@ -34,6 +34,14 @@ This engine is built on a pure Entity Component System (ECS) architecture with D
 - **Refactor continuously**: Refactor ownership and dependencies as responsibilities become clear rather than postponing all structural work until files become difficult to change
 - **Prefer meaningful modules**: Modular design does not require a separate file for every small helper; extract code when it establishes a clear boundary, reusable capability, or independently testable unit
 
+### 6. SOLID and Clean Code
+- **Use SOLID pragmatically**: Apply single responsibility, open/closed design, substitutability, interface segregation, and dependency inversion where they produce clearer ownership, safer extension, and independently testable behavior
+- **Preserve data-oriented design**: SOLID does not require object-heavy architecture, virtual dispatch, or an interface for every type; use composition, data-oriented modules, templates, functions, or explicit resource injection when they better fit performance-sensitive engine code
+- **Keep dependencies explicit**: High-level policy should not reach through unrelated modules or hidden global state. Pass narrow dependencies through constructors, function parameters, ECS resources, or established engine ownership boundaries
+- **Write cohesive units**: Functions, types, and files should have clear names and focused responsibilities, with control flow and error handling that make behavior apparent without explanatory archaeology
+- **Refactor with evidence**: Remove duplication and extract abstractions when repeated behavior or coupling is concrete. Avoid speculative generalization and preserve simple code when it already expresses the requirement clearly
+- **Protect behavior**: Pair structural changes with tests proportionate to their risk, keep public contracts deliberate, and leave touched code easier to understand without expanding unrelated scope
+
 ## System Architecture
 
 ```mermaid

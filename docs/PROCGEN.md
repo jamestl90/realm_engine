@@ -57,13 +57,14 @@ This follows Mapgen4's layered elevation approach while deliberately retaining a
 - Coastlines, mountain peaks, rivers, and sampled drainage directions are independent overlays. Terrain with coastlines, peaks, and rivers enabled remains the default view.
 - Changing a base view or overlay rebuilds only the RGBA image and preview texture from the retained map; it does not regenerate procedural data.
 - `TextureManager` uploads the RGBA output without requiring procgen code to depend on SDL or GPU APIs.
-- The application-level `GreaterRealmDebugPanel` owns the debug UI, active settings, and regeneration callbacks; `RogueFarmGame` owns preview placement, the editable constraint field, and composition. Controls expose terrain, mountain strength, peak spacing/radius/jaggedness, potential-channel catchment threshold, and coordinate-based constraint stamping settings.
-- The current Constraint X/Y controls are a temporary debug harness. Unlike Mapgen4, the engine does not yet convert pointer positions on the preview into direct brush strokes; task 035 tracks removing these controls and replacing them with preview painting.
+- The application-level `GreaterRealmDebugPanel` owns the debug UI, active settings, selected constraint tool, and regeneration callbacks; `RogueFarmGame` owns preview placement, the editable constraint field, and composition. Controls expose terrain, mountain strength, peak spacing/radius/jaggedness, potential-channel catchment threshold, and selectable Ocean, Shallow, Valley, and Mountain brushes.
+- Primary-button input over the visible preview maps directly to normalized constraint coordinates and paints continuously while dragged. UI-consumed input and positions outside the preview cannot paint, and generated output is rebuilt at most once per frame while a stroke is active.
+- The compile-gated `TerrainConstraintPainting` module owns preview-coordinate conversion and drag state without depending on SDL, UI widgets, rendering, or application classes.
 - Island bias follows Mapgen4's `0..1` range and `0.5` default. It changes the signed landmass constraint, so it can affect both coastline topology and water elevation before the separate ocean-depth stage.
 - Terrain noise and ocean depth use larger tuning steps and contrast-enhanced debug shading so changes are visible.
 - Debug builds report per-stage generation timings plus end-to-end control-to-preview timing through the Debug-only `REALM_ENABLE_PROCGEN_PROFILING` definition; profiling code is compiled out of production builds.
 - `REALM_OPTIMIZE_PROCGEN_DEBUG` defaults to `ON`, compiling the interactive procgen runtime with optimization in Debug builds while dedicated test targets retain their normal Debug checks. Disable it when stepping through procgen at instruction level is more important than interactive tuning speed.
-- Automated tests cover output shape, deterministic seeds, map lookup, signed constraints, topology stability, ocean connectivity, sea-level response, terrain statistics, peak selection/spacing/distance fields, constraint interpolation/serialization, drainage invariants, catchment accumulation, channel connectivity, and debug-image output.
+- Automated tests cover output shape, deterministic seeds, map lookup, signed constraints, topology stability, ocean connectivity, sea-level response, terrain statistics, peak selection/spacing/distance fields, constraint interpolation/serialization, preview-coordinate mapping, paint interaction state, drainage invariants, catchment accumulation, channel connectivity, and debug-image output.
 - Test code is compiled only when `REALM_BUILD_TESTS=ON` and does not enter release builds.
 
 ## Not Yet Supported
@@ -73,7 +74,6 @@ This follows Mapgen4's layered elevation approach while deliberately retaining a
 - Resources, settlements, factions, or object placement.
 - Local tile generation or world-region streaming.
 - Beach, cliff, rocky-shore, marsh, delta, or other detailed shoreline classification.
-- Direct pointer painting of terrain constraints on the debug preview.
 - A derived Delaunay/Voronoi render surface; task 032 rejected it as the canonical greater-realm representation.
 - Mapgen4-style folded terrain geometry or 2.5D projection.
 - Continuous elevation-informed terrain colouring.

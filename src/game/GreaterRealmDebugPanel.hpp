@@ -16,7 +16,7 @@ namespace game {
 class GreaterRealmDebugPanel {
 public:
     using RegenerateCallback = std::function<void()>;
-    using PaintConstraintCallback = std::function<void(procgen::TerrainConstraintTool, float, float)>;
+    using ToolChangedCallback = std::function<void(procgen::TerrainConstraintTool)>;
     using ClearConstraintsCallback = std::function<void()>;
     using ViewChangedCallback = std::function<void()>;
 
@@ -25,7 +25,7 @@ public:
         procgen::GreaterRealmDebugOptions& debug_options,
         const procgen::GreaterRealmMap& map,
         RegenerateCallback on_regenerate,
-        PaintConstraintCallback on_paint_constraint,
+        ToolChangedCallback on_tool_changed,
         ClearConstraintsCallback on_clear_constraints,
         ViewChangedCallback on_view_changed
     );
@@ -36,15 +36,16 @@ private:
     void regenerate();
     void notify_view_changed();
     void update_overlay_buttons();
+    void select_constraint_tool(procgen::TerrainConstraintTool tool);
+    void update_constraint_tool_buttons();
 
     procgen::GreaterRealmGeneratorSettings* m_settings{nullptr};
     procgen::GreaterRealmDebugOptions* m_debug_options{nullptr};
     RegenerateCallback m_on_regenerate;
-    PaintConstraintCallback m_on_paint_constraint;
+    ToolChangedCallback m_on_tool_changed;
     ClearConstraintsCallback m_on_clear_constraints;
     ViewChangedCallback m_on_view_changed;
-    float m_constraint_x{0.5f};
-    float m_constraint_y{0.5f};
+    procgen::TerrainConstraintTool m_selected_tool{procgen::TerrainConstraintTool::Mountain};
     ui::TextBlock* m_seed_text{nullptr};
     ui::TextBlock* m_sea_text{nullptr};
     ui::TextBlock* m_island_bias_text{nullptr};
@@ -59,8 +60,6 @@ private:
     ui::TextBlock* m_noise_text{nullptr};
     ui::TextBlock* m_ocean_depth_text{nullptr};
     ui::TextBlock* m_channel_threshold_text{nullptr};
-    ui::TextBlock* m_constraint_x_text{nullptr};
-    ui::TextBlock* m_constraint_y_text{nullptr};
     ui::TextBlock* m_coverage_text{nullptr};
     ui::TextBlock* m_terrain_text{nullptr};
     ui::TextBlock* m_hydrology_text{nullptr};
@@ -68,6 +67,10 @@ private:
     ui::Button* m_peaks_button{nullptr};
     ui::Button* m_rivers_button{nullptr};
     ui::Button* m_drainage_button{nullptr};
+    ui::Button* m_ocean_tool_button{nullptr};
+    ui::Button* m_shallow_tool_button{nullptr};
+    ui::Button* m_valley_tool_button{nullptr};
+    ui::Button* m_mountain_tool_button{nullptr};
 };
 
 } // namespace game
