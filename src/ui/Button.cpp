@@ -103,6 +103,9 @@ void Button::measure(float availableWidth, float availableHeight) {
 
 void Button::onMouseDown(MouseEventArgs& args) {
     FocusableControl::onMouseDown(args);
+    if (!isEnabled()) {
+        return;
+    }
     setPressed(true);
     args.handled = true;
 }

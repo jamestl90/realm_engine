@@ -4,12 +4,14 @@
 #include "../../include/ui/ComboBox.hpp"
 #include "../../include/ui/Layout.hpp"
 #include "../../include/ui/Primitives.hpp"
+#include "../../include/ui/RepeatButton.hpp"
 #include <algorithm>
 #if defined(REALM_ENABLE_PROCGEN_PROFILING)
 #include <SDL3/SDL.h>
 #include <chrono>
 #endif
 #include <iomanip>
+#include <limits>
 #include <sstream>
 #include <utility>
 
@@ -67,6 +69,21 @@ std::unique_ptr<ui::TextBlock> make_text(const std::string& text, ui::TextBlock*
     return element;
 }
 
+void configure_debug_button(ui::Button& button, float min_width) {
+    button.setBackgroundColour(ui::Colour{54, 88, 128, 255});
+    button.setHoverColour(ui::Colour{72, 108, 152, 255});
+    button.setPressedColour(ui::Colour{38, 68, 102, 255});
+    button.setTextColour(ui::Colour::white());
+    button.setBorderColour(ui::Colour{28, 52, 78, 255});
+    button.setBorderThickness(1.0f);
+    button.setFontSize(14.0f);
+    button.setPadding(ui::Thickness(8.0f, 4.0f));
+    ui::SizeConstraints constraints;
+    constraints.min_width = min_width;
+    constraints.min_height = 30.0f;
+    button.setSizeConstraints(constraints);
+}
+
 std::unique_ptr<ui::Button> make_debug_button(
     const std::string& text,
     ui::Button::ClickCallback callback,
@@ -74,30 +91,28 @@ std::unique_ptr<ui::Button> make_debug_button(
     ui::Button** out = nullptr
 ) {
     auto button = std::make_unique<ui::Button>(text);
-    button->setBackgroundColour(ui::Colour{54, 88, 128, 255});
-    button->setHoverColour(ui::Colour{72, 108, 152, 255});
-    button->setPressedColour(ui::Colour{38, 68, 102, 255});
-    button->setTextColour(ui::Colour::white());
-    button->setBorderColour(ui::Colour{28, 52, 78, 255});
-    button->setBorderThickness(1.0f);
-    button->setFontSize(14.0f);
-    button->setPadding(ui::Thickness(8.0f, 4.0f));
+    configure_debug_button(*button, min_width);
     button->setOnClick(std::move(callback));
     if (out) {
         *out = button.get();
     }
+    return button;
+}
 
-    ui::SizeConstraints constraints;
-    constraints.min_width = min_width;
-    constraints.min_height = 30.0f;
-    button->setSizeConstraints(constraints);
+std::unique_ptr<ui::RepeatButton> make_step_button(
+    const std::string& text,
+    ui::RepeatButton::RepeatCallback callback
+) {
+    auto button = std::make_unique<ui::RepeatButton>(text);
+    configure_debug_button(*button, 38.0f);
+    button->setOnRepeat(std::move(callback));
     return button;
 }
 
 std::unique_ptr<ui::StackPanel> make_control_row(
     std::unique_ptr<ui::TextBlock> label,
-    ui::Button::ClickCallback decrease,
-    ui::Button::ClickCallback increase
+    ui::RepeatButton::RepeatCallback decrease,
+    ui::RepeatButton::RepeatCallback increase
 ) {
     auto row = std::make_unique<ui::StackPanel>(ui::Orientation::Horizontal);
     row->setSpacing(4.0f);
@@ -108,8 +123,8 @@ std::unique_ptr<ui::StackPanel> make_control_row(
     label->setSizeConstraints(label_constraints);
 
     row->addChild(std::move(label));
-    row->addChild(make_debug_button("-", std::move(decrease)));
-    row->addChild(make_debug_button("+", std::move(increase)));
+    row->addChild(make_step_button("-", std::move(decrease)));
+    row->addChild(make_step_button("+", std::move(increase)));
     return row;
 }
 
@@ -230,11 +245,16 @@ std::unique_ptr<ui::UIElement> GreaterRealmDebugPanel::build(
     ) {
         return [this, member, amount, minimum, maximum]() {
             if (!m_settings) {
-                return;
+                return false;
             }
             auto& value = m_settings->*member;
-            value = std::clamp(value + amount, minimum, maximum);
+            const float adjusted = std::clamp(value + amount, minimum, maximum);
+            if (adjusted == value) {
+                return false;
+            }
+            value = adjusted;
             regenerate();
+            return true;
         };
     };
 
@@ -248,18 +268,21 @@ std::unique_ptr<ui::UIElement> GreaterRealmDebugPanel::build(
     left_settings->addChild(make_control_row(
         make_text(seed_text(settings.seed), &m_seed_text),
         [this]() {
-            if (m_settings) {
-                if (m_settings->seed > 0) {
-                    --m_settings->seed;
-                }
-                regenerate();
+            if (!m_settings || m_settings->seed == 0) {
+                return false;
             }
+            --m_settings->seed;
+            regenerate();
+            return true;
         },
         [this]() {
-            if (m_settings) {
-                ++m_settings->seed;
-                regenerate();
+            if (!m_settings
+                || m_settings->seed == std::numeric_limits<procgen::Seed>::max()) {
+                return false;
             }
+            ++m_settings->seed;
+            regenerate();
+            return true;
         }
     ));
 

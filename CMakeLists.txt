@@ -253,4 +253,23 @@ if(REALM_BUILD_TESTS)
     target_compile_definitions(realm_ui_tests PRIVATE REALM_TEST_BUILD=1)
 
     add_test(NAME ui_text_measurement COMMAND realm_ui_tests)
+
+    add_executable(realm_ui_repeat_button_tests EXCLUDE_FROM_ALL
+        tests/ui/RepeatButtonTests.cpp
+        src/ui/Button.cpp
+        src/ui/FocusableControl.cpp
+        src/ui/InputSurface.cpp
+        src/ui/RepeatButton.cpp
+        src/ui/Style.cpp
+        src/ui/UIElement.cpp
+    )
+
+    target_include_directories(realm_ui_repeat_button_tests PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${SDL3_INCLUDE_DIR}
+    )
+
+    target_compile_definitions(realm_ui_repeat_button_tests PRIVATE REALM_TEST_BUILD=1)
+
+    add_test(NAME ui_repeat_button COMMAND realm_ui_repeat_button_tests)
 endif()

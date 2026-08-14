@@ -44,6 +44,7 @@ void UIManager::setScreenSize(float width, float height) noexcept {
 }
 
 void UIManager::setRoot(std::unique_ptr<UIElement> root) {
+    cancelActivePointerInteraction();
     m_root = std::move(root);
     m_layoutDirty = true;
     m_hoveredElement = nullptr;
@@ -122,6 +123,10 @@ bool UIManager::handleEvent(const SDL_Event& event) {
         case SDL_EVENT_TEXT_INPUT:
             return handleTextInput(event);
 
+        case SDL_EVENT_WINDOW_FOCUS_LOST:
+        case SDL_EVENT_WINDOW_MOUSE_LEAVE:
+            return cancelActivePointerInteraction();
+
         default:
             return false;
     }
@@ -140,6 +145,7 @@ bool UIManager::handleMouseButtonDown(const SDL_Event& event) {
 
     m_mouseX = x;
     m_mouseY = y;
+    updateHover(x, y);
 
     MouseEventArgs args;
     args.x = x;
@@ -148,6 +154,7 @@ bool UIManager::handleMouseButtonDown(const SDL_Event& event) {
 
     // If we have a captured element, send to it
     if (m_capturedElement) {
+        m_pressedSurface = m_capturedElement;
         m_capturedElement->onMouseDown(args);
         return args.handled;
     }
@@ -166,6 +173,7 @@ bool UIManager::handleMouseButtonDown(const SDL_Event& event) {
     while (current) {
         auto* surface = dynamic_cast<InputSurface*>(current);
         if (surface) {
+            m_pressedSurface = surface;
             surface->onMouseDown(args);
 
             // Handle focus for focusable controls
@@ -190,21 +198,29 @@ bool UIManager::handleMouseButtonUp(const SDL_Event& event) {
     // Convert screen coordinates to logical coordinates
     float x, y;
     if (!screenToLogical(screenX, screenY, x, y)) {
-        // Release in letterbox area - still send to captured element if any
-        if (m_capturedElement) {
+        // Release in letterbox area - still end the active pointer interaction.
+        InputSurface* releaseTarget = m_capturedElement
+            ? m_capturedElement
+            : m_pressedSurface;
+        if (releaseTarget) {
             // Use last known logical position
             MouseEventArgs args;
             args.x = m_mouseX;
             args.y = m_mouseY;
             args.button = toMouseButton(event.button.button);
-            m_capturedElement->onMouseUp(args);
-            return args.handled;
+            releaseTarget->onMouseUp(args);
+            if (m_pressedSurface && m_pressedSurface != releaseTarget) {
+                m_pressedSurface->cancelPointerInteraction();
+            }
+            m_pressedSurface = nullptr;
+            return true;
         }
         return false;
     }
 
     m_mouseX = x;
     m_mouseY = y;
+    updateHover(x, y);
 
     MouseEventArgs args;
     args.x = x;
@@ -214,6 +230,17 @@ bool UIManager::handleMouseButtonUp(const SDL_Event& event) {
     // If we have a captured element, send to it
     if (m_capturedElement) {
         m_capturedElement->onMouseUp(args);
+        if (m_pressedSurface && m_pressedSurface != m_capturedElement) {
+            m_pressedSurface->cancelPointerInteraction();
+        }
+        m_pressedSurface = nullptr;
+        return args.handled;
+    }
+
+    if (m_pressedSurface) {
+        InputSurface* pressedSurface = m_pressedSurface;
+        m_pressedSurface = nullptr;
+        pressedSurface->onMouseUp(args);
         return args.handled;
     }
 
@@ -470,6 +497,28 @@ void UIManager::setFontManager(rendering::FontManager* fontManager, rendering::F
         configureTextMeasurement(m_root.get());
     }
     m_layoutDirty = true;
+}
+
+bool UIManager::cancelActivePointerInteraction() noexcept {
+    const bool hadActiveInteraction = m_pressedSurface || m_capturedElement;
+
+    if (m_lastHoveredSurface) {
+        m_lastHoveredSurface->onMouseLeave();
+    }
+    if (m_pressedSurface && m_pressedSurface != m_lastHoveredSurface) {
+        m_pressedSurface->cancelPointerInteraction();
+    }
+    if (m_capturedElement
+        && m_capturedElement != m_pressedSurface
+        && m_capturedElement != m_lastHoveredSurface) {
+        m_capturedElement->cancelPointerInteraction();
+    }
+
+    m_pressedSurface = nullptr;
+    m_capturedElement = nullptr;
+    m_lastHoveredSurface = nullptr;
+    m_hoveredElement = nullptr;
+    return hadActiveInteraction;
 }
 
 void UIManager::configureTextMeasurement(UIElement* element) {

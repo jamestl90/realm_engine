@@ -85,6 +85,7 @@ public:
     virtual void onKeyDown(KeyEventArgs& args);
     virtual void onKeyUp(KeyEventArgs& args);
     virtual void onTextInput(TextInputEventArgs& args);
+    virtual void cancelPointerInteraction() noexcept;
 
 protected:
     void setHovered(bool hovered) noexcept;

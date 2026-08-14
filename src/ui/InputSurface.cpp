@@ -112,6 +112,10 @@ void InputSurface::onMouseEnter() {
 
 void InputSurface::onMouseLeave() {
     setHovered(false);
+    cancelPointerInteraction();
+}
+
+void InputSurface::cancelPointerInteraction() noexcept {
     m_pressed = false;
 }
 
