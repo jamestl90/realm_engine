@@ -47,7 +47,7 @@ This document tracks the procedural generation capabilities currently present in
 10. Build priority drainage and condition depressions for downhill routing.
 11. Accumulate contributing terrain area and export potential river channels.
 
-This follows Mapgen4's layered elevation approach while deliberately retaining a regular-grid representation. A future irregular or triangulated surface may be derived for rendering without replacing canonical map data.
+This follows Mapgen4's layered elevation approach while deliberately retaining a regular-grid representation. The renderer can derive a triangulated regular-grid heightfield for 2.5D presentation without replacing or mutating canonical map data.
 
 ## Debugging And Tests
 
@@ -56,6 +56,7 @@ This follows Mapgen4's layered elevation approach while deliberately retaining a
 - Runtime base views expose terrain forms, elevation, signed landmass, mountain influence, slope, coast distance, and catchment area.
 - Coastlines, mountain peaks, rivers, and sampled drainage directions are independent overlays. Terrain with coastlines, peaks, and rivers enabled remains the default view.
 - Changing a base view or overlay rebuilds only the RGBA image and preview texture from the retained map; it does not regenerate procedural data.
+- The application can switch between the flat debug texture and a lit oblique `3D` heightfield. The heightfield reuses the active debug colours and overlays, and its elevation scale is presentation-only.
 - `TextureManager` uploads the RGBA output without requiring procgen code to depend on SDL or GPU APIs.
 - The application-level `GreaterRealmDebugPanel` owns the debug UI, active settings, selected constraint tool, and regeneration callbacks; `RogueFarmGame` owns preview placement, the editable constraint field, and composition. Controls expose terrain, mountain strength, peak spacing/radius/jaggedness, potential-channel catchment threshold, and selectable Ocean, Shallow, Valley, and Mountain brushes.
 - Primary-button input over the visible preview maps directly to normalized constraint coordinates and paints continuously while dragged. UI-consumed input and positions outside the preview cannot paint, and generated output is rebuilt at most once per frame while a stroke is active.
@@ -75,6 +76,6 @@ This follows Mapgen4's layered elevation approach while deliberately retaining a
 - Local tile generation or world-region streaming.
 - Beach, cliff, rocky-shore, marsh, delta, or other detailed shoreline classification.
 - A derived Delaunay/Voronoi render surface; task 032 rejected it as the canonical greater-realm representation.
-- Mapgen4-style folded terrain geometry or 2.5D projection.
+- Mapgen4's irregular folded mesh around coasts, ridges, valleys, and rivers. The supported 2.5D path is a continuous triangulated regular-grid heightfield instead.
 - Continuous elevation-informed terrain colouring.
 - Dependency-aware partial regeneration and in-place debug texture updates; task 036 tracks avoiding full-pipeline work for every control change.

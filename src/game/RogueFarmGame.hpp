@@ -30,6 +30,8 @@ private:
     bool regenerate_procgen_debug_map(core::Engine& engine);
     bool refresh_procgen_debug_view(core::Engine& engine);
     bool replace_procgen_debug_texture(core::Engine& engine, const procgen::DebugImage& image);
+    bool refresh_procgen_terrain_mesh(core::Engine& engine, const procgen::DebugImage& image);
+    void apply_procgen_presentation(core::Engine& engine) noexcept;
     [[nodiscard]] procgen::TerrainPreviewBounds procgen_preview_bounds(core::Engine& engine) const noexcept;
     void apply_procgen_paint_sample(const procgen::TerrainConstraintPaintSample& sample) noexcept;
 #endif
@@ -42,6 +44,7 @@ private:
     procgen::TerrainConstraintField m_procgen_constraints{64, 64};
     procgen::GreaterRealmMap m_procgen_map;
     procgen::GreaterRealmDebugOptions m_procgen_debug_options;
+    GreaterRealmPresentationSettings m_procgen_presentation;
     procgen::TerrainConstraintPaintSession m_procgen_paint_session;
     GreaterRealmDebugPanel m_procgen_debug_panel;
     bool m_procgen_paint_dirty{false};

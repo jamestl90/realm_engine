@@ -47,6 +47,7 @@ bool Engine::initialize(const char* title, int width, int height) {
 
     // Create subsystems
     renderer_ = std::make_unique<rendering::Renderer>(gpu_device_.get(), window_);
+    terrain_renderer_ = std::make_unique<rendering::TerrainRenderer>(gpu_device_.get());
     texture_manager_ = std::make_unique<rendering::TextureManager>(gpu_device_.get());
     font_manager_ = std::make_unique<rendering::FontManager>(gpu_device_.get(), texture_manager_.get());
     ui_renderer_ = std::make_unique<rendering::UIRenderer>(gpu_device_.get());
@@ -110,6 +111,9 @@ void Engine::shutdown() noexcept {
         texture_manager_.reset();
         SDL_Log("Texture Manager Reset");
     }
+
+    terrain_renderer_.reset();
+    SDL_Log("Terrain Renderer Reset");
 
     renderer_.reset();
     SDL_Log("Renderer Reset");
@@ -286,13 +290,30 @@ void Engine::render(double alpha) {
     if (!renderer_->begin_frame()) {
         quit();
     }
+    if (!renderer_->swapchain_texture()) {
+        return;
+    }
 
     // Set logical resolution for coordinate mapping
     renderer_->set_logical_size(LOGICAL_W, LOGICAL_H);
 
-    renderer_->clear(0, 0, 51, 255);
+    const bool terrain_pass_enabled = terrain_renderer_ && terrain_renderer_->is_enabled();
+    if (!renderer_->clear(0, 0, 51, 255, terrain_pass_enabled)) {
+        quit();
+        return;
+    }
 
-    // Render ECS world sprites first
+    // Terrain is an engine-owned world pass rendered before ECS sprites.
+    if (terrain_renderer_) {
+        terrain_renderer_->render(*renderer_);
+    }
+
+    if (terrain_pass_enabled && !renderer_->begin_sprite_pass()) {
+        quit();
+        return;
+    }
+
+    // Render ECS world sprites over the terrain pass.
     renderer_->render(world_, alpha);
 
     // Call game render hook for custom rendering between world sprites and retained UI.

@@ -4,6 +4,8 @@
 #include "../../include/core/Utils.hpp"
 #include "../../include/rendering/FontManager.hpp"
 #include "../../include/rendering/Sprite.hpp"
+#include "../../include/rendering/TerrainMesh.hpp"
+#include "../../include/rendering/TerrainRenderer.hpp"
 #include "../../include/rendering/UIRenderer.hpp"
 #include "../../include/ui/Button.hpp"
 #include "../../include/ui/ComboBox.hpp"
@@ -48,6 +50,9 @@ bool RogueFarmGame::regenerate_procgen_debug_map(core::Engine& engine) {
     }
 
     if (!replace_procgen_debug_texture(engine, image)) {
+        return false;
+    }
+    if (!refresh_procgen_terrain_mesh(engine, image)) {
         return false;
     }
 #if defined(REALM_ENABLE_PROCGEN_PROFILING)
@@ -100,7 +105,8 @@ bool RogueFarmGame::refresh_procgen_debug_view(core::Engine& engine) {
         m_procgen_settings.sea_level,
         m_procgen_debug_options
     );
-    return replace_procgen_debug_texture(engine, image);
+    return replace_procgen_debug_texture(engine, image)
+        && refresh_procgen_terrain_mesh(engine, image);
 }
 
 bool RogueFarmGame::replace_procgen_debug_texture(
@@ -133,7 +139,9 @@ bool RogueFarmGame::replace_procgen_debug_texture(
     m_test_texture = new_texture;
 
     if (auto* sprite = engine.world().get_component<rendering::Sprite>(m_test_entity)) {
-        sprite->texture_id = m_test_texture;
+        sprite->texture_id = m_procgen_presentation.mode == GreaterRealmPresentationMode::Flat
+            ? m_test_texture
+            : rendering::INVALID_TEXTURE_ID;
         sprite->scale_x = 4.0f;
         sprite->scale_y = 4.0f;
     }
@@ -145,9 +153,61 @@ bool RogueFarmGame::replace_procgen_debug_texture(
     return true;
 }
 
+bool RogueFarmGame::refresh_procgen_terrain_mesh(
+    core::Engine& engine,
+    const procgen::DebugImage& image
+) {
+    auto* terrain_renderer = engine.terrain_renderer();
+    if (!terrain_renderer || !m_procgen_map.has_expected_cell_count()) {
+        return false;
+    }
+
+    std::vector<float> relative_elevations;
+    relative_elevations.reserve(m_procgen_map.cells.size());
+    for (const auto& cell : m_procgen_map.cells) {
+        relative_elevations.push_back(cell.elevation - m_procgen_settings.sea_level);
+    }
+
+    auto mesh = rendering::build_heightfield_mesh(
+        m_procgen_map.width,
+        m_procgen_map.height,
+        m_procgen_map.cell_size,
+        relative_elevations,
+        image.rgba
+    );
+    if (!mesh.has_expected_shape()) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to build greater-realm terrain mesh");
+        return false;
+    }
+
+    terrain_renderer->set_mesh(std::move(mesh));
+    apply_procgen_presentation(engine);
+    return true;
+}
+
+void RogueFarmGame::apply_procgen_presentation(core::Engine& engine) noexcept {
+    const bool show_tilted_3d = m_procgen_presentation.mode
+        == GreaterRealmPresentationMode::Tilted3D;
+    if (auto* terrain_renderer = engine.terrain_renderer()) {
+        terrain_renderer->set_elevation_scale(m_procgen_presentation.elevation_scale);
+        terrain_renderer->set_enabled(show_tilted_3d);
+    }
+    if (auto* sprite = engine.world().get_component<rendering::Sprite>(m_test_entity)) {
+        sprite->texture_id = show_tilted_3d
+            ? rendering::INVALID_TEXTURE_ID
+            : m_test_texture;
+    }
+    if (show_tilted_3d) {
+        m_procgen_paint_session.cancel();
+    }
+}
+
 procgen::TerrainPreviewBounds RogueFarmGame::procgen_preview_bounds(
     core::Engine& engine
 ) const noexcept {
+    if (m_procgen_presentation.mode == GreaterRealmPresentationMode::Tilted3D) {
+        return {};
+    }
     const auto* sprite = engine.world().get_component<rendering::Sprite>(m_test_entity);
     const auto* transform = engine.world().get_component<rendering::Transform>(m_test_entity);
     if (!sprite || !transform || !m_procgen_map.has_expected_cell_count()) {
@@ -268,11 +328,18 @@ void RogueFarmGame::on_startup(core::Engine& engine) {
 #endif
     engine.world().add_component(m_test_entity, sprite);
 
+#if defined(REALM_ENABLE_PROCGEN_DEBUG_VIEW)
+    if (!refresh_procgen_terrain_mesh(engine, initial_image)) {
+        return;
+    }
+#endif
+
     auto& ui_manager = engine.ui_manager();
 #if defined(REALM_ENABLE_PROCGEN_DEBUG_VIEW)
     ui_manager.setRoot(m_procgen_debug_panel.build(
         m_procgen_settings,
         m_procgen_debug_options,
+        m_procgen_presentation,
         m_procgen_map,
         [this, &engine]() { regenerate_procgen_debug_map(engine); },
         [this](procgen::TerrainConstraintTool tool) {
@@ -284,7 +351,8 @@ void RogueFarmGame::on_startup(core::Engine& engine) {
             m_procgen_constraints.clear();
             regenerate_procgen_debug_map(engine);
         },
-        [this, &engine]() { refresh_procgen_debug_view(engine); }
+        [this, &engine]() { refresh_procgen_debug_view(engine); },
+        [this, &engine]() { apply_procgen_presentation(engine); }
     ));
 #else
     auto root = std::make_unique<ui::StackPanel>(ui::Orientation::Vertical);
@@ -404,6 +472,12 @@ void RogueFarmGame::on_event(core::Engine& engine, const SDL_Event& event, bool 
 }
 
 void RogueFarmGame::on_shutdown(core::Engine& engine) {
+#if defined(REALM_ENABLE_PROCGEN_DEBUG_VIEW)
+    if (auto* terrain_renderer = engine.terrain_renderer()) {
+        terrain_renderer->set_enabled(false);
+        terrain_renderer->clear_mesh();
+    }
+#endif
     if (m_test_texture != rendering::INVALID_TEXTURE_ID) {
         engine.texture_manager()->destroy(m_test_texture);
         m_test_texture = rendering::INVALID_TEXTURE_ID;

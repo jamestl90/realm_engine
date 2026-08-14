@@ -32,6 +32,10 @@ set(REALM_SHADER_ASSETS
     "${REALM_ASSET_SOURCE_DIR}/Shaders/sprite.frag.spv"
     "${REALM_ASSET_SOURCE_DIR}/Shaders/sprite.vert.reflect.json"
     "${REALM_ASSET_SOURCE_DIR}/Shaders/sprite.frag.reflect.json"
+    "${REALM_ASSET_SOURCE_DIR}/Shaders/terrain.vert.spv"
+    "${REALM_ASSET_SOURCE_DIR}/Shaders/terrain.frag.spv"
+    "${REALM_ASSET_SOURCE_DIR}/Shaders/terrain.vert.reflect.json"
+    "${REALM_ASSET_SOURCE_DIR}/Shaders/terrain.frag.reflect.json"
 )
 set(REALM_FONT_ASSETS
     "${REALM_ASSET_SOURCE_DIR}/Fonts/Inter-4.1/extras/ttf/Inter-Regular.ttf"
@@ -272,4 +276,17 @@ if(REALM_BUILD_TESTS)
     target_compile_definitions(realm_ui_repeat_button_tests PRIVATE REALM_TEST_BUILD=1)
 
     add_test(NAME ui_repeat_button COMMAND realm_ui_repeat_button_tests)
+
+    add_executable(realm_terrain_mesh_tests EXCLUDE_FROM_ALL
+        tests/rendering/TerrainMeshTests.cpp
+        src/rendering/TerrainMesh.cpp
+    )
+
+    target_include_directories(realm_terrain_mesh_tests PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+    )
+
+    target_compile_definitions(realm_terrain_mesh_tests PRIVATE REALM_TEST_BUILD=1)
+
+    add_test(NAME rendering_terrain_mesh COMMAND realm_terrain_mesh_tests)
 endif()

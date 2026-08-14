@@ -9,6 +9,7 @@ namespace rendering {
 // Core pipeline types available in the engine
 enum class PipelineType : std::uint8_t {
     Sprite,         // Textured 2D sprites
+    Terrain,        // Lit 3D heightfield terrain
     Shape,          // Solid colour shapes
     Text,           // Text rendering
     PostProcess,    // Full-screen post effects

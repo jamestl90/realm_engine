@@ -133,18 +133,22 @@ std::unique_ptr<ui::StackPanel> make_control_row(
 std::unique_ptr<ui::UIElement> GreaterRealmDebugPanel::build(
     procgen::GreaterRealmGeneratorSettings& settings,
     procgen::GreaterRealmDebugOptions& debug_options,
+    GreaterRealmPresentationSettings& presentation_settings,
     const procgen::GreaterRealmMap& map,
     RegenerateCallback on_regenerate,
     ToolChangedCallback on_tool_changed,
     ClearConstraintsCallback on_clear_constraints,
-    ViewChangedCallback on_view_changed
+    ViewChangedCallback on_view_changed,
+    PresentationChangedCallback on_presentation_changed
 ) {
     m_settings = &settings;
     m_debug_options = &debug_options;
+    m_presentation_settings = &presentation_settings;
     m_on_regenerate = std::move(on_regenerate);
     m_on_tool_changed = std::move(on_tool_changed);
     m_on_clear_constraints = std::move(on_clear_constraints);
     m_on_view_changed = std::move(on_view_changed);
+    m_on_presentation_changed = std::move(on_presentation_changed);
 
     auto root = std::make_unique<ui::StackPanel>(ui::Orientation::Vertical);
     root->setPadding(ui::Thickness(10.0f));
@@ -160,6 +164,57 @@ std::unique_ptr<ui::UIElement> GreaterRealmDebugPanel::build(
     title->setFontSize(20.0f);
     title->setColour(ui::Colour{10, 18, 24, 255});
     root->addChild(std::move(title));
+
+    auto presentation_row = std::make_unique<ui::StackPanel>(ui::Orientation::Horizontal);
+    presentation_row->setSpacing(6.0f);
+    presentation_row->addChild(make_debug_button(
+        "Flat",
+        [this]() { select_presentation_mode(GreaterRealmPresentationMode::Flat); },
+        145.0f,
+        &m_flat_button
+    ));
+    presentation_row->addChild(make_debug_button(
+        "3D",
+        [this]() { select_presentation_mode(GreaterRealmPresentationMode::Tilted3D); },
+        145.0f,
+        &m_tilted_3d_button
+    ));
+    root->addChild(std::move(presentation_row));
+    update_presentation_buttons();
+
+    root->addChild(make_control_row(
+        make_text(setting_text("Elevation scale", presentation_settings.elevation_scale), &m_elevation_scale_text),
+        [this]() {
+            if (!m_presentation_settings) {
+                return false;
+            }
+            const float adjusted = std::max(10.0f, m_presentation_settings->elevation_scale - 10.0f);
+            if (adjusted == m_presentation_settings->elevation_scale) {
+                return false;
+            }
+            m_presentation_settings->elevation_scale = adjusted;
+            if (m_elevation_scale_text) {
+                m_elevation_scale_text->setText(setting_text("Elevation scale", adjusted));
+            }
+            notify_presentation_changed();
+            return true;
+        },
+        [this]() {
+            if (!m_presentation_settings) {
+                return false;
+            }
+            const float adjusted = std::min(250.0f, m_presentation_settings->elevation_scale + 10.0f);
+            if (adjusted == m_presentation_settings->elevation_scale) {
+                return false;
+            }
+            m_presentation_settings->elevation_scale = adjusted;
+            if (m_elevation_scale_text) {
+                m_elevation_scale_text->setText(setting_text("Elevation scale", adjusted));
+            }
+            notify_presentation_changed();
+            return true;
+        }
+    ));
 
     auto view_selector = std::make_unique<ui::ComboBox>();
     for (std::uint8_t index = 0;
@@ -400,6 +455,9 @@ void GreaterRealmDebugPanel::update(const procgen::GreaterRealmMap& map) {
     if (m_noise_text) m_noise_text->setText(setting_text("Terrain noise", m_settings->terrain_noise_weight));
     if (m_ocean_depth_text) m_ocean_depth_text->setText(setting_text("Ocean depth", m_settings->ocean_depth_weight));
     if (m_channel_threshold_text) m_channel_threshold_text->setText(setting_text("Channel threshold", m_settings->river_min_drainage_area));
+    if (m_elevation_scale_text && m_presentation_settings) {
+        m_elevation_scale_text->setText(setting_text("Elevation scale", m_presentation_settings->elevation_scale));
+    }
 
     if (m_coverage_text || m_terrain_text || m_hydrology_text) {
         const auto counts = procgen::count_terrain_forms(map);
@@ -431,6 +489,43 @@ void GreaterRealmDebugPanel::notify_view_changed() {
     if (m_on_view_changed) {
         m_on_view_changed();
     }
+}
+
+void GreaterRealmDebugPanel::notify_presentation_changed() {
+    if (m_on_presentation_changed) {
+        m_on_presentation_changed();
+    }
+}
+
+void GreaterRealmDebugPanel::select_presentation_mode(GreaterRealmPresentationMode mode) {
+    if (!m_presentation_settings || m_presentation_settings->mode == mode) {
+        return;
+    }
+    m_presentation_settings->mode = mode;
+    update_presentation_buttons();
+    notify_presentation_changed();
+}
+
+void GreaterRealmDebugPanel::update_presentation_buttons() {
+    if (!m_presentation_settings) {
+        return;
+    }
+
+    const auto update_button = [this](ui::Button* button, GreaterRealmPresentationMode mode) {
+        if (!button) {
+            return;
+        }
+        const bool selected = m_presentation_settings->mode == mode;
+        button->setBackgroundColour(selected
+            ? ui::Colour{42, 116, 82, 255}
+            : ui::Colour{54, 88, 128, 255});
+        button->setBorderColour(selected
+            ? ui::Colour{24, 76, 52, 255}
+            : ui::Colour{28, 52, 78, 255});
+    };
+
+    update_button(m_flat_button, GreaterRealmPresentationMode::Flat);
+    update_button(m_tilted_3d_button, GreaterRealmPresentationMode::Tilted3D);
 }
 
 void GreaterRealmDebugPanel::update_overlay_buttons() {

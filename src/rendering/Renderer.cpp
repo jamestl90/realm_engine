@@ -49,8 +49,11 @@ Renderer::Renderer(Renderer&& other) noexcept
     , sampler_(other.sampler_)
     , current_pass_(other.current_pass_)
     , swapchain_texture_(other.swapchain_texture_)
+    , depth_texture_(other.depth_texture_)
     , swapchain_width_(other.swapchain_width_)
     , swapchain_height_(other.swapchain_height_)
+    , depth_width_(other.depth_width_)
+    , depth_height_(other.depth_height_)
     , vertex_data_(std::move(other.vertex_data_))
     , index_data_(std::move(other.index_data_))
     , batches_(std::move(other.batches_))
@@ -67,6 +70,9 @@ Renderer::Renderer(Renderer&& other) noexcept
     other.sampler_ = nullptr;
     other.current_pass_ = nullptr;
     other.swapchain_texture_ = nullptr;
+    other.depth_texture_ = nullptr;
+    other.depth_width_ = 0;
+    other.depth_height_ = 0;
     other.gpu_resources_created_ = false;
 }
 
@@ -82,8 +88,11 @@ Renderer& Renderer::operator=(Renderer&& other) noexcept {
         sampler_ = other.sampler_;
         current_pass_ = other.current_pass_;
         swapchain_texture_ = other.swapchain_texture_;
+        depth_texture_ = other.depth_texture_;
         swapchain_width_ = other.swapchain_width_;
         swapchain_height_ = other.swapchain_height_;
+        depth_width_ = other.depth_width_;
+        depth_height_ = other.depth_height_;
         vertex_data_ = std::move(other.vertex_data_);
         index_data_ = std::move(other.index_data_);
         batches_ = std::move(other.batches_);
@@ -101,6 +110,9 @@ Renderer& Renderer::operator=(Renderer&& other) noexcept {
         other.sampler_ = nullptr;
         other.current_pass_ = nullptr;
         other.swapchain_texture_ = nullptr;
+        other.depth_texture_ = nullptr;
+        other.depth_width_ = 0;
+        other.depth_height_ = 0;
         other.gpu_resources_created_ = false;
     }
     return *this;
@@ -161,12 +173,56 @@ bool Renderer::create_gpu_resources() {
     return true;
 }
 
+bool Renderer::ensure_depth_target() {
+    if (!swapchain_texture_ || swapchain_width_ == 0 || swapchain_height_ == 0) {
+        return false;
+    }
+    if (depth_texture_
+        && depth_width_ == swapchain_width_
+        && depth_height_ == swapchain_height_) {
+        return true;
+    }
+
+    release_depth_target();
+
+    SDL_GPUTextureCreateInfo create_info{};
+    create_info.type = SDL_GPU_TEXTURETYPE_2D;
+    create_info.format = SDL_GPU_TEXTUREFORMAT_D16_UNORM;
+    create_info.usage = SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET;
+    create_info.width = swapchain_width_;
+    create_info.height = swapchain_height_;
+    create_info.layer_count_or_depth = 1;
+    create_info.num_levels = 1;
+    create_info.sample_count = SDL_GPU_SAMPLECOUNT_1;
+
+    depth_texture_ = SDL_CreateGPUTexture(device_->handle(), &create_info);
+    if (!depth_texture_) {
+        SDL_LogError(SDL_LOG_CATEGORY_RENDER, "Failed to create depth target: %s", SDL_GetError());
+        return false;
+    }
+
+    depth_width_ = swapchain_width_;
+    depth_height_ = swapchain_height_;
+    return true;
+}
+
+void Renderer::release_depth_target() noexcept {
+    if (depth_texture_ && device_ && device_->is_valid()) {
+        SDL_ReleaseGPUTexture(device_->handle(), depth_texture_);
+    }
+    depth_texture_ = nullptr;
+    depth_width_ = 0;
+    depth_height_ = 0;
+}
+
 void Renderer::release_gpu_resources() {
     if (!device_ || !device_->is_valid()) {
         return;
     }
 
     SDL_GPUDevice* gpu = device_->handle();
+
+    release_depth_target();
 
     if (sampler_) {
         SDL_ReleaseGPUSampler(gpu, sampler_);
@@ -200,6 +256,8 @@ bool Renderer::begin_frame() {
     // Acquire swapchain texture
     if (!SDL_AcquireGPUSwapchainTexture(command_buffer_, window_, &swapchain_texture_, &swapchain_width_, &swapchain_height_)) {
         SDL_Log("Failed to acquire swapchain texture: %s", SDL_GetError());
+        SDL_CancelGPUCommandBuffer(command_buffer_);
+        command_buffer_ = nullptr;
         return false;
     }
 
@@ -213,9 +271,21 @@ bool Renderer::begin_frame() {
     return true;
 }
 
-void Renderer::clear(std::uint8_t r, std::uint8_t g, std::uint8_t b, std::uint8_t a) {
+bool Renderer::clear(
+    std::uint8_t r,
+    std::uint8_t g,
+    std::uint8_t b,
+    std::uint8_t a,
+    bool with_depth
+) {
     if (!command_buffer_ || !swapchain_texture_) {
-        return;
+        return false;
+    }
+    if (with_depth && !ensure_depth_target()) {
+        SDL_CancelGPUCommandBuffer(command_buffer_);
+        command_buffer_ = nullptr;
+        swapchain_texture_ = nullptr;
+        return false;
     }
 
     SDL_GPUColorTargetInfo color_target{};
@@ -229,7 +299,27 @@ void Renderer::clear(std::uint8_t r, std::uint8_t g, std::uint8_t b, std::uint8_
     color_target.load_op = SDL_GPU_LOADOP_CLEAR;
     color_target.store_op = SDL_GPU_STOREOP_STORE;
 
-    current_pass_ = SDL_BeginGPURenderPass(command_buffer_, &color_target, 1, nullptr);
+    SDL_GPUDepthStencilTargetInfo depth_target{};
+    depth_target.texture = with_depth ? depth_texture_ : nullptr;
+    depth_target.clear_depth = 1.0f;
+    depth_target.load_op = SDL_GPU_LOADOP_CLEAR;
+    depth_target.store_op = SDL_GPU_STOREOP_STORE;
+    depth_target.stencil_load_op = SDL_GPU_LOADOP_DONT_CARE;
+    depth_target.stencil_store_op = SDL_GPU_STOREOP_DONT_CARE;
+
+    current_pass_ = SDL_BeginGPURenderPass(
+        command_buffer_,
+        &color_target,
+        1,
+        with_depth ? &depth_target : nullptr
+    );
+    if (!current_pass_) {
+        SDL_LogError(SDL_LOG_CATEGORY_RENDER, "Failed to begin render pass: %s", SDL_GetError());
+        SDL_CancelGPUCommandBuffer(command_buffer_);
+        command_buffer_ = nullptr;
+        swapchain_texture_ = nullptr;
+    }
+    return current_pass_ != nullptr;
 }
 
 void Renderer::present() {
@@ -281,13 +371,9 @@ void Renderer::render(ecs::World& world, double alpha) {
 
     upload_vertex_data();
 
-    // Restart render pass for drawing (with LOAD to preserve clear color)
+    // Restart the colour-only pass after the sprite upload copy pass.
     if (had_render_pass && swapchain_texture_) {
-        SDL_GPUColorTargetInfo color_target{};
-        color_target.texture = swapchain_texture_;
-        color_target.load_op = SDL_GPU_LOADOP_LOAD;
-        color_target.store_op = SDL_GPU_STOREOP_STORE;
-        current_pass_ = SDL_BeginGPURenderPass(command_buffer_, &color_target, 1, nullptr);
+        (void)resume_render_pass(false);
     }
 
     draw_batches(*texture_manager);
@@ -318,6 +404,50 @@ void Renderer::collect_render_commands(ecs::World& world, double alpha) {
         cmd.layer = sprite.layer;
         render_commands_.push_back(cmd);
     });
+}
+
+bool Renderer::resume_render_pass(bool with_depth) {
+    if (current_pass_) {
+        return true;
+    }
+    if (!command_buffer_ || !swapchain_texture_ || (with_depth && !depth_texture_)) {
+        return false;
+    }
+
+    SDL_GPUColorTargetInfo color_target{};
+    color_target.texture = swapchain_texture_;
+    color_target.load_op = SDL_GPU_LOADOP_LOAD;
+    color_target.store_op = SDL_GPU_STOREOP_STORE;
+
+    SDL_GPUDepthStencilTargetInfo depth_target{};
+    if (with_depth) {
+        depth_target.texture = depth_texture_;
+        depth_target.load_op = SDL_GPU_LOADOP_LOAD;
+        depth_target.store_op = SDL_GPU_STOREOP_STORE;
+        depth_target.stencil_load_op = SDL_GPU_LOADOP_DONT_CARE;
+        depth_target.stencil_store_op = SDL_GPU_STOREOP_DONT_CARE;
+    }
+
+    current_pass_ = SDL_BeginGPURenderPass(
+        command_buffer_,
+        &color_target,
+        1,
+        with_depth ? &depth_target : nullptr
+    );
+    if (!current_pass_) {
+        SDL_LogError(
+            SDL_LOG_CATEGORY_RENDER,
+            "Failed to resume %s render pass: %s",
+            with_depth ? "depth-enabled" : "sprite",
+            SDL_GetError()
+        );
+    }
+    return current_pass_ != nullptr;
+}
+
+bool Renderer::begin_sprite_pass() {
+    end_render_pass();
+    return resume_render_pass(false);
 }
 
 void Renderer::sort_render_commands() {

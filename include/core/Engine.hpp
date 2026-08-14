@@ -4,6 +4,7 @@
 #include "Game.hpp"
 #include "../ecs/World.hpp"
 #include "../rendering/Renderer.hpp"
+#include "../rendering/TerrainRenderer.hpp"
 #include "../rendering/TextureManager.hpp"
 #include "../rendering/FontManager.hpp"
 #include "../rendering/UIRenderer.hpp"
@@ -51,6 +52,8 @@ public:
     [[nodiscard]] SDL_Window* window() noexcept { return window_; }
     [[nodiscard]] rendering::Renderer* renderer() noexcept { return renderer_.get(); }
     [[nodiscard]] const rendering::Renderer* renderer() const noexcept { return renderer_.get(); }
+    [[nodiscard]] rendering::TerrainRenderer* terrain_renderer() noexcept { return terrain_renderer_.get(); }
+    [[nodiscard]] const rendering::TerrainRenderer* terrain_renderer() const noexcept { return terrain_renderer_.get(); }
     
     [[nodiscard]] rendering::TextureManager* texture_manager() noexcept { return texture_manager_.get(); }
     [[nodiscard]] const rendering::TextureManager* texture_manager() const noexcept { return texture_manager_.get(); }
@@ -83,6 +86,7 @@ private:
     
     // Rendering
     std::unique_ptr<rendering::Renderer> renderer_;
+    std::unique_ptr<rendering::TerrainRenderer> terrain_renderer_;
     std::unique_ptr<rendering::TextureManager> texture_manager_;
     std::unique_ptr<rendering::FontManager> font_manager_;
     std::unique_ptr<rendering::UIRenderer> ui_renderer_;
