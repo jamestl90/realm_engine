@@ -57,6 +57,8 @@ struct GreaterRealmMountainPeak {
     float priority{0.0f};
 };
 
+inline constexpr float DEFAULT_MOUNTAIN_STRENGTH = 0.35f;
+
 struct GreaterRealmGeneratorSettings {
     Seed seed{1};
     std::uint32_t width{256};
@@ -78,7 +80,7 @@ struct GreaterRealmGeneratorSettings {
 
     float island_bias{0.5f};
     float base_elevation_weight{1.0f};
-    float mountain_weight{0.35f};
+    float mountain_weight{DEFAULT_MOUNTAIN_STRENGTH};
     float mountain_peak_spacing{28.0f};
     float mountain_peak_radius{36.0f};
     float mountain_peak_jaggedness{0.25f};

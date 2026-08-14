@@ -12,6 +12,7 @@ This document tracks the procedural generation capabilities currently present in
 - Keeps broad land/water topology independent from inland terrain weights.
 - Builds normalized final elevation with separate land-relief and water-depth paths.
 - Shapes land with base elevation, explicit mountain peaks, ridges, valleys, and controlled terrain noise.
+- Reserves fixed mountain headroom while normalizing land relief, then applies mountain strength only through the peak-distance influence. Changing mountain strength does not alter the denominator or shift uninfluenced terrain, and the default strength preserves the established terrain and drainage output.
 - Selects deterministic land-based mountain peaks with configurable spacing, then propagates a jagged distance field to form coherent mountain masses.
 - Exports peak records plus per-cell peak distance, influence, and peak flags for hydrology and tooling.
 - Applies terrain noise after base relief normalization so its weight remains independently tunable.

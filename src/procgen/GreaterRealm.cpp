@@ -441,7 +441,7 @@ static GreaterRealmMap generate_greater_realm_impl(
     const float valley_weight = std::max(settings.valley_weight, 0.0f);
     const float terrain_noise_weight = std::max(settings.terrain_noise_weight, 0.0f);
     const float relief_min = -valley_weight;
-    const float relief_max = base_weight + mountain_weight + ridge_weight;
+    const float relief_max = base_weight + DEFAULT_MOUNTAIN_STRENGTH + ridge_weight;
     const float relief_range = std::max(relief_max - relief_min, 0.0001f);
 
     for (std::size_t i = 0; i < map.cells.size(); ++i) {

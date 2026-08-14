@@ -251,6 +251,51 @@ bool test_inland_relief_preserves_landmass_topology() {
     return ok;
 }
 
+bool test_mountain_strength_changes_only_local_mountain_relief() {
+    procgen::GreaterRealmGeneratorSettings settings;
+    settings.seed = 515151;
+    settings.width = 128;
+    settings.height = 96;
+    settings.mountain_weight = 0.0f;
+    const auto without_mountains = procgen::generate_greater_realm(settings);
+
+    settings.mountain_weight = 1.0f;
+    const auto strong_mountains = procgen::generate_greater_realm(settings);
+
+    bool water_unchanged = true;
+    bool uninfluenced_land_unchanged = true;
+    bool land_never_lowered = true;
+    std::size_t influenced_land_count = 0;
+    std::size_t uninfluenced_land_count = 0;
+    float influenced_elevation_gain = 0.0f;
+    for (std::size_t index = 0; index < without_mountains.cells.size(); ++index) {
+        const auto& baseline = without_mountains.cells[index];
+        const auto& stronger = strong_mountains.cells[index];
+        if (baseline.is_water) {
+            water_unchanged &= baseline.elevation == stronger.elevation;
+            continue;
+        }
+
+        land_never_lowered &= stronger.elevation >= baseline.elevation;
+        if (baseline.mountain_influence == 0.0f) {
+            ++uninfluenced_land_count;
+            uninfluenced_land_unchanged &= baseline.elevation == stronger.elevation;
+        } else {
+            ++influenced_land_count;
+            influenced_elevation_gain += stronger.elevation - baseline.elevation;
+        }
+    }
+
+    bool ok = true;
+    ok &= require(topology_matches(without_mountains, strong_mountains), "mountain strength preserves land and ocean topology");
+    ok &= require(water_unchanged, "mountain strength does not change water elevation");
+    ok &= require(influenced_land_count > 0, "test map contains mountain-influenced land");
+    ok &= require(uninfluenced_land_count > 0, "test map contains land outside mountain influence");
+    ok &= require(uninfluenced_land_unchanged, "mountain strength does not shift land outside mountain influence");
+    ok &= require(land_never_lowered, "stronger mountains never lower land elevation");
+    return ok && require(influenced_elevation_gain > 1.0f, "mountain strength raises localized influenced terrain");
+}
+
 bool test_terrain_noise_changes_land_relief_only() {
     procgen::GreaterRealmGeneratorSettings settings;
     settings.seed = 11223;
@@ -641,6 +686,7 @@ int main() {
         test_map_cell_lookup,
         test_coastal_land_preserves_elevation_form,
         test_inland_relief_preserves_landmass_topology,
+        test_mountain_strength_changes_only_local_mountain_relief,
         test_terrain_noise_changes_land_relief_only,
         test_sea_level_controls_landmass_topology,
         test_ocean_depth_preserves_topology,
