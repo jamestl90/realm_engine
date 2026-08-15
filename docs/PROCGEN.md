@@ -8,7 +8,7 @@ This document tracks the procedural generation capabilities currently present in
 - Uses a regular grid with configurable width, height, and cell size.
 - The regular grid is the deliberate canonical representation following task 032's measured dual-mesh evaluation; direct indexing, compact implicit adjacency, and local-tile handoff outweigh an authoritative irregular mesh for current engine goals.
 - Produces a signed landmass elevation field following Mapgen4: negative values are water, positive values are land, and zero is the fixed coastline.
-- Combines unscaled five-octave land-shape noise at frequencies `1, 2, 4, 8, 16` with Mapgen4's square-distance island constraint and coastline-localized noise.
+- Combines unscaled five-octave land-shape noise at frequencies `1, 2, 4, 8, 16` with Mapgen4's square-distance island constraint and coastline noise sampled at fixed frequencies `16, 32, 64`, weighted `1, 1/2, 1/4`, and attenuated by `1 - e^4`.
 - Applies Mapgen4's automatic positive-land mountain hint to the signed landmass field before authored constraints and coastline noise, so stronger inland signed constraints can locally select mountain relief without changing land/water sign.
 - Keeps broad land/water topology independent from inland terrain weights.
 - Builds normalized final elevation with separate land-relief and water-depth paths around a fixed `0.5` output waterline; adjustable sea level is not a generation input.
@@ -65,6 +65,7 @@ Mapgen4 is the reference for the generator's layered terrain behavior, not a req
 - The engine keeps Mapgen4's fixed signed coastline threshold while exporting final elevation normalized to `0..1`, with water below and land above a fixed `0.5` output waterline.
 - The automatic positive-land mountain hint is adopted in the signed constraint stage. Explicit peak fields still own the mountain target shape; the hint only controls where the signed terrain is strong enough to prefer that target.
 - Mountain peak sites are sampled independently from authored constraints and land/water classification. Spacing changes resample the fixed site field; jaggedness, radius, mountain strength, and other relief-only controls preserve peak identities.
+- Coastline noise uses Mapgen4's signed attenuation `1 - e^4`, fixed `16, 32, 64` spectrum with `1, 1/2, 1/4` weights, `0.01` default strength, and `0..0.1` control range.
 - Ridge, valley, and terrain-noise layers remain engine extensions after the signed-constraint, low-hill, and peak-distance terrain composition and preserve control locality.
 - Terrain forms, explicit coastline metadata, coast distance, and slope are engine data contracts beyond Mapgen4's elevation output (tasks 016 and 025).
 - Drainage uses conditioned terrain and terrain-only catchment area. Generated rainfall, humidity, moisture, and current river discharge are deliberately excluded in favor of future runtime weather (tasks 027 and 039).
@@ -88,7 +89,7 @@ Task 049 records the alignment audit. Differences not listed above require an ex
 - Terrain noise and ocean depth use larger tuning steps and contrast-enhanced debug shading so changes are visible.
 - Debug builds report per-stage generation timings plus end-to-end control-to-preview timing through the Debug-only `REALM_ENABLE_PROCGEN_PROFILING` definition; profiling code is compiled out of production builds.
 - `REALM_OPTIMIZE_PROCGEN_DEBUG` defaults to `ON`, compiling the interactive procgen runtime with optimization in Debug builds while dedicated test targets retain their normal Debug checks. Disable it when stepping through procgen at instruction level is more important than interactive tuning speed.
-- Automated tests cover output shape, deterministic seeds, map lookup, signed constraints, topology stability, ocean connectivity, sea-level invariance, terrain statistics, hill/mountain relief-stage separation, land-relief control ranges, stable fixed peak selection/spacing/distribution/dormancy/distance fields, one-stage authored-constraint composition, constraint interpolation/serialization, preview-coordinate mapping, paint interaction state, brush setting clamping/effect, drainage invariants, catchment accumulation, channel connectivity, and debug-image output.
+- Automated tests cover output shape, deterministic seeds, map lookup, signed constraints, topology stability, ocean connectivity, sea-level invariance, Mapgen4 coastline attenuation, terrain statistics, hill/mountain relief-stage separation, land-relief control ranges, stable fixed peak selection/spacing/distribution/dormancy/distance fields, one-stage authored-constraint composition, constraint interpolation/serialization, preview-coordinate mapping, paint interaction state, brush setting clamping/effect, drainage invariants, catchment accumulation, channel connectivity, and debug-image output.
 - Test code is compiled only when `REALM_BUILD_TESTS=ON` and does not enter release builds.
 
 ## Not Yet Supported

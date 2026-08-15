@@ -155,6 +155,20 @@ bool topology_matches(const procgen::GreaterRealmMap& a, const procgen::GreaterR
     return true;
 }
 
+bool landmass_fields_match(const procgen::GreaterRealmMap& a, const procgen::GreaterRealmMap& b) {
+    if (a.width != b.width || a.height != b.height || a.cells.size() != b.cells.size()) {
+        return false;
+    }
+
+    for (std::size_t i = 0; i < a.cells.size(); ++i) {
+        if (a.cells[i].landmass_elevation != b.cells[i].landmass_elevation
+            || a.cells[i].is_water != b.cells[i].is_water) {
+            return false;
+        }
+    }
+    return true;
+}
+
 bool ocean_flags_match_boundary_connectivity(const procgen::GreaterRealmMap& map) {
     std::vector<bool> expected(map.cells.size(), false);
     std::vector<std::size_t> open;
@@ -301,6 +315,7 @@ bool test_mountain_strength_changes_only_local_mountain_relief() {
     settings.seed = 515151;
     settings.width = 128;
     settings.height = 96;
+    settings.mountain_peak_radius = 14.0f;
     settings.mountain_weight = 0.0f;
     const auto without_mountains = procgen::generate_greater_realm(settings);
 
@@ -386,7 +401,10 @@ bool test_land_relief_stages_are_inspectable_and_separated() {
 
 bool test_relief_control_ranges_preserve_topology_and_monotonicity() {
     constexpr std::array seeds{314159ull, 515151ull, 616161ull};
-    bool ok = true;
+    bool ok = require(
+        procgen::GreaterRealmGeneratorSettings{}.coastline_noise_weight == 0.01f,
+        "coastline detail defaults to Mapgen4's 0.01 strength"
+    );
 
     for (const auto seed : seeds) {
         procgen::GreaterRealmGeneratorSettings settings;
@@ -491,7 +509,10 @@ bool test_mountain_blend_uses_local_positive_constraint() {
 
 bool test_terrain_noise_range_is_masked_to_land_relief() {
     constexpr std::array seeds{314159ull, 515151ull, 616161ull};
-    bool ok = true;
+    bool ok = require(
+        procgen::GreaterRealmGeneratorSettings{}.coastline_noise_weight == 0.01f,
+        "coastline detail defaults to Mapgen4's 0.01 strength"
+    );
 
     for (const auto seed : seeds) {
         procgen::GreaterRealmGeneratorSettings settings;
@@ -553,6 +574,111 @@ bool test_terrain_noise_changes_land_relief_only() {
     ok &= require(topology_matches(smooth, noisy), "terrain noise does not change land or ocean topology");
     ok &= require(water_elevation_unchanged, "terrain noise does not change water elevation");
     ok &= require(land_elevation_difference > 1.0f, "terrain noise changes land elevation");
+    return ok;
+}
+
+bool test_coastline_noise_matches_mapgen4_shape_and_scale() {
+    constexpr std::array seeds{314159ull, 515151ull, 616161ull};
+    bool ok = require(
+        procgen::GreaterRealmGeneratorSettings{}.coastline_noise_weight == 0.01f,
+        "coastline detail defaults to Mapgen4's 0.01 strength"
+    );
+
+    for (const auto seed : seeds) {
+        procgen::GreaterRealmGeneratorSettings settings;
+        settings.seed = seed;
+        settings.width = 128;
+        settings.height = 96;
+        settings.coastline_noise_weight = 0.0f;
+        const auto unperturbed = procgen::generate_greater_realm(settings);
+
+        settings.coastline_noise_weight = 0.01f;
+        const auto default_detail = procgen::generate_greater_realm(settings);
+
+        settings.coastline_noise_weight = 0.10f;
+        const auto strong_detail = procgen::generate_greater_realm(settings);
+        const auto repeated_strong = procgen::generate_greater_realm(settings);
+
+        std::size_t mid_signed_count = 0;
+        std::size_t saturated_count = 0;
+        float default_delta_sum = 0.0f;
+        float strong_delta_sum = 0.0f;
+        float mid_signed_delta_sum = 0.0f;
+        float saturated_max_delta = 0.0f;
+        for (std::size_t i = 0; i < unperturbed.cells.size(); ++i) {
+            const float base_signed = std::abs(unperturbed.cells[i].landmass_elevation);
+            const float default_delta = std::abs(
+                default_detail.cells[i].landmass_elevation - unperturbed.cells[i].landmass_elevation
+            );
+            const float strong_delta = std::abs(
+                strong_detail.cells[i].landmass_elevation - unperturbed.cells[i].landmass_elevation
+            );
+            default_delta_sum += default_delta;
+            strong_delta_sum += strong_delta;
+
+            if (base_signed >= 0.45f && base_signed <= 0.75f) {
+                ++mid_signed_count;
+                mid_signed_delta_sum += strong_delta;
+            }
+            if (base_signed >= 0.55f) {
+                ++saturated_count;
+                saturated_max_delta = std::max(saturated_max_delta, strong_delta);
+            }
+        }
+
+        ok &= require(maps_match(strong_detail, repeated_strong), "coastline noise response is deterministic");
+        ok &= require(default_delta_sum > 0.1f, "default coastline detail perturbs the signed coastline field");
+        ok &= require(strong_delta_sum > default_delta_sum * 5.0f, "Mapgen4's 0..0.1 coastline range has a substantial continuous response");
+        ok &= require(mid_signed_count > 0, "test map contains mid-range signed constraints beyond the old narrow mask");
+        ok &= require(mid_signed_delta_sum > 0.01f, "Mapgen4 attenuation continues beyond the old abs(e) < 0.30 coastline mask");
+        ok &= require(saturated_count > 0, "test map contains upper-half signed constraints");
+        ok &= require(saturated_max_delta <= 0.1751f, "Mapgen4's weighted coastline spectrum bounds maximum perturbation");
+    }
+
+    return ok;
+}
+
+bool test_coastline_noise_is_independent_from_relief_and_depth_controls() {
+    procgen::GreaterRealmGeneratorSettings settings;
+    settings.seed = 424242;
+    settings.width = 96;
+    settings.height = 72;
+    settings.coastline_noise_weight = 0.0f;
+    const auto baseline_without_detail = procgen::generate_greater_realm(settings);
+
+    settings.coastline_noise_weight = 0.05f;
+    const auto baseline_with_detail = procgen::generate_greater_realm(settings);
+
+    auto changed_controls = settings;
+    changed_controls.base_elevation_weight = 2.0f;
+    changed_controls.mountain_weight = 1.3f;
+    changed_controls.ridge_weight = 1.5f;
+    changed_controls.valley_weight = 1.5f;
+    changed_controls.terrain_noise_weight = 2.0f;
+    changed_controls.ocean_depth_weight = 3.0f;
+    changed_controls.coastline_noise_weight = 0.0f;
+    const auto changed_without_detail = procgen::generate_greater_realm(changed_controls);
+
+    changed_controls.coastline_noise_weight = 0.05f;
+    const auto changed_with_detail = procgen::generate_greater_realm(changed_controls);
+
+    bool ok = true;
+    ok &= require(
+        landmass_fields_match(baseline_without_detail, changed_without_detail),
+        "inland relief and ocean depth controls do not change the unperturbed signed landmass field"
+    );
+    ok &= require(
+        landmass_fields_match(baseline_with_detail, changed_with_detail),
+        "inland relief and ocean depth controls do not change coastline-noise signed perturbation"
+    );
+    ok &= require(
+        topology_matches(baseline_with_detail, changed_with_detail),
+        "coastline detail topology remains independent from relief and depth controls"
+    );
+    ok &= require(
+        elevation_difference_sum(baseline_with_detail, changed_with_detail) > 1.0f,
+        "relief and depth controls can still change final elevation after coastline topology is fixed"
+    );
     return ok;
 }
 
@@ -932,6 +1058,8 @@ int main() {
         test_mountain_blend_uses_local_positive_constraint,
         test_terrain_noise_changes_land_relief_only,
         test_terrain_noise_range_is_masked_to_land_relief,
+        test_coastline_noise_matches_mapgen4_shape_and_scale,
+        test_coastline_noise_is_independent_from_relief_and_depth_controls,
         test_sea_level_is_not_a_generation_input,
         test_ocean_depth_preserves_topology,
         test_island_bias_matches_mapgen4_contract,

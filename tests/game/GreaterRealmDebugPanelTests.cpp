@@ -124,7 +124,10 @@ bool test_panel_sliders_update_settings_and_callbacks() {
 
     std::vector<ui::Slider*> sliders;
     collect_sliders(root.get(), sliders);
-    bool ok = require(sliders.size() >= 16, "debug panel builds reusable sliders for presentation, generator, and brush settings");
+    bool ok = require(sliders.size() >= 15, "debug panel builds reusable sliders for presentation, generator, and brush settings");
+    ok &= require(nearly_equal(sliders[2]->value(), 0.01f), "coast-detail slider starts at Mapgen4's default");
+    ok &= require(nearly_equal(sliders[2]->minimum(), 0.0f), "coast-detail slider starts at zero");
+    ok &= require(nearly_equal(sliders[2]->maximum(), 0.10f), "coast-detail slider uses Mapgen4's upper bound");
 
     std::vector<ui::Button*> buttons;
     collect_buttons(root.get(), buttons);

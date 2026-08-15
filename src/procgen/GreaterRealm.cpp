@@ -394,22 +394,34 @@ static GreaterRealmMap generate_greater_realm_impl(
                 authored_influence
             );
 
-            const float coastline_noise = fbm(
+            const float coastline_noise4 = value_noise(
                 settings.seed,
-                u,
-                v,
-                settings.coastline_noise_frequency,
-                59ull,
-                4
+                centered_x + 15.0f / 16.0f,
+                centered_y + 15.0f / 16.0f,
+                16.0f,
+                59ull
             ) * 2.0f - 1.0f;
-            const float coastline_proximity = 1.0f - smoothstep(
-                0.0f,
-                0.30f,
-                std::abs(broad_constraint)
-            );
+            const float coastline_noise5 = value_noise(
+                settings.seed,
+                centered_x + 31.0f / 32.0f,
+                centered_y + 31.0f / 32.0f,
+                32.0f,
+                59ull
+            ) * 2.0f - 1.0f;
+            const float coastline_noise6 = value_noise(
+                settings.seed,
+                centered_x + 67.0f / 64.0f,
+                centered_y + 67.0f / 64.0f,
+                64.0f,
+                59ull
+            ) * 2.0f - 1.0f;
+            const float coastline_noise = coastline_noise4
+                + coastline_noise5 * 0.5f
+                + coastline_noise6 * 0.25f;
+            const float coastline_attenuation = 1.0f - std::pow(broad_constraint, 4.0f);
             const float landmass_elevation = std::clamp(
                 broad_constraint
-                    + coastline_noise * std::max(settings.coastline_noise_weight, 0.0f) * coastline_proximity,
+                    + coastline_noise * std::max(settings.coastline_noise_weight, 0.0f) * coastline_attenuation,
                 -1.0f,
                 1.0f
             );

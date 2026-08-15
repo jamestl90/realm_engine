@@ -77,7 +77,6 @@ struct GreaterRealmGeneratorSettings {
     float base_elevation_frequency{5.0f};
     float ridge_frequency{9.0f};
     float valley_frequency{6.0f};
-    float coastline_noise_frequency{14.0f};
     float terrain_noise_frequency{18.0f};
     float ocean_noise_frequency{8.0f};
 
@@ -89,11 +88,11 @@ struct GreaterRealmGeneratorSettings {
     float mountain_peak_jaggedness{0.25f};
     float ridge_weight{0.25f};
     float valley_weight{0.25f};
-    float coastline_noise_weight{0.08f};
+    float coastline_noise_weight{0.01f};
     float terrain_noise_weight{0.12f};
     float ocean_depth_weight{1.0f};
 
-    float river_min_drainage_area{700.0f};
+    float river_min_drainage_area{500.0f};
     float river_width_scale{0.25f};
 };
 
