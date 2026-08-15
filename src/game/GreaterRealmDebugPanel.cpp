@@ -419,7 +419,6 @@ std::unique_ptr<ui::UIElement> GreaterRealmDebugPanel::build(
     add_setting_slider(*left_settings, "Island bias", settings.island_bias, &m_island_bias_text, &m_island_bias_slider, &procgen::GreaterRealmGeneratorSettings::island_bias, 0.05f, 0.0f, 1.0f);
     add_setting_slider(*left_settings, "Coast detail", settings.coastline_noise_weight, &m_coastline_noise_text, &m_coastline_noise_slider, &procgen::GreaterRealmGeneratorSettings::coastline_noise_weight, 0.01f, 0.0f, 0.40f);
     add_setting_slider(*left_settings, "Base relief", settings.base_elevation_weight, &m_base_elevation_text, &m_base_elevation_slider, &procgen::GreaterRealmGeneratorSettings::base_elevation_weight, 0.05f, 0.0f, 2.0f);
-    add_setting_slider(*left_settings, "Sea", settings.sea_level, &m_sea_text, &m_sea_slider, &procgen::GreaterRealmGeneratorSettings::sea_level, 0.02f, 0.10f, 0.90f);
     add_setting_slider(*left_settings, "Mountain strength", settings.mountain_weight, &m_mountain_text, &m_mountain_slider, &procgen::GreaterRealmGeneratorSettings::mountain_weight, 0.05f, 0.0f, 1.5f);
     add_setting_slider(*left_settings, "Peak spacing", settings.mountain_peak_spacing, &m_peak_spacing_text, &m_peak_spacing_slider, &procgen::GreaterRealmGeneratorSettings::mountain_peak_spacing, 4.0f, 8.0f, 80.0f);
     add_setting_slider(*left_settings, "Peak radius", settings.mountain_peak_radius, &m_peak_radius_text, &m_peak_radius_slider, &procgen::GreaterRealmGeneratorSettings::mountain_peak_radius, 4.0f, 4.0f, 100.0f);
@@ -551,7 +550,6 @@ void GreaterRealmDebugPanel::update(const procgen::GreaterRealmMap& map) {
     }
 
     if (m_seed_text) m_seed_text->setText(seed_text(m_settings->seed));
-    if (m_sea_text) m_sea_text->setText(setting_text("Sea", m_settings->sea_level));
     if (m_island_bias_text) m_island_bias_text->setText(setting_text("Island bias", m_settings->island_bias));
     if (m_coastline_noise_text) m_coastline_noise_text->setText(setting_text("Coast detail", m_settings->coastline_noise_weight));
     if (m_base_elevation_text) m_base_elevation_text->setText(setting_text("Base relief", m_settings->base_elevation_weight));
@@ -568,7 +566,6 @@ void GreaterRealmDebugPanel::update(const procgen::GreaterRealmMap& map) {
         m_elevation_scale_text->setText(setting_text("Elevation scale", m_presentation_settings->elevation_scale));
     }
 
-    if (m_sea_slider) m_sea_slider->setValue(m_settings->sea_level);
     if (m_island_bias_slider) m_island_bias_slider->setValue(m_settings->island_bias);
     if (m_coastline_noise_slider) m_coastline_noise_slider->setValue(m_settings->coastline_noise_weight);
     if (m_base_elevation_slider) m_base_elevation_slider->setValue(m_settings->base_elevation_weight);

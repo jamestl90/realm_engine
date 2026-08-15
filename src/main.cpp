@@ -1,7 +1,7 @@
 #define SDL_DISABLE_OLD_NAMES
 
 #include "core/Engine.hpp"
-#include "game/RogueFarmGame.hpp"
+#include "game/test_app.hpp"
 #include <memory>
 
 int main(int argc, char* argv[]) {
@@ -10,12 +10,11 @@ int main(int argc, char* argv[]) {
 
     core::Engine engine;
 
-    if (!engine.initialize("Rogue Farm Game", 2460, 1440)) {
+    if (!engine.initialize("test_app", 2460, 1440)) {
         return 1;
     }
 
-    // Set up the game
-    engine.set_game(std::make_unique<game::RogueFarmGame>());
+    engine.set_game(std::make_unique<game::TestApp>());
 
     engine.run();
 

@@ -248,17 +248,17 @@ bool test_constraint_tools_route_through_signed_field_once() {
         ok &= require(outside.elevation == baseline_outside.elevation, "outside brush final elevation is unchanged");
         ok &= require(center.is_water == expectation.center_is_water, expectation.name);
         if (!center.is_water) {
-            ok &= require(center.elevation > settings.sea_level, "positive constraint center becomes land above sea level");
+            ok &= require(center.elevation > procgen::NORMALIZED_WATERLINE, "positive constraint center becomes land above the fixed waterline");
             ok &= require(center.hill_relief == center.mountain_relief, "zero mountain strength keeps authored land on hill relief path");
         } else {
-            ok &= require(center.elevation < settings.sea_level, "negative constraint center becomes water below sea level");
+            ok &= require(center.elevation < procgen::NORMALIZED_WATERLINE, "negative constraint center becomes water below the fixed waterline");
         }
         center_elevations[tool_index++] = center.elevation;
     }
 
     ok &= require(center_elevations[0] < center_elevations[1], "ocean center is deeper than shallow-water center");
-    ok &= require(center_elevations[1] < settings.sea_level, "shallow-water center remains below sea level");
-    ok &= require(center_elevations[2] > settings.sea_level, "valley center remains above sea level");
+    ok &= require(center_elevations[1] < procgen::NORMALIZED_WATERLINE, "shallow-water center remains below the fixed waterline");
+    ok &= require(center_elevations[2] > procgen::NORMALIZED_WATERLINE, "valley center remains above the fixed waterline");
     ok &= require(center_elevations[2] < center_elevations[3], "mountain center is higher than valley center through signed relief semantics");
     return ok;
 }

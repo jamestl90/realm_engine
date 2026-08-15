@@ -60,6 +60,7 @@ struct GreaterRealmMountainPeak {
 };
 
 inline constexpr float DEFAULT_MOUNTAIN_STRENGTH = 0.35f;
+inline constexpr float NORMALIZED_WATERLINE = 0.5f;
 
 struct GreaterRealmGeneratorSettings {
     Seed seed{1};
@@ -67,7 +68,7 @@ struct GreaterRealmGeneratorSettings {
     std::uint32_t height{256};
     float cell_size{1.0f};
 
-    float sea_level{0.5f};
+    float sea_level{NORMALIZED_WATERLINE};
 
     float mountain_threshold{0.82f};
     float highland_threshold{0.68f};

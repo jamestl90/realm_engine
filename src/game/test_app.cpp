@@ -1,4 +1,4 @@
-#include "RogueFarmGame.hpp"
+#include "test_app.hpp"
 #include "../../include/core/Engine.hpp"
 #include "../../include/core/Config.hpp"
 #include "../../include/core/Utils.hpp"
@@ -25,7 +25,7 @@
 namespace game {
 
 #if defined(REALM_ENABLE_PROCGEN_DEBUG_VIEW)
-bool RogueFarmGame::regenerate_procgen_debug_map(core::Engine& engine) {
+bool TestApp::regenerate_procgen_debug_map(core::Engine& engine) {
     m_procgen_paint_dirty = false;
 #if defined(REALM_ENABLE_PROCGEN_PROFILING)
     using ProfileClock = std::chrono::steady_clock;
@@ -38,7 +38,7 @@ bool RogueFarmGame::regenerate_procgen_debug_map(core::Engine& engine) {
 #endif
     const auto image = procgen::build_greater_realm_debug_image(
         m_procgen_map,
-        m_procgen_settings.sea_level,
+        procgen::NORMALIZED_WATERLINE,
         m_procgen_debug_options
     );
 #if defined(REALM_ENABLE_PROCGEN_PROFILING)
@@ -75,11 +75,11 @@ bool RogueFarmGame::regenerate_procgen_debug_map(core::Engine& engine) {
     );
 #endif
     SDL_Log(
-        "Generated procgen debug map: seed=%llu size=%ux%u sea=%.2f island=%.2f coast=%.2f base=%.2f mountain=%.2f peaks=%zu ridge=%.2f valley=%.2f noise=%.2f ocean=%.2f channel_area=%.2f channels=%zu",
+        "Generated procgen debug map: seed=%llu size=%ux%u waterline=%.2f island=%.2f coast=%.2f base=%.2f mountain=%.2f peaks=%zu ridge=%.2f valley=%.2f noise=%.2f ocean=%.2f channel_area=%.2f channels=%zu",
         m_procgen_settings.seed,
         m_procgen_settings.width,
         m_procgen_settings.height,
-        m_procgen_settings.sea_level,
+        procgen::NORMALIZED_WATERLINE,
         m_procgen_settings.island_bias,
         m_procgen_settings.coastline_noise_weight,
         m_procgen_settings.base_elevation_weight,
@@ -95,21 +95,21 @@ bool RogueFarmGame::regenerate_procgen_debug_map(core::Engine& engine) {
     return true;
 }
 
-bool RogueFarmGame::refresh_procgen_debug_view(core::Engine& engine) {
+bool TestApp::refresh_procgen_debug_view(core::Engine& engine) {
     if (!m_procgen_map.has_expected_cell_count()) {
         return false;
     }
 
     const auto image = procgen::build_greater_realm_debug_image(
         m_procgen_map,
-        m_procgen_settings.sea_level,
+        procgen::NORMALIZED_WATERLINE,
         m_procgen_debug_options
     );
     return replace_procgen_debug_texture(engine, image)
         && refresh_procgen_terrain_mesh(engine, image);
 }
 
-bool RogueFarmGame::replace_procgen_debug_texture(
+bool TestApp::replace_procgen_debug_texture(
     core::Engine& engine,
     const procgen::DebugImage& image
 ) {
@@ -153,7 +153,7 @@ bool RogueFarmGame::replace_procgen_debug_texture(
     return true;
 }
 
-bool RogueFarmGame::refresh_procgen_terrain_mesh(
+bool TestApp::refresh_procgen_terrain_mesh(
     core::Engine& engine,
     const procgen::DebugImage& image
 ) {
@@ -165,7 +165,7 @@ bool RogueFarmGame::refresh_procgen_terrain_mesh(
     std::vector<float> relative_elevations;
     relative_elevations.reserve(m_procgen_map.cells.size());
     for (const auto& cell : m_procgen_map.cells) {
-        relative_elevations.push_back(cell.elevation - m_procgen_settings.sea_level);
+        relative_elevations.push_back(cell.elevation - procgen::NORMALIZED_WATERLINE);
     }
 
     auto mesh = rendering::build_heightfield_mesh(
@@ -185,7 +185,7 @@ bool RogueFarmGame::refresh_procgen_terrain_mesh(
     return true;
 }
 
-void RogueFarmGame::apply_procgen_presentation(core::Engine& engine) noexcept {
+void TestApp::apply_procgen_presentation(core::Engine& engine) noexcept {
     const bool show_tilted_3d = m_procgen_presentation.mode
         == GreaterRealmPresentationMode::Tilted3D;
     if (auto* terrain_renderer = engine.terrain_renderer()) {
@@ -202,7 +202,7 @@ void RogueFarmGame::apply_procgen_presentation(core::Engine& engine) noexcept {
     }
 }
 
-procgen::TerrainPreviewBounds RogueFarmGame::procgen_preview_bounds(
+procgen::TerrainPreviewBounds TestApp::procgen_preview_bounds(
     core::Engine& engine
 ) const noexcept {
     if (m_procgen_presentation.mode == GreaterRealmPresentationMode::Tilted3D) {
@@ -224,7 +224,7 @@ procgen::TerrainPreviewBounds RogueFarmGame::procgen_preview_bounds(
     };
 }
 
-void RogueFarmGame::apply_procgen_paint_sample(
+void TestApp::apply_procgen_paint_sample(
     const procgen::TerrainConstraintPaintSample& sample
 ) noexcept {
     m_procgen_constraints.paint(
@@ -238,8 +238,8 @@ void RogueFarmGame::apply_procgen_paint_sample(
 }
 #endif
 
-void RogueFarmGame::on_startup(core::Engine& engine) {
-    SDL_Log("RogueFarmGame starting up...");
+void TestApp::on_startup(core::Engine& engine) {
+    SDL_Log("TestApp starting up...");
 
     auto* ui_renderer = engine.ui_renderer();
     if (ui_renderer) {
@@ -261,11 +261,10 @@ void RogueFarmGame::on_startup(core::Engine& engine) {
     m_procgen_settings.seed = 8675309;
     m_procgen_settings.width = 256;
     m_procgen_settings.height = 192;
-    m_procgen_settings.sea_level = 0.5f;
     m_procgen_map = procgen::generate_greater_realm(m_procgen_settings, m_procgen_constraints);
     const auto initial_image = procgen::build_greater_realm_debug_image(
         m_procgen_map,
-        m_procgen_settings.sea_level,
+        procgen::NORMALIZED_WATERLINE,
         m_procgen_debug_options
     );
 #else
@@ -416,10 +415,10 @@ void RogueFarmGame::on_startup(core::Engine& engine) {
     ui_manager.setRoot(std::move(root));
 #endif
 
-    SDL_Log("RogueFarmGame startup complete");
+    SDL_Log("TestApp startup complete");
 }
 
-void RogueFarmGame::on_update(core::Engine& engine, double dt) {
+void TestApp::on_update(core::Engine& engine, double dt) {
     (void)dt;
 #if defined(REALM_ENABLE_PROCGEN_DEBUG_VIEW)
     if (m_procgen_paint_dirty) {
@@ -430,7 +429,7 @@ void RogueFarmGame::on_update(core::Engine& engine, double dt) {
 #endif
 }
 
-void RogueFarmGame::on_event(core::Engine& engine, const SDL_Event& event, bool ui_consumed) {
+void TestApp::on_event(core::Engine& engine, const SDL_Event& event, bool ui_consumed) {
 #if defined(REALM_ENABLE_PROCGEN_DEBUG_VIEW)
     if (event.type == SDL_EVENT_WINDOW_FOCUS_LOST
         || event.type == SDL_EVENT_WINDOW_MOUSE_LEAVE) {
@@ -477,7 +476,7 @@ void RogueFarmGame::on_event(core::Engine& engine, const SDL_Event& event, bool 
 #endif
 }
 
-void RogueFarmGame::on_shutdown(core::Engine& engine) {
+void TestApp::on_shutdown(core::Engine& engine) {
 #if defined(REALM_ENABLE_PROCGEN_DEBUG_VIEW)
     if (auto* terrain_renderer = engine.terrain_renderer()) {
         terrain_renderer->set_enabled(false);
@@ -493,10 +492,10 @@ void RogueFarmGame::on_shutdown(core::Engine& engine) {
         engine.world().destroy_entity(m_test_entity);
     }
 
-    SDL_Log("RogueFarmGame shutting down...");
+    SDL_Log("TestApp shutting down...");
 }
 
-void RogueFarmGame::on_resized(core::Engine& engine, int width, int height) {
+void TestApp::on_resized(core::Engine& engine, int width, int height) {
     (void)engine;
     (void)width;
     (void)height;

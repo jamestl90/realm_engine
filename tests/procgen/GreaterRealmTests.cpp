@@ -262,10 +262,10 @@ bool test_generated_map_shape() {
 
         if (cell.is_water) {
             ok &= require(cell.landmass_elevation <= 0.0f, "water has a non-positive landmass constraint");
-            ok &= require(cell.elevation <= settings.sea_level, "water elevation does not exceed sea level");
+            ok &= require(cell.elevation <= procgen::NORMALIZED_WATERLINE, "water elevation does not exceed the fixed waterline");
         } else {
             ok &= require(cell.landmass_elevation > 0.0f, "land has a positive landmass constraint");
-            ok &= require(cell.elevation > settings.sea_level, "land elevation exceeds sea level");
+            ok &= require(cell.elevation > procgen::NORMALIZED_WATERLINE, "land elevation exceeds the fixed waterline");
         }
     }
 
@@ -556,18 +556,24 @@ bool test_terrain_noise_changes_land_relief_only() {
     return ok;
 }
 
-bool test_sea_level_controls_landmass_topology() {
+bool test_sea_level_is_not_a_generation_input() {
     procgen::GreaterRealmGeneratorSettings settings;
     settings.seed = 13579;
     settings.width = 96;
     settings.height = 72;
-    settings.sea_level = 0.35f;
-    const auto low_sea = procgen::generate_greater_realm(settings);
+    settings.sea_level = 0.10f;
+    const auto low_setting = procgen::generate_greater_realm(settings);
+    const auto low_image = procgen::build_greater_realm_debug_image(low_setting, settings.sea_level);
 
-    settings.sea_level = 0.65f;
-    const auto high_sea = procgen::generate_greater_realm(settings);
+    settings.sea_level = 0.90f;
+    const auto high_setting = procgen::generate_greater_realm(settings);
+    const auto high_image = procgen::build_greater_realm_debug_image(high_setting, settings.sea_level);
 
-    return require(count_land(low_sea) > count_land(high_sea), "higher sea level reduces generated land area");
+    bool ok = true;
+    ok &= require(maps_match(low_setting, high_setting), "sea level setting no longer changes generated terrain data");
+    ok &= require(count_land(low_setting) == count_land(high_setting), "sea level setting no longer changes land area");
+    ok &= require(low_image.rgba == high_image.rgba, "sea level setting no longer changes debug terrain shading");
+    return ok;
 }
 
 bool test_ocean_depth_preserves_topology() {
@@ -671,7 +677,7 @@ bool test_coastal_land_preserves_elevation_form() {
     settings.seed = 556677;
     settings.width = 96;
     settings.height = 72;
-    settings.mountain_threshold = settings.sea_level;
+    settings.mountain_threshold = procgen::NORMALIZED_WATERLINE;
 
     const auto map = procgen::generate_greater_realm(settings);
     std::size_t coastal_count = 0;
@@ -926,7 +932,7 @@ int main() {
         test_mountain_blend_uses_local_positive_constraint,
         test_terrain_noise_changes_land_relief_only,
         test_terrain_noise_range_is_masked_to_land_relief,
-        test_sea_level_controls_landmass_topology,
+        test_sea_level_is_not_a_generation_input,
         test_ocean_depth_preserves_topology,
         test_island_bias_matches_mapgen4_contract,
         test_debug_visualization_data,

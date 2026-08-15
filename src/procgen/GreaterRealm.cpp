@@ -347,8 +347,6 @@ static GreaterRealmMap generate_greater_realm_impl(
 
     std::vector<TerrainLayers> layers(map.cells.size());
 
-    const float sea_level = std::clamp(settings.sea_level, 0.01f, 0.99f);
-    const float sea_level_offset = (0.5f - sea_level) * 2.0f;
     const float island_bias = std::clamp(settings.island_bias, 0.0f, 1.0f);
 
     for (std::uint32_t y = 0; y < map.height; ++y) {
@@ -369,8 +367,7 @@ static GreaterRealmMap generate_greater_realm_impl(
             ) * 2.0f - 1.0f;
             const float island_constraint = 0.75f - 2.0f * square_distance * square_distance;
             float automatic_constraint = std::clamp(
-                0.5f * (land_noise + island_constraint * island_bias)
-                + sea_level_offset,
+                0.5f * (land_noise + island_constraint * island_bias),
                 -1.0f,
                 1.0f
             );
@@ -467,7 +464,7 @@ static GreaterRealmMap generate_greater_realm_impl(
                 * std::max(settings.ocean_depth_weight, 0.0f)
                 * std::max(depth_variation, 0.0f)
             );
-            cell.elevation = sea_level * (1.0f - depth);
+            cell.elevation = NORMALIZED_WATERLINE * (1.0f - depth);
             continue;
         }
 
@@ -490,7 +487,7 @@ static GreaterRealmMap generate_greater_realm_impl(
         const float inland_influence = smoothstep(0.0f, 0.45f, cell.landmass_elevation);
         const float coastal_rise = 0.01f + 0.14f * clamp01(cell.landmass_elevation / 0.45f);
         const float land_height = clamp01(lerp(coastal_rise, relief, inland_influence));
-        cell.elevation = sea_level + (1.0f - sea_level) * land_height;
+        cell.elevation = NORMALIZED_WATERLINE + (1.0f - NORMALIZED_WATERLINE) * land_height;
     }
 
 #if defined(REALM_ENABLE_PROCGEN_PROFILING)

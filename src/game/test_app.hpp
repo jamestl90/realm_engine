@@ -12,13 +12,11 @@
 
 namespace game {
 
-// Main game class for Rogue Farm
-class RogueFarmGame : public core::Game {
+class TestApp : public core::Game {
 public:
-    RogueFarmGame() = default;
-    ~RogueFarmGame() override = default;
+    TestApp() = default;
+    ~TestApp() override = default;
 
-    // Lifecycle hooks
     void on_startup(core::Engine& engine) override;
     void on_update(core::Engine& engine, double dt) override;
     void on_event(core::Engine& engine, const SDL_Event& event, bool ui_consumed) override;

@@ -126,7 +126,7 @@ const char* to_string(GreaterRealmDebugView view) noexcept {
 
 DebugColour greater_realm_debug_colour(
     const GreaterRealmCell& cell,
-    float sea_level,
+    float,
     GreaterRealmDebugView view,
     float scalar_maximum
 ) noexcept {
@@ -196,8 +196,7 @@ DebugColour greater_realm_debug_colour(
     }
 
     if (cell.terrain_form == TerrainForm::Ocean) {
-        const float safe_sea_level = sea_level > 0.01f ? sea_level : 0.01f;
-        const float relative_depth = 1.0f - std::clamp(cell.elevation / safe_sea_level, 0.0f, 1.0f);
+        const float relative_depth = 1.0f - std::clamp(cell.elevation / NORMALIZED_WATERLINE, 0.0f, 1.0f);
         const float shallow = 1.0f - std::sqrt(relative_depth);
         const auto mix = [shallow](std::uint8_t deep, std::uint8_t coast) -> std::uint8_t {
             return static_cast<std::uint8_t>(
@@ -208,8 +207,8 @@ DebugColour greater_realm_debug_colour(
         return {mix(3, 66), mix(18, 145), mix(52, 196), 255};
     }
 
-    const float land_range = sea_level < 0.99f ? 1.0f - sea_level : 0.01f;
-    const float relative_land_height = std::clamp((cell.elevation - sea_level) / land_range, 0.0f, 1.0f);
+    const float land_range = 1.0f - NORMALIZED_WATERLINE;
+    const float relative_land_height = std::clamp((cell.elevation - NORMALIZED_WATERLINE) / land_range, 0.0f, 1.0f);
     const float shade = 0.62f + relative_land_height * 0.38f;
     const auto scale = [shade](std::uint8_t value) -> std::uint8_t {
         return static_cast<std::uint8_t>(static_cast<float>(value) * shade);

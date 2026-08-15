@@ -65,7 +65,8 @@ void World::remove_system(ISystem* system) {
 }
 
 void World::update(float dt) {
-    // TODO: Collision - Process collision detection/response systems here.
+    // TODO: Collision - Process collision detection/response systems here?
+    // I'm still considering whether I should just use an event based system for collisions rather than utilising ECS. 
     // Collision checks should occur after movement systems but before rendering.
     // Consider spatial partitioning (grid, quadtree) for broad-phase culling.
 

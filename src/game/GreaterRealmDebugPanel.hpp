@@ -74,7 +74,6 @@ private:
     PresentationChangedCallback m_on_presentation_changed;
     procgen::TerrainConstraintTool m_selected_tool{procgen::TerrainConstraintTool::Mountain};
     ui::TextBlock* m_seed_text{nullptr};
-    ui::TextBlock* m_sea_text{nullptr};
     ui::TextBlock* m_island_bias_text{nullptr};
     ui::TextBlock* m_coastline_noise_text{nullptr};
     ui::TextBlock* m_base_elevation_text{nullptr};
@@ -93,7 +92,6 @@ private:
     ui::TextBlock* m_hydrology_text{nullptr};
     ui::TextBlock* m_brush_size_text{nullptr};
     ui::TextBlock* m_brush_strength_text{nullptr};
-    ui::Slider* m_sea_slider{nullptr};
     ui::Slider* m_island_bias_slider{nullptr};
     ui::Slider* m_coastline_noise_slider{nullptr};
     ui::Slider* m_base_elevation_slider{nullptr};
