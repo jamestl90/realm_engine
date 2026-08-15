@@ -50,6 +50,19 @@ This document tracks the procedural generation capabilities currently present in
 
 This follows Mapgen4's layered elevation approach while deliberately retaining a regular-grid representation. The renderer can derive a triangulated regular-grid heightfield for 2.5D presentation without replacing or mutating canonical map data.
 
+## Mapgen4 Alignment Boundary
+
+Mapgen4 is the reference for the generator's layered terrain behavior, not a requirement for identical storage or rendering. The following differences are intentional:
+
+- `GreaterRealmMap` remains a canonical regular grid. Mountain distance and drainage therefore use deterministic eight-neighbor grid traversals instead of Mapgen4's triangle graph (tasks 031 and 032).
+- The engine keeps a signed landmass constraint for topology but exports final elevation normalized to `0..1`, with an independent sea-level offset and water-depth path (tasks 016, 023, and 026).
+- Ridge, valley, and terrain-noise layers may remain as engine extensions, provided they are secondary to the signed-constraint, low-hill, and peak-distance terrain composition and preserve control locality.
+- Terrain forms, explicit coastline metadata, coast distance, and slope are engine data contracts beyond Mapgen4's elevation output (tasks 016 and 025).
+- Drainage uses conditioned terrain and terrain-only catchment area. Generated rainfall, humidity, moisture, and current river discharge are deliberately excluded in favor of future runtime weather (tasks 027 and 039).
+- The 2.5D view derives a continuous regular-grid heightfield and does not adopt Mapgen4's irregular folded render mesh (tasks 032 and 033).
+
+Task 049 records the alignment audit. Differences not listed above require an explicit decision or remediation before they can be treated as intentional.
+
 ## Debugging And Tests
 
 - The compile-gated `GreaterRealmDebug` module counts terrain forms and coastal land independently, converts map data into an engine-neutral RGBA image, overlays exported rivers, and marks explicit peak cells.
