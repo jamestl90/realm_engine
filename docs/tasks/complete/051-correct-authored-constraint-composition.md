@@ -1,6 +1,6 @@
 # Correct Authored Constraint Composition
 
-Status: todo
+Status: complete
 Priority: high
 Area: Procedural Generation / Terrain Constraints
 
@@ -30,3 +30,25 @@ Task 049 confirmed that an authored value is first blended into the broad signed
 
 - Mapgen4 `painting.ts` paint values and blending.
 - Mapgen4 `map.ts` signed constraint sampling and elevation assignment.
+
+## Implementation Summary
+
+- Audited the current task-050 relief pipeline and confirmed authored constraints are sampled once, blended into `broad_constraint`, perturbed through the same coastline-noise path as automatic terrain, and then consumed through the signed landmass field for water depth and positive-land relief selection.
+- Confirmed there is no remaining second direct final-relief interpolation of authored signed values.
+- Added fixed-seed regression coverage for Ocean, Shallow, Valley, and Mountain tool semantics at the brush center, brush shoulder, and outside the brush.
+- Added a one-stage authored-mountain regression where mountain strength is zero; this proves the painted mountain value cannot bypass the hill/mountain relief pipeline and force final elevation directly.
+- Added monotonic brush-strength coverage for authored mountain constraints while preserving exact distant signed/final elevation outside the brush influence.
+- Preserved the existing constraint serialization format.
+- Updated `docs/PROCGEN.md` with the one-stage authored-constraint composition rule and tool responsibilities.
+
+## Testing
+
+- Passed: `cmake --build out/build/debug-with-tests --target realm_engine_tests realm_procgen_pipeline_tests`
+- Passed: `ctest --test-dir out/build/debug-with-tests -R procgen_hydrology_constraints --output-on-failure`
+- Passed: `ctest --test-dir out/build/debug-with-tests --output-on-failure` (13/13)
+- Passed: `cmake --build --preset debug-no-tests`
+- Passed: `cmake --build --preset release-no-tests`
+
+## Commit Message
+
+Verify authored constraints use one-stage composition

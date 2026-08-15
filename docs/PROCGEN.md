@@ -15,7 +15,8 @@ This document tracks the procedural generation capabilities currently present in
 - Shapes land by computing separate low-amplitude hill relief and peak-distance mountain relief, then blending from hills toward mountains with the squared positive signed landmass constraint.
 - Keeps base relief as the hill stage. Mountain strength raises only the explicit peak-distance mountain target, so changing it does not shift terrain with no peak influence.
 - Applies ridges, valleys, and terrain noise after the hill-to-mountain blend as secondary engine extensions, masked to positive inland constraint strength. Ridges raise relief, valleys lower relief, and terrain noise can move relief both directions without changing land/water topology.
-- Selects deterministic land-based mountain peaks with configurable spacing, then propagates a jagged distance field to form coherent mountain masses.
+- Selects deterministic mountain peak sites from the canonical grid before considering mutable land/water output, using configurable Poisson-style spacing with a center-biased priority to avoid bucket-aligned artifacts.
+- Exports only fixed peak sites that currently sit on land as active mountain peaks; fixed sites under water remain dormant and can become active if authored painting later creates land there.
 - Exports peak records plus per-cell peak distance, influence, and peak flags for hydrology and tooling.
 - Exports per-cell hill and mountain relief stages for debugging and tests.
 - Marks boundary-connected water as ocean.
@@ -23,7 +24,7 @@ This document tracks the procedural generation capabilities currently present in
 - Classifies water as ocean and land as plains, hills, highlands, or mountains, including land directly beside water.
 - Treats coastline proximity independently from terrain form so coastal relief is not replaced by a generic beach classification.
 - Accepts an optional, lower-resolution authored constraint field with ocean, shallow-water, valley, and mountain tools.
-- Bilinearly samples authored constraints and blends them into the automatic signed terrain field.
+- Bilinearly samples authored constraints and blends them once into the automatic signed terrain field. The resulting signed field controls water/land topology, coastline perturbation, and positive-land relief selection; painted values are not reapplied later as direct final-relief targets.
 - Builds a deterministic priority drainage topology with a downslope target or outlet for every cell.
 - Exports a hydrologically conditioned elevation so drainage remains acyclic and downhill through depressions without changing visual terrain elevation.
 - Accumulates terrain-only contributing area downstream and exports renderer-independent potential river channels with catchment area and a derived display width. Channels may terminate near the coast, but coastal land cells are not exported as river segment endpoints, and near-coast exported segments must move toward the coastline rather than along it.
@@ -35,13 +36,14 @@ This document tracks the procedural generation capabilities currently present in
 - Tool values follow Mapgen4: ocean `-0.25`, shallow water `-0.05`, valley `+0.05`, and mountain `+1.0`.
 - Unpainted samples have zero influence, preserving byte-for-byte deterministic automatic generation.
 - Constraint data uses a versioned, validated little-endian binary representation through `serialize_terrain_constraints` and `deserialize_terrain_constraints`.
+- Ocean and shallow-water tools write negative signed values and therefore carve water through the same water-depth path as automatic water. Valley and mountain tools write positive signed values and therefore create land that blends from low hill relief toward the peak-distance mountain target according to positive constraint strength.
 
 ## Pipeline
 
 1. Generate a signed broad landmass field from fBm and a square-distance island constraint.
 2. Apply controlled noise near the coastline.
 3. Convert the field into a signed landmass constraint at sea level.
-4. Select spaced mountain peaks and propagate their jagged distance field.
+4. Select fixed spaced mountain peak sites, export the land-active subset, and propagate their jagged distance field.
 5. Generate base elevation and the remaining inland relief influences.
 6. Generate ocean depth separately.
 7. Compute low-amplitude hill relief and a peak-distance mountain target.
@@ -62,6 +64,7 @@ Mapgen4 is the reference for the generator's layered terrain behavior, not a req
 - `GreaterRealmMap` remains a canonical regular grid. Mountain distance and drainage therefore use deterministic eight-neighbor grid traversals instead of Mapgen4's triangle graph (tasks 031 and 032).
 - The engine keeps a signed landmass constraint for topology but exports final elevation normalized to `0..1`, with an independent sea-level offset and water-depth path (tasks 016, 023, and 026).
 - The automatic positive-land mountain hint is adopted in the signed constraint stage. Explicit peak fields still own the mountain target shape; the hint only controls where the signed terrain is strong enough to prefer that target.
+- Mountain peak sites are sampled independently from authored constraints and land/water classification. Spacing changes resample the fixed site field; jaggedness, radius, mountain strength, and other relief-only controls preserve peak identities.
 - Ridge, valley, and terrain-noise layers remain engine extensions after the signed-constraint, low-hill, and peak-distance terrain composition and preserve control locality.
 - Terrain forms, explicit coastline metadata, coast distance, and slope are engine data contracts beyond Mapgen4's elevation output (tasks 016 and 025).
 - Drainage uses conditioned terrain and terrain-only catchment area. Generated rainfall, humidity, moisture, and current river discharge are deliberately excluded in favor of future runtime weather (tasks 027 and 039).
@@ -85,7 +88,7 @@ Task 049 records the alignment audit. Differences not listed above require an ex
 - Terrain noise and ocean depth use larger tuning steps and contrast-enhanced debug shading so changes are visible.
 - Debug builds report per-stage generation timings plus end-to-end control-to-preview timing through the Debug-only `REALM_ENABLE_PROCGEN_PROFILING` definition; profiling code is compiled out of production builds.
 - `REALM_OPTIMIZE_PROCGEN_DEBUG` defaults to `ON`, compiling the interactive procgen runtime with optimization in Debug builds while dedicated test targets retain their normal Debug checks. Disable it when stepping through procgen at instruction level is more important than interactive tuning speed.
-- Automated tests cover output shape, deterministic seeds, map lookup, signed constraints, topology stability, ocean connectivity, sea-level response, terrain statistics, hill/mountain relief-stage separation, land-relief control ranges, peak selection/spacing/distance fields, constraint interpolation/serialization, preview-coordinate mapping, paint interaction state, brush setting clamping/effect, drainage invariants, catchment accumulation, channel connectivity, and debug-image output.
+- Automated tests cover output shape, deterministic seeds, map lookup, signed constraints, topology stability, ocean connectivity, sea-level response, terrain statistics, hill/mountain relief-stage separation, land-relief control ranges, stable fixed peak selection/spacing/distribution/dormancy/distance fields, one-stage authored-constraint composition, constraint interpolation/serialization, preview-coordinate mapping, paint interaction state, brush setting clamping/effect, drainage invariants, catchment accumulation, channel connectivity, and debug-image output.
 - Test code is compiled only when `REALM_BUILD_TESTS=ON` and does not enter release builds.
 
 ## Not Yet Supported

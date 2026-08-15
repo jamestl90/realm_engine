@@ -4,7 +4,6 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
-#include <iterator>
 #include <queue>
 #include <vector>
 
@@ -57,33 +56,24 @@ float squared_distance(const GreaterRealmCell& a, const GreaterRealmCell& b) noe
     return dx * dx + dy * dy;
 }
 
-std::vector<PeakCandidate> build_candidates(const GreaterRealmMap& map, float spacing) {
-    const auto bucket_size = std::max<std::uint32_t>(static_cast<std::uint32_t>(std::floor(spacing)), 1u);
+std::vector<PeakCandidate> build_candidates(const GreaterRealmMap& map) {
     std::vector<PeakCandidate> candidates;
+    candidates.reserve(map.cells.size());
 
-    for (std::uint32_t top = 0; top < map.height; top += bucket_size) {
-        for (std::uint32_t left = 0; left < map.width; left += bucket_size) {
-            PeakCandidate best;
-            const std::uint32_t bottom = std::min(top + bucket_size, map.height);
-            const std::uint32_t right = std::min(left + bucket_size, map.width);
-            for (std::uint32_t y = top; y < bottom; ++y) {
-                for (std::uint32_t x = left; x < right; ++x) {
-                    const auto index = static_cast<std::uint32_t>(map.index(x, y));
-                    const auto& cell = map.cells[index];
-                    if (cell.is_water) {
-                        continue;
-                    }
-
-                    const float priority = random01(map.seed, x, y, 0x4d4f554e5441494eull)
-                        + std::clamp(cell.landmass_elevation, 0.0f, 1.0f) * 0.35f;
-                    if (best.index == INVALID_CELL_INDEX || priority > best.priority) {
-                        best = {index, priority};
-                    }
-                }
-            }
-            if (best.index != INVALID_CELL_INDEX) {
-                candidates.push_back(best);
-            }
+    for (std::uint32_t y = 0; y < map.height; ++y) {
+        for (std::uint32_t x = 0; x < map.width; ++x) {
+            const float centered_x = map.width > 1
+                ? static_cast<float>(x) / static_cast<float>(map.width - 1) * 2.0f - 1.0f
+                : 0.0f;
+            const float centered_y = map.height > 1
+                ? static_cast<float>(y) / static_cast<float>(map.height - 1) * 2.0f - 1.0f
+                : 0.0f;
+            const float square_distance = std::max(std::abs(centered_x), std::abs(centered_y));
+            const float boundary_weight = std::clamp(1.0f - square_distance, 0.0f, 1.0f) * 0.35f;
+            candidates.push_back({
+                static_cast<std::uint32_t>(map.index(x, y)),
+                random01(map.seed, x, y, 0x4d4f554e5441494eull) + boundary_weight
+            });
         }
     }
 
@@ -117,33 +107,30 @@ void generate_mountain_peak_field(
         cell.mountain_influence = 0.0f;
     }
 
-    const auto candidates = build_candidates(map, spacing);
+    std::vector<PeakCandidate> selected_sites;
+    const auto candidates = build_candidates(map);
     for (const auto& candidate : candidates) {
         const auto& candidate_cell = map.cells[candidate.index];
         bool separated = true;
-        for (const auto& peak : map.mountain_peaks) {
-            if (squared_distance(candidate_cell, map.cells[peak.cell_index]) < spacing_squared) {
+        for (const auto& selected : selected_sites) {
+            if (squared_distance(candidate_cell, map.cells[selected.index]) < spacing_squared) {
                 separated = false;
                 break;
             }
         }
-        if (separated) {
+
+        if (!separated) {
+            continue;
+        }
+
+        selected_sites.push_back(candidate);
+        if (!candidate_cell.is_water) {
             map.mountain_peaks.push_back({
                 candidate.index,
                 candidate_cell.x,
                 candidate_cell.y,
                 candidate.priority
             });
-        }
-    }
-
-    if (map.mountain_peaks.empty()) {
-        const auto highest = std::max_element(map.cells.begin(), map.cells.end(), [](const GreaterRealmCell& left, const GreaterRealmCell& right) {
-            return left.landmass_elevation < right.landmass_elevation;
-        });
-        if (highest != map.cells.end() && !highest->is_water) {
-            const auto index = static_cast<std::uint32_t>(std::distance(map.cells.begin(), highest));
-            map.mountain_peaks.push_back({index, highest->x, highest->y, 1.0f});
         }
     }
 

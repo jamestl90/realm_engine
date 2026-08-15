@@ -75,6 +75,33 @@ bool topology_matches(const procgen::GreaterRealmMap& a, const procgen::GreaterR
     return true;
 }
 
+float normalized_coord(std::uint32_t coordinate, std::uint32_t extent) {
+    return extent > 1 ? static_cast<float>(coordinate) / static_cast<float>(extent - 1) : 0.0f;
+}
+
+float normalized_distance_from_center(
+    const procgen::GreaterRealmMap& map,
+    std::uint32_t x,
+    std::uint32_t y
+) {
+    const float dx = normalized_coord(x, map.width) - 0.5f;
+    const float dy = normalized_coord(y, map.height) - 0.5f;
+    return std::sqrt(dx * dx + dy * dy);
+}
+
+procgen::GreaterRealmGeneratorSettings one_stage_constraint_test_settings() {
+    procgen::GreaterRealmGeneratorSettings settings;
+    settings.seed = 424242;
+    settings.width = 65;
+    settings.height = 65;
+    settings.coastline_noise_weight = 0.0f;
+    settings.mountain_weight = 0.0f;
+    settings.ridge_weight = 0.0f;
+    settings.valley_weight = 0.0f;
+    settings.terrain_noise_weight = 0.0f;
+    return settings;
+}
+
 bool river_export_candidate(
     const procgen::GreaterRealmMap& map,
     std::uint32_t source_index,
@@ -169,6 +196,131 @@ bool test_constraints_have_local_deterministic_influence() {
     ok &= require(edited.cells[center].elevation > baseline.cells[center].elevation, "mountain constraint raises local final elevation");
     ok &= require(edited.cells[corner].landmass_elevation == baseline.cells[corner].landmass_elevation, "local constraint leaves distant topology unchanged");
     ok &= require(complete_maps_match(edited, repeated), "authored constraints preserve deterministic complete output");
+    return ok;
+}
+
+bool test_constraint_tools_route_through_signed_field_once() {
+    const auto settings = one_stage_constraint_test_settings();
+    const auto baseline = procgen::generate_greater_realm(settings);
+    const auto center_index = baseline.index(settings.width / 2, settings.height / 2);
+    const auto shoulder_index = baseline.index(settings.width / 2 + 8, settings.height / 2);
+    const auto outside_index = baseline.index(0, 0);
+
+    struct ToolExpectation {
+        procgen::TerrainConstraintTool tool;
+        bool center_is_water;
+        const char* name;
+    };
+
+    const std::array tools{
+        ToolExpectation{procgen::TerrainConstraintTool::Ocean, true, "ocean"},
+        ToolExpectation{procgen::TerrainConstraintTool::ShallowWater, true, "shallow-water"},
+        ToolExpectation{procgen::TerrainConstraintTool::Valley, false, "valley"},
+        ToolExpectation{procgen::TerrainConstraintTool::Mountain, false, "mountain"}
+    };
+
+    bool ok = true;
+    std::array<float, 4> center_elevations{};
+    std::size_t tool_index = 0;
+    for (const auto& expectation : tools) {
+        procgen::TerrainConstraintField constraints(65, 65);
+        constraints.paint(expectation.tool, 0.5f, 0.5f, 0.20f);
+        const auto center_sample = constraints.sample(0.5f, 0.5f);
+        const auto shoulder_sample = constraints.sample(
+            normalized_coord(settings.width / 2 + 8, settings.width),
+            0.5f
+        );
+        const auto edited = procgen::generate_greater_realm(settings, constraints);
+
+        const auto& center = edited.cells[center_index];
+        const auto& shoulder = edited.cells[shoulder_index];
+        const auto& outside = edited.cells[outside_index];
+        const auto& baseline_center = baseline.cells[center_index];
+        const auto& baseline_shoulder = baseline.cells[shoulder_index];
+        const auto& baseline_outside = baseline.cells[outside_index];
+
+        const float center_delta = std::abs(center.landmass_elevation - baseline_center.landmass_elevation);
+        const float shoulder_delta = std::abs(shoulder.landmass_elevation - baseline_shoulder.landmass_elevation);
+        ok &= require(center_sample.influence > shoulder_sample.influence, "authored field has stronger center than shoulder influence");
+        ok &= require(center_delta > 0.0f, "signed landmass responds at brush center");
+        ok &= require(shoulder_delta > 0.0f, "signed landmass responds at brush shoulder");
+        ok &= require(outside.landmass_elevation == baseline_outside.landmass_elevation, "outside brush signed field is unchanged");
+        ok &= require(outside.elevation == baseline_outside.elevation, "outside brush final elevation is unchanged");
+        ok &= require(center.is_water == expectation.center_is_water, expectation.name);
+        if (!center.is_water) {
+            ok &= require(center.elevation > settings.sea_level, "positive constraint center becomes land above sea level");
+            ok &= require(center.hill_relief == center.mountain_relief, "zero mountain strength keeps authored land on hill relief path");
+        } else {
+            ok &= require(center.elevation < settings.sea_level, "negative constraint center becomes water below sea level");
+        }
+        center_elevations[tool_index++] = center.elevation;
+    }
+
+    ok &= require(center_elevations[0] < center_elevations[1], "ocean center is deeper than shallow-water center");
+    ok &= require(center_elevations[1] < settings.sea_level, "shallow-water center remains below sea level");
+    ok &= require(center_elevations[2] > settings.sea_level, "valley center remains above sea level");
+    ok &= require(center_elevations[2] < center_elevations[3], "mountain center is higher than valley center through signed relief semantics");
+    return ok;
+}
+
+bool test_authored_mountain_does_not_bypass_relief_pipeline() {
+    const auto settings = one_stage_constraint_test_settings();
+    const auto baseline = procgen::generate_greater_realm(settings);
+
+    procgen::TerrainConstraintField constraints(65, 65);
+    constraints.paint(procgen::TerrainConstraintTool::Mountain, 0.5f, 0.5f, 0.20f);
+    const auto edited = procgen::generate_greater_realm(settings, constraints);
+    const auto center_index = edited.index(settings.width / 2, settings.height / 2);
+    const auto& center = edited.cells[center_index];
+
+    bool distant_elevations_match = true;
+    for (std::uint32_t y = 0; y < edited.height; ++y) {
+        for (std::uint32_t x = 0; x < edited.width; ++x) {
+            if (normalized_distance_from_center(edited, x, y) <= 0.24f) {
+                continue;
+            }
+            const auto index = edited.index(x, y);
+            if (edited.cells[index].landmass_elevation != baseline.cells[index].landmass_elevation
+                || edited.cells[index].elevation != baseline.cells[index].elevation) {
+                distant_elevations_match = false;
+                break;
+            }
+        }
+        if (!distant_elevations_match) {
+            break;
+        }
+    }
+
+    bool ok = true;
+    ok &= require(center.landmass_elevation > 0.95f, "mountain brush strongly raises the signed landmass field");
+    ok &= require(center.hill_relief == center.mountain_relief, "zero mountain strength disables the mountain relief target");
+    ok &= require(center.elevation < 0.70f, "authored mountain does not directly force final relief to the painted value");
+    ok &= require(distant_elevations_match, "authored constraint leaves distant signed and final elevations unchanged");
+    return ok;
+}
+
+bool test_constraint_strength_response_is_monotonic_and_local() {
+    const auto settings = one_stage_constraint_test_settings();
+    const auto baseline = procgen::generate_greater_realm(settings);
+
+    procgen::TerrainConstraintField weak_constraints(65, 65);
+    weak_constraints.paint(procgen::TerrainConstraintTool::Mountain, 0.5f, 0.5f, 0.20f, 0.35f);
+    const auto weak = procgen::generate_greater_realm(settings, weak_constraints);
+
+    procgen::TerrainConstraintField strong_constraints(65, 65);
+    strong_constraints.paint(procgen::TerrainConstraintTool::Mountain, 0.5f, 0.5f, 0.20f, 1.0f);
+    const auto strong = procgen::generate_greater_realm(settings, strong_constraints);
+
+    const auto center_index = weak.index(settings.width / 2, settings.height / 2);
+    const auto shoulder_index = weak.index(settings.width / 2 + 8, settings.height / 2);
+    const auto outside_index = weak.index(0, 0);
+
+    bool ok = true;
+    ok &= require(strong.cells[center_index].landmass_elevation > weak.cells[center_index].landmass_elevation, "stronger brush increases center signed landmass");
+    ok &= require(strong.cells[center_index].elevation > weak.cells[center_index].elevation, "stronger brush increases center final elevation through signed semantics");
+    ok &= require(strong.cells[shoulder_index].landmass_elevation > weak.cells[shoulder_index].landmass_elevation, "stronger brush increases shoulder signed landmass");
+    ok &= require(weak.cells[outside_index].landmass_elevation == baseline.cells[outside_index].landmass_elevation, "weak brush leaves outside signed field unchanged");
+    ok &= require(strong.cells[outside_index].elevation == baseline.cells[outside_index].elevation, "strong brush leaves outside final elevation unchanged");
     return ok;
 }
 
@@ -353,6 +505,9 @@ int main() {
     const std::array tests{
         test_constraint_tools_sampling_and_serialization,
         test_constraints_have_local_deterministic_influence,
+        test_constraint_tools_route_through_signed_field_once,
+        test_authored_mountain_does_not_bypass_relief_pipeline,
+        test_constraint_strength_response_is_monotonic_and_local,
         test_drainage_is_complete_acyclic_and_downhill,
         test_catchment_area_accumulates_without_weather,
         test_river_accumulation_connectivity_and_thresholding,
