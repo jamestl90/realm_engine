@@ -111,7 +111,7 @@ Remediation: task 053 will compare both before choosing.
 
 The suite strongly covers deterministic output, valid topology, peak spacing, acyclic drainage, channel connectivity, serialization, and debug output. However, several relief controls are accepted when total elevation difference merely exceeds `1.0`. Those tests do not establish where the change occurred, whether it was monotonic, whether it was visible relative to map size, or whether another stage changed unexpectedly. Constraint locality checks only the edited center and one corner.
 
-Remediation: task 054, with focused contracts also required by tasks 050 through 053.
+Remediation: the owning contracts are folded into tasks 050 through 053 rather than maintained as a separate cross-cutting test ticket.
 
 ## Characterization Results
 
@@ -126,7 +126,7 @@ The temporary audit probe was compiled only with `REALM_TEST_BUILD` and removed 
 
 - Keep: exact determinism, signed topology, ocean connectivity, sea-level response, mountain-strength locality, peak spacing and descending distance paths, constraint serialization, priority-drainage invariants, catchment accumulation, and channel threshold independence.
 - Strengthen: base, ridge, valley, terrain-noise, peak radius, jaggedness, and coastline controls need spatial and significance assertions across several seeds.
-- Add with remediation: fixed peak identity under painting, bounded distant response, one-stage authored semantics, hill-versus-mountain separation, coastline attenuation, and parameter ownership.
+- Add with remediation: fixed peak identity under painting, bounded distant response, one-stage authored semantics, hill-versus-mountain separation, coastline attenuation, and parameter ownership. These belong in tasks 050 through 053 alongside the behavior they protect.
 - Avoid: snapshotting the current complete elevation field. Tasks 050 through 053 will deliberately correct accidental output and should be guarded by behavioral contracts instead of preserving exact flawed maps.
 
 ## Intentional Deviations Confirmed
@@ -146,13 +146,12 @@ These are now summarized canonically in `docs/PROCGEN.md` so future comparisons 
 2. Task 052: stabilize peak sites independently from mutable terrain.
 3. Task 051: route authored constraints once through the corrected composition.
 4. Task 053: evaluate and resolve coastline attenuation.
-5. Task 054: complete the cross-parameter behavioral contract matrix after semantics settle.
 
 ## Implementation
 
 - Audited all greater-realm, constraint, peak, drainage, river, debug, UI-setting, and procgen test paths against Mapgen4's authoritative source.
 - Classified settled architecture decisions separately from accidental generation differences.
-- Added tasks 050 through 054 for focused remediation and test hardening.
+- Added tasks 050 through 053 for focused remediation, with each task owning the behavioral contracts for the generation stage it changes.
 - Added the intentional-deviation boundary to `docs/PROCGEN.md`.
 - Made no production or generation-behavior changes.
 

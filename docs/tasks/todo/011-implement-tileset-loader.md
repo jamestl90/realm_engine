@@ -22,3 +22,7 @@ Implement loading for tileset metadata and texture linkage.
 ## Notes
 
 This does not need to implement a full tilemap renderer yet.
+
+## Dependencies
+
+- Task 006 for the atlas-region identity policy used by tiles and tile animations.

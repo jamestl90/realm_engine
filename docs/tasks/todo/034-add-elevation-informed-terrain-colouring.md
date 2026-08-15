@@ -21,3 +21,7 @@ Mapgen4's colour mapping combines multiple fields, then applies terrain lighting
 - Add image-data tests for parameter response, stable dimensions, and deterministic output.
 - Expose the mode only through compile-gated debug tooling.
 - Update procgen documentation.
+
+## Dependencies
+
+- Tasks 050 and 051, so continuous colouring is tuned against corrected land relief and authored-constraint semantics instead of preserving accidental elevation output.

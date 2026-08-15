@@ -19,7 +19,7 @@ Task 049 measured a locality defect in the current land-dependent bucket candida
 - Keep peak sites stable across authored constraint edits, mountain strength, radius, jaggedness, and other non-spacing relief controls.
 - Define how fixed sites under water remain dormant and become relevant if painting creates land.
 - Avoid bucket-aligned sampling artifacts and retain deterministic seed behavior.
-- Add tests for peak identity stability, spacing, distribution, local edit bounds, and parameter ownership.
+- Add lower/default/upper tests across representative fixed seeds for peak identity stability, spacing, distribution, local edit bounds, jaggedness/radius response, and parameter ownership.
 - Update `docs/PROCGEN.md` and run all procgen tests plus tests-disabled Debug and Release builds.
 
 ## Dependencies

@@ -14,7 +14,10 @@ Greater-realm generation owns stable terrain, catchment area, and potential rive
 ## Dependencies
 
 - Task 039: terrain-only drainage and potential river channels.
+- Task 015 and its resulting region/streaming tasks.
 - Biome and world-region data sufficient to describe local weather tendencies.
+
+This task is intentionally deferred until those dependencies exist; static procgen must not grow placeholder weather fields in the meantime.
 
 ## Acceptance Criteria
 

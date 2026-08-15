@@ -17,7 +17,7 @@ The engine currently fades coastline noise to zero once the absolute broad const
 - Characterize both attenuation functions across fixed seeds and control extremes.
 - Adopt Mapgen4's attenuation or record a concrete visual and behavioral reason for retaining an engine-specific mask.
 - Keep coastline detail independent from island bias, sea level, inland relief, and ocean depth.
-- Verify deterministic topology response, bounded inland influence, continuous parameter response, and no land-relief or water-depth coupling.
+- Verify deterministic topology response across representative fixed seeds, bounded inland influence, continuous lower/default/upper parameter response, and no land-relief or water-depth coupling.
 - Add focused regression tests and update `docs/PROCGEN.md` with the decision.
 
 ## Dependencies

@@ -22,3 +22,7 @@ The 256x192 generator meets the immediate sub-50 ms target when the interactive 
 - Add tests that verify partial paths produce the same map data as a clean full regeneration.
 - Add timing coverage for representative full and partial changes at 256x192.
 - Update `PROCGEN.md` with the resulting invalidation behavior.
+
+## Dependencies
+
+- Tasks 050 through 053. The generation stage contracts must settle before they become cache and invalidation boundaries.

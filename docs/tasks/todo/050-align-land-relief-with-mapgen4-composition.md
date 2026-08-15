@@ -20,7 +20,7 @@ Task 049 confirmed that the current generator adds base fBm, mountain influence,
 - Keep ridge, valley, and terrain-noise controls only as secondary engine extensions with documented stage ordering and masks.
 - Preserve signed land/water topology and the normalized `0..1` final-elevation data contract.
 - Retune defaults deliberately rather than preserving accidental aggregate output.
-- Add fixed-seed tests for local significance, monotonicity, topology independence, and visible peak-versus-hill separation.
+- Add lower/default/upper tests across representative fixed seeds for local significance, monotonicity, topology independence, and visible peak-versus-hill separation, including base, ridge, valley, terrain-noise, and mountain controls owned by this stage.
 - Update `docs/PROCGEN.md` and verify all procgen tests plus tests-disabled Debug and Release builds.
 
 ## Dependencies

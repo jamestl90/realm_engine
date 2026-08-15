@@ -22,3 +22,8 @@ Implement loading for animation asset metadata.
 ## Notes
 
 This pairs naturally with the sprite animation system, but can be done after a code-driven animation system exists.
+
+## Dependencies
+
+- Task 006 for the atlas-region identity policy.
+- Task 005 for the runtime animation contract that loaded assets must drive.

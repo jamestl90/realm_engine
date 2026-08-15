@@ -19,7 +19,7 @@ Task 049 confirmed that an authored value is first blended into the broad signed
 - Preserve sparse unpainted influence, independent constraint resolution, deterministic interpolation, and the serialized format unless a versioned change is necessary.
 - Verify each tool's topology and relief responsibility at its center, brush shoulder, and outside the brush.
 - Ensure local edits do not cause unexplained distant elevation changes.
-- Add fixed-seed tests that would fail under the current double-application behavior.
+- Add representative fixed-seed tests for spatial locality, independence, monotonic brush response, and one-stage semantics that would fail under the current double-application behavior.
 - Update `docs/PROCGEN.md` and run all procgen tests plus tests-disabled Debug and Release builds.
 
 ## Dependencies
