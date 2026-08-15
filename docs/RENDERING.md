@@ -25,7 +25,9 @@ This document tracks rendering features currently present in the engine. It is a
 
 - `TerrainMesh` derives a continuous indexed heightfield from regular-grid elevation and RGBA display data without changing canonical procgen cells.
 - Vertices contain planar position, elevation, elevation gradient, and colour; gradients produce lighting normals in the vertex shader.
-- The terrain pipeline uses 32-bit indices, depth testing/writes, an oblique orthographic camera, adjustable elevation scale, and ambient plus directional lighting.
+- Flat greater-realm debug pixels and canonical map cells both use `(x, y)` with `y` increasing downward. Derived terrain mesh coordinates use world `+x` to the right and world `+y` upward: cell `(x, y)` maps to `(x * cell_size - extent_x / 2, extent_y / 2 - y * cell_size)`. This keeps the top map row at positive world `y`, so a top-down camera with `+y` as screen up matches the flat 2D map without flipping the view basis.
+- Terrain gradients are stored in world-space units. `gradient_x` follows increasing map/world `x`; `gradient_y` is inverted relative to increasing map row index because world `+y` points upward.
+- The terrain pipeline uses 32-bit indices, depth testing/writes, a top-down orthographic camera, adjustable elevation scale, and ambient plus directional lighting.
 - The current greater-realm mesh is uploaded only when map geometry or debug colours change. Presentation mode and elevation-scale changes do not regenerate the map.
 - A `256x192` greater realm produces 49,152 vertices and 292,230 indices in one indexed terrain draw.
 
@@ -64,7 +66,7 @@ This document tracks rendering features currently present in the engine. It is a
 - Shape, text, and post-process pipeline enum values exist, but their core pipelines are not initialised.
 - Custom pipeline asset loading exists in interfaces, but the engine currently constructs `AssetManager` without a pipeline manager.
 - Texture loading support depends on SDL surface loading; broader image-format support should be verified before relying on PNG/JPG in production.
-- The terrain camera is currently fixed and intended for debug inspection rather than player camera control.
+- The terrain camera is currently fixed to a top-down debug view with world `+y` as screen up and is intended for inspection rather than player camera control.
 - Existing world sprites do not yet share terrain projection or depth; task 047 tracks depth-aware 2.5D sprite integration.
 - The greater-realm heightfield is currently one mesh. Future world streaming should partition derived meshes by region while retaining the canonical map representation.
 - Collision remains 2D/canonical-grid data and is not derived from rendered triangles.

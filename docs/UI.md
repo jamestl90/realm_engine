@@ -26,6 +26,7 @@ This document tracks the UI system features currently present in the engine. It 
 
 - `Button`: clickable text button with normal, hover, pressed, focused, and disabled visual state support. Supports click callback, colours, border thickness, padding, and font size.
 - `RepeatButton`: press-and-hold button that activates immediately, waits for a configurable initial delay, then repeats at a configurable interval. Its callback can stop repetition when a control reaches a value bound.
+- `Slider`: horizontal range control with min/max/step snapping, value-change callback, click-to-set and drag interaction, disabled-state rendering, and pointer-cancellation handling.
 - `TextBox`: single-line text input with placeholder text, cursor movement, selection, max length, read-only mode, password masking, submit callback, text-changed callback, focus border colour, selection colour, and blinking cursor.
 - `ComboBox`: dropdown selection control with item list, selected index/item, placeholder text, open/close state, hovered item tracking, selection callback, and configurable colours/border/font/padding.
 
@@ -33,6 +34,7 @@ This document tracks the UI system features currently present in the engine. It 
 
 - `InputSurface`: mouse, wheel, keyboard, text input, hover, and pressed-state callbacks.
 - Active pointer interactions are cancelled when the pointer leaves the window or the window loses focus.
+- Pressed controls receive pointer motion while the press remains active, allowing drag controls such as sliders to continue updating outside their own hover bounds.
 - `FocusableControl`: keyboard focus support, tab index, focus/blur callbacks, and activation via keyboard.
 - `FocusManager`: tracks focused control and supports focus navigation.
 - Text input is routed to the focused control when it reports `wantsTextInput()`.

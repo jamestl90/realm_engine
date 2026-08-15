@@ -278,9 +278,6 @@ bool UIManager::handleMouseMotion(const SDL_Event& event) {
     m_mouseX = x;
     m_mouseY = y;
 
-    // Update hover state
-    updateHover(x, y);
-
     MouseEventArgs args;
     args.x = x;
     args.y = y;
@@ -290,6 +287,14 @@ bool UIManager::handleMouseMotion(const SDL_Event& event) {
         m_capturedElement->onMouseMove(args);
         return args.handled;
     }
+
+    if (m_pressedSurface) {
+        m_pressedSurface->onMouseMove(args);
+        return args.handled || true;
+    }
+
+    // Update hover state only when no active press owns the pointer motion.
+    updateHover(x, y);
 
     // Send move event to hovered surface
     if (m_lastHoveredSurface) {

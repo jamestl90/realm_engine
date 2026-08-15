@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../../include/procgen/GreaterRealmDebug.hpp"
+#include "../../include/procgen/TerrainConstraintPainting.hpp"
 #include "../../include/procgen/TerrainConstraints.hpp"
 #include <cstdint>
 #include <functional>
@@ -8,6 +9,7 @@
 
 namespace ui {
 class Button;
+class Slider;
 class TextBlock;
 class UIElement;
 }
@@ -28,6 +30,7 @@ class GreaterRealmDebugPanel {
 public:
     using RegenerateCallback = std::function<void()>;
     using ToolChangedCallback = std::function<void(procgen::TerrainConstraintTool)>;
+    using BrushSettingsChangedCallback = std::function<void(procgen::TerrainConstraintBrushSettings)>;
     using ClearConstraintsCallback = std::function<void()>;
     using ViewChangedCallback = std::function<void()>;
     using PresentationChangedCallback = std::function<void()>;
@@ -36,9 +39,11 @@ public:
         procgen::GreaterRealmGeneratorSettings& settings,
         procgen::GreaterRealmDebugOptions& debug_options,
         GreaterRealmPresentationSettings& presentation_settings,
+        procgen::TerrainConstraintBrushSettings& brush_settings,
         const procgen::GreaterRealmMap& map,
         RegenerateCallback on_regenerate,
         ToolChangedCallback on_tool_changed,
+        BrushSettingsChangedCallback on_brush_settings_changed,
         ClearConstraintsCallback on_clear_constraints,
         ViewChangedCallback on_view_changed,
         PresentationChangedCallback on_presentation_changed
@@ -54,13 +59,16 @@ private:
     void select_presentation_mode(GreaterRealmPresentationMode mode);
     void update_presentation_buttons();
     void select_constraint_tool(procgen::TerrainConstraintTool tool);
+    void notify_brush_settings_changed();
     void update_constraint_tool_buttons();
 
     procgen::GreaterRealmGeneratorSettings* m_settings{nullptr};
     procgen::GreaterRealmDebugOptions* m_debug_options{nullptr};
     GreaterRealmPresentationSettings* m_presentation_settings{nullptr};
+    procgen::TerrainConstraintBrushSettings* m_brush_settings{nullptr};
     RegenerateCallback m_on_regenerate;
     ToolChangedCallback m_on_tool_changed;
+    BrushSettingsChangedCallback m_on_brush_settings_changed;
     ClearConstraintsCallback m_on_clear_constraints;
     ViewChangedCallback m_on_view_changed;
     PresentationChangedCallback m_on_presentation_changed;
@@ -83,6 +91,24 @@ private:
     ui::TextBlock* m_coverage_text{nullptr};
     ui::TextBlock* m_terrain_text{nullptr};
     ui::TextBlock* m_hydrology_text{nullptr};
+    ui::TextBlock* m_brush_size_text{nullptr};
+    ui::TextBlock* m_brush_strength_text{nullptr};
+    ui::Slider* m_sea_slider{nullptr};
+    ui::Slider* m_island_bias_slider{nullptr};
+    ui::Slider* m_coastline_noise_slider{nullptr};
+    ui::Slider* m_base_elevation_slider{nullptr};
+    ui::Slider* m_mountain_slider{nullptr};
+    ui::Slider* m_peak_spacing_slider{nullptr};
+    ui::Slider* m_peak_radius_slider{nullptr};
+    ui::Slider* m_peak_jaggedness_slider{nullptr};
+    ui::Slider* m_ridge_slider{nullptr};
+    ui::Slider* m_valley_slider{nullptr};
+    ui::Slider* m_noise_slider{nullptr};
+    ui::Slider* m_ocean_depth_slider{nullptr};
+    ui::Slider* m_channel_threshold_slider{nullptr};
+    ui::Slider* m_elevation_scale_slider{nullptr};
+    ui::Slider* m_brush_size_slider{nullptr};
+    ui::Slider* m_brush_strength_slider{nullptr};
     ui::Button* m_coastline_button{nullptr};
     ui::Button* m_peaks_button{nullptr};
     ui::Button* m_rivers_button{nullptr};

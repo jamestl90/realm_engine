@@ -231,7 +231,8 @@ void RogueFarmGame::apply_procgen_paint_sample(
         sample.tool,
         sample.normalized_x,
         sample.normalized_y,
-        0.12f
+        sample.normalized_radius,
+        sample.strength
     );
     m_procgen_paint_dirty = true;
 }
@@ -340,10 +341,15 @@ void RogueFarmGame::on_startup(core::Engine& engine) {
         m_procgen_settings,
         m_procgen_debug_options,
         m_procgen_presentation,
+        m_procgen_brush_settings,
         m_procgen_map,
         [this, &engine]() { regenerate_procgen_debug_map(engine); },
         [this](procgen::TerrainConstraintTool tool) {
             m_procgen_paint_session.select_tool(tool);
+        },
+        [this](procgen::TerrainConstraintBrushSettings settings) {
+            m_procgen_brush_settings = procgen::clamp_terrain_constraint_brush_settings(settings);
+            m_procgen_paint_session.set_brush_settings(m_procgen_brush_settings);
         },
         [this, &engine]() {
             m_procgen_paint_session.cancel();

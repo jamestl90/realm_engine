@@ -277,6 +277,52 @@ if(REALM_BUILD_TESTS)
 
     add_test(NAME ui_repeat_button COMMAND realm_ui_repeat_button_tests)
 
+    add_executable(realm_ui_slider_tests EXCLUDE_FROM_ALL
+        tests/ui/SliderTests.cpp
+        src/ui/FocusableControl.cpp
+        src/ui/InputSurface.cpp
+        src/ui/Slider.cpp
+        src/ui/Style.cpp
+        src/ui/UIElement.cpp
+    )
+
+    target_include_directories(realm_ui_slider_tests PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${SDL3_INCLUDE_DIR}
+    )
+
+    target_compile_definitions(realm_ui_slider_tests PRIVATE REALM_TEST_BUILD=1)
+
+    add_test(NAME ui_slider COMMAND realm_ui_slider_tests)
+
+    add_executable(realm_greater_realm_debug_panel_tests EXCLUDE_FROM_ALL
+        tests/game/GreaterRealmDebugPanelTests.cpp
+        tests/game/GreaterRealmDebugPanelProcgenStubs.cpp
+        src/game/GreaterRealmDebugPanel.cpp
+        src/procgen/TerrainConstraintPainting.cpp
+        src/ui/Button.cpp
+        src/ui/ComboBox.cpp
+        src/ui/FocusableControl.cpp
+        src/ui/InputSurface.cpp
+        src/ui/Layout.cpp
+        src/ui/Primitives.cpp
+        src/ui/RepeatButton.cpp
+        src/ui/Slider.cpp
+        src/ui/Style.cpp
+        src/ui/TextBox.cpp
+        src/ui/UIElement.cpp
+    )
+
+    target_include_directories(realm_greater_realm_debug_panel_tests PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/src
+        ${SDL3_INCLUDE_DIR}
+    )
+
+    target_compile_definitions(realm_greater_realm_debug_panel_tests PRIVATE REALM_TEST_BUILD=1)
+
+    add_test(NAME ui_greater_realm_debug_panel COMMAND realm_greater_realm_debug_panel_tests)
+
     add_executable(realm_terrain_mesh_tests EXCLUDE_FROM_ALL
         tests/rendering/TerrainMeshTests.cpp
         src/rendering/TerrainMesh.cpp

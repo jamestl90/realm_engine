@@ -204,7 +204,9 @@ void UIRenderer::collectCommands(ui::UIElement* element) {
     }
 
     // Check element type and collect appropriate commands
-    if (auto* button = dynamic_cast<ui::Button*>(element)) {
+    if (auto* slider = dynamic_cast<ui::Slider*>(element)) {
+        collectSliderCommands(slider);
+    } else if (auto* button = dynamic_cast<ui::Button*>(element)) {
         collectButtonCommands(button);
     } else if (auto* textBox = dynamic_cast<ui::TextBox*>(element)) {
         collectTextBoxCommands(textBox);
@@ -304,6 +306,62 @@ void UIRenderer::collectButtonCommands(ui::Button* button) {
         textCmd.height = static_cast<float>(textHeight);
         m_commands.push_back(textCmd);
     }
+}
+
+void UIRenderer::collectSliderCommands(ui::Slider* slider) {
+    const auto& bounds = slider->bounds();
+    const float thumbWidth = slider->thumbWidth();
+    const float thumbHeight = slider->thumbHeight();
+    const float trackHeight = slider->trackHeight();
+    const float trackX = bounds.x + thumbWidth * 0.5f;
+    const float trackWidth = std::max(0.0f, bounds.width - thumbWidth);
+    const float trackY = bounds.y + (bounds.height - trackHeight) * 0.5f;
+    const float thumbCenterX = trackX + trackWidth * slider->normalizedValue();
+
+    UIRenderCommand trackCmd;
+    trackCmd.type = UICommandType::Rectangle;
+    trackCmd.x = trackX;
+    trackCmd.y = trackY;
+    trackCmd.width = trackWidth;
+    trackCmd.height = trackHeight;
+    const auto& track = slider->trackColour();
+    trackCmd.r = track.r;
+    trackCmd.g = track.g;
+    trackCmd.b = track.b;
+    trackCmd.a = slider->isEnabled() ? track.a : static_cast<std::uint8_t>(track.a / 2);
+    m_commands.push_back(trackCmd);
+
+    UIRenderCommand fillCmd;
+    fillCmd.type = UICommandType::Rectangle;
+    fillCmd.x = trackX;
+    fillCmd.y = trackY;
+    fillCmd.width = std::max(0.0f, thumbCenterX - trackX);
+    fillCmd.height = trackHeight;
+    const auto& fill = slider->fillColour();
+    fillCmd.r = fill.r;
+    fillCmd.g = fill.g;
+    fillCmd.b = fill.b;
+    fillCmd.a = slider->isEnabled() ? fill.a : static_cast<std::uint8_t>(fill.a / 2);
+    m_commands.push_back(fillCmd);
+
+    UIRenderCommand thumbCmd;
+    thumbCmd.type = UICommandType::Rectangle;
+    thumbCmd.x = thumbCenterX - thumbWidth * 0.5f;
+    thumbCmd.y = bounds.y + (bounds.height - thumbHeight) * 0.5f;
+    thumbCmd.width = thumbWidth;
+    thumbCmd.height = thumbHeight;
+    const auto thumb = slider->currentThumbColour();
+    thumbCmd.r = thumb.r;
+    thumbCmd.g = thumb.g;
+    thumbCmd.b = thumb.b;
+    thumbCmd.a = thumb.a;
+    thumbCmd.borderThickness = slider->borderThickness();
+    const auto& border = slider->borderColour();
+    thumbCmd.borderR = border.r;
+    thumbCmd.borderG = border.g;
+    thumbCmd.borderB = border.b;
+    thumbCmd.borderA = border.a;
+    m_commands.push_back(thumbCmd);
 }
 
 void UIRenderer::collectTextBoxCommands(ui::TextBox* textBox) {

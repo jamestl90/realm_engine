@@ -5,6 +5,7 @@
 #include "../../include/ui/Layout.hpp"
 #include "../../include/ui/Primitives.hpp"
 #include "../../include/ui/RepeatButton.hpp"
+#include "../../include/ui/Slider.hpp"
 #include <algorithm>
 #if defined(REALM_ENABLE_PROCGEN_PROFILING)
 #include <SDL3/SDL.h>
@@ -33,6 +34,12 @@ std::string setting_text(const char* label, float value) {
 std::string seed_text(procgen::Seed seed) {
     std::ostringstream stream;
     stream << "Seed: " << seed;
+    return stream.str();
+}
+
+std::string percent_text(const char* label, float value) {
+    std::ostringstream stream;
+    stream << label << ": " << std::fixed << std::setprecision(0) << value * 100.0f << "%";
     return stream.str();
 }
 
@@ -109,6 +116,41 @@ std::unique_ptr<ui::RepeatButton> make_step_button(
     return button;
 }
 
+void configure_debug_slider(ui::Slider& slider) {
+    slider.setTrackColour(ui::Colour{174, 188, 184, 255});
+    slider.setFillColour(ui::Colour{42, 116, 82, 255});
+    slider.setThumbColour(ui::Colour{250, 252, 250, 255});
+    slider.setHoverThumbColour(ui::Colour{230, 242, 234, 255});
+    slider.setPressedThumbColour(ui::Colour{204, 224, 212, 255});
+    slider.setBorderColour(ui::Colour{54, 72, 72, 255});
+    slider.setBorderThickness(1.0f);
+    ui::SizeConstraints constraints;
+    constraints.preferred_width = 295.0f;
+    constraints.min_width = 295.0f;
+    constraints.min_height = 26.0f;
+    slider.setSizeConstraints(constraints);
+}
+
+std::unique_ptr<ui::Slider> make_debug_slider(
+    float value,
+    float minimum,
+    float maximum,
+    float step,
+    ui::Slider::ValueChangedCallback callback,
+    ui::Slider** out = nullptr
+) {
+    auto slider = std::make_unique<ui::Slider>();
+    configure_debug_slider(*slider);
+    slider->setRange(minimum, maximum);
+    slider->setStep(step);
+    slider->setValue(value);
+    slider->setOnValueChanged(std::move(callback));
+    if (out) {
+        *out = slider.get();
+    }
+    return slider;
+}
+
 std::unique_ptr<ui::StackPanel> make_control_row(
     std::unique_ptr<ui::TextBlock> label,
     ui::RepeatButton::RepeatCallback decrease,
@@ -128,15 +170,39 @@ std::unique_ptr<ui::StackPanel> make_control_row(
     return row;
 }
 
+std::unique_ptr<ui::StackPanel> make_slider_row(
+    std::unique_ptr<ui::TextBlock> label,
+    std::unique_ptr<ui::Slider> slider
+) {
+    auto row = std::make_unique<ui::StackPanel>(ui::Orientation::Vertical);
+    row->setSpacing(2.0f);
+
+    ui::SizeConstraints row_constraints;
+    row_constraints.preferred_width = 295.0f;
+    row_constraints.min_width = 295.0f;
+    row->setSizeConstraints(row_constraints);
+
+    ui::SizeConstraints label_constraints;
+    label_constraints.preferred_width = 295.0f;
+    label_constraints.min_width = 295.0f;
+    label->setSizeConstraints(label_constraints);
+
+    row->addChild(std::move(label));
+    row->addChild(std::move(slider));
+    return row;
+}
+
 } // namespace
 
 std::unique_ptr<ui::UIElement> GreaterRealmDebugPanel::build(
     procgen::GreaterRealmGeneratorSettings& settings,
     procgen::GreaterRealmDebugOptions& debug_options,
     GreaterRealmPresentationSettings& presentation_settings,
+    procgen::TerrainConstraintBrushSettings& brush_settings,
     const procgen::GreaterRealmMap& map,
     RegenerateCallback on_regenerate,
     ToolChangedCallback on_tool_changed,
+    BrushSettingsChangedCallback on_brush_settings_changed,
     ClearConstraintsCallback on_clear_constraints,
     ViewChangedCallback on_view_changed,
     PresentationChangedCallback on_presentation_changed
@@ -144,8 +210,11 @@ std::unique_ptr<ui::UIElement> GreaterRealmDebugPanel::build(
     m_settings = &settings;
     m_debug_options = &debug_options;
     m_presentation_settings = &presentation_settings;
+    brush_settings = procgen::clamp_terrain_constraint_brush_settings(brush_settings);
+    m_brush_settings = &brush_settings;
     m_on_regenerate = std::move(on_regenerate);
     m_on_tool_changed = std::move(on_tool_changed);
+    m_on_brush_settings_changed = std::move(on_brush_settings_changed);
     m_on_clear_constraints = std::move(on_clear_constraints);
     m_on_view_changed = std::move(on_view_changed);
     m_on_presentation_changed = std::move(on_presentation_changed);
@@ -182,38 +251,28 @@ std::unique_ptr<ui::UIElement> GreaterRealmDebugPanel::build(
     root->addChild(std::move(presentation_row));
     update_presentation_buttons();
 
-    root->addChild(make_control_row(
+    root->addChild(make_slider_row(
         make_text(setting_text("Elevation scale", presentation_settings.elevation_scale), &m_elevation_scale_text),
-        [this]() {
+        make_debug_slider(
+            presentation_settings.elevation_scale,
+            10.0f,
+            250.0f,
+            10.0f,
+            [this](float adjusted) {
             if (!m_presentation_settings) {
-                return false;
+                return;
             }
-            const float adjusted = std::max(10.0f, m_presentation_settings->elevation_scale - 10.0f);
             if (adjusted == m_presentation_settings->elevation_scale) {
-                return false;
+                return;
             }
             m_presentation_settings->elevation_scale = adjusted;
             if (m_elevation_scale_text) {
                 m_elevation_scale_text->setText(setting_text("Elevation scale", adjusted));
             }
             notify_presentation_changed();
-            return true;
-        },
-        [this]() {
-            if (!m_presentation_settings) {
-                return false;
-            }
-            const float adjusted = std::min(250.0f, m_presentation_settings->elevation_scale + 10.0f);
-            if (adjusted == m_presentation_settings->elevation_scale) {
-                return false;
-            }
-            m_presentation_settings->elevation_scale = adjusted;
-            if (m_elevation_scale_text) {
-                m_elevation_scale_text->setText(setting_text("Elevation scale", adjusted));
-            }
-            notify_presentation_changed();
-            return true;
-        }
+            },
+            &m_elevation_scale_slider
+        )
     ));
 
     auto view_selector = std::make_unique<ui::ComboBox>();
@@ -292,27 +351,6 @@ std::unique_ptr<ui::UIElement> GreaterRealmDebugPanel::build(
     root->addChild(std::move(overlay_row));
     update_overlay_buttons();
 
-    const auto adjust = [this](
-        float procgen::GreaterRealmGeneratorSettings::* member,
-        float amount,
-        float minimum,
-        float maximum
-    ) {
-        return [this, member, amount, minimum, maximum]() {
-            if (!m_settings) {
-                return false;
-            }
-            auto& value = m_settings->*member;
-            const float adjusted = std::clamp(value + amount, minimum, maximum);
-            if (adjusted == value) {
-                return false;
-            }
-            value = adjusted;
-            regenerate();
-            return true;
-        };
-    };
-
     auto tuning_columns = std::make_unique<ui::StackPanel>(ui::Orientation::Horizontal);
     tuning_columns->setSpacing(10.0f);
     auto left_settings = std::make_unique<ui::StackPanel>(ui::Orientation::Vertical);
@@ -341,36 +379,56 @@ std::unique_ptr<ui::UIElement> GreaterRealmDebugPanel::build(
         }
     ));
 
-    const auto add_setting_row = [&adjust](
+    const auto add_setting_slider = [this](
         ui::StackPanel& target,
         const char* label,
         float value,
         ui::TextBlock** text,
+        ui::Slider** slider,
         float procgen::GreaterRealmGeneratorSettings::* member,
         float step,
         float minimum,
         float maximum
     ) {
-        target.addChild(make_control_row(
+        target.addChild(make_slider_row(
             make_text(setting_text(label, value), text),
-            adjust(member, -step, minimum, maximum),
-            adjust(member, step, minimum, maximum)
+            make_debug_slider(
+                value,
+                minimum,
+                maximum,
+                step,
+                [this, label, text, member](float adjusted) {
+                    if (!m_settings) {
+                        return;
+                    }
+                    auto& target_value = m_settings->*member;
+                    if (adjusted == target_value) {
+                        return;
+                    }
+                    target_value = adjusted;
+                    if (text && *text) {
+                        (*text)->setText(setting_text(label, adjusted));
+                    }
+                    regenerate();
+                },
+                slider
+            )
         ));
     };
 
-    add_setting_row(*left_settings, "Island bias", settings.island_bias, &m_island_bias_text, &procgen::GreaterRealmGeneratorSettings::island_bias, 0.05f, 0.0f, 1.0f);
-    add_setting_row(*left_settings, "Coast detail", settings.coastline_noise_weight, &m_coastline_noise_text, &procgen::GreaterRealmGeneratorSettings::coastline_noise_weight, 0.01f, 0.0f, 0.40f);
-    add_setting_row(*left_settings, "Base relief", settings.base_elevation_weight, &m_base_elevation_text, &procgen::GreaterRealmGeneratorSettings::base_elevation_weight, 0.05f, 0.0f, 2.0f);
-    add_setting_row(*left_settings, "Sea", settings.sea_level, &m_sea_text, &procgen::GreaterRealmGeneratorSettings::sea_level, 0.02f, 0.10f, 0.90f);
-    add_setting_row(*left_settings, "Mountain strength", settings.mountain_weight, &m_mountain_text, &procgen::GreaterRealmGeneratorSettings::mountain_weight, 0.05f, 0.0f, 1.5f);
-    add_setting_row(*left_settings, "Peak spacing", settings.mountain_peak_spacing, &m_peak_spacing_text, &procgen::GreaterRealmGeneratorSettings::mountain_peak_spacing, 4.0f, 8.0f, 80.0f);
-    add_setting_row(*left_settings, "Peak radius", settings.mountain_peak_radius, &m_peak_radius_text, &procgen::GreaterRealmGeneratorSettings::mountain_peak_radius, 4.0f, 4.0f, 100.0f);
-    add_setting_row(*left_settings, "Peak jaggedness", settings.mountain_peak_jaggedness, &m_peak_jaggedness_text, &procgen::GreaterRealmGeneratorSettings::mountain_peak_jaggedness, 0.10f, 0.0f, 1.0f);
-    add_setting_row(*left_settings, "Ridge", settings.ridge_weight, &m_ridge_text, &procgen::GreaterRealmGeneratorSettings::ridge_weight, 0.05f, 0.0f, 1.5f);
-    add_setting_row(*left_settings, "Valley", settings.valley_weight, &m_valley_text, &procgen::GreaterRealmGeneratorSettings::valley_weight, 0.05f, 0.0f, 1.5f);
-    add_setting_row(*right_settings, "Terrain noise", settings.terrain_noise_weight, &m_noise_text, &procgen::GreaterRealmGeneratorSettings::terrain_noise_weight, 0.10f, 0.0f, 2.0f);
-    add_setting_row(*right_settings, "Ocean depth", settings.ocean_depth_weight, &m_ocean_depth_text, &procgen::GreaterRealmGeneratorSettings::ocean_depth_weight, 0.25f, 0.0f, 3.0f);
-    add_setting_row(*right_settings, "Channel threshold", settings.river_min_drainage_area, &m_channel_threshold_text, &procgen::GreaterRealmGeneratorSettings::river_min_drainage_area, 100.0f, 0.0f, 2000.0f);
+    add_setting_slider(*left_settings, "Island bias", settings.island_bias, &m_island_bias_text, &m_island_bias_slider, &procgen::GreaterRealmGeneratorSettings::island_bias, 0.05f, 0.0f, 1.0f);
+    add_setting_slider(*left_settings, "Coast detail", settings.coastline_noise_weight, &m_coastline_noise_text, &m_coastline_noise_slider, &procgen::GreaterRealmGeneratorSettings::coastline_noise_weight, 0.01f, 0.0f, 0.40f);
+    add_setting_slider(*left_settings, "Base relief", settings.base_elevation_weight, &m_base_elevation_text, &m_base_elevation_slider, &procgen::GreaterRealmGeneratorSettings::base_elevation_weight, 0.05f, 0.0f, 2.0f);
+    add_setting_slider(*left_settings, "Sea", settings.sea_level, &m_sea_text, &m_sea_slider, &procgen::GreaterRealmGeneratorSettings::sea_level, 0.02f, 0.10f, 0.90f);
+    add_setting_slider(*left_settings, "Mountain strength", settings.mountain_weight, &m_mountain_text, &m_mountain_slider, &procgen::GreaterRealmGeneratorSettings::mountain_weight, 0.05f, 0.0f, 1.5f);
+    add_setting_slider(*left_settings, "Peak spacing", settings.mountain_peak_spacing, &m_peak_spacing_text, &m_peak_spacing_slider, &procgen::GreaterRealmGeneratorSettings::mountain_peak_spacing, 4.0f, 8.0f, 80.0f);
+    add_setting_slider(*left_settings, "Peak radius", settings.mountain_peak_radius, &m_peak_radius_text, &m_peak_radius_slider, &procgen::GreaterRealmGeneratorSettings::mountain_peak_radius, 4.0f, 4.0f, 100.0f);
+    add_setting_slider(*left_settings, "Peak jaggedness", settings.mountain_peak_jaggedness, &m_peak_jaggedness_text, &m_peak_jaggedness_slider, &procgen::GreaterRealmGeneratorSettings::mountain_peak_jaggedness, 0.10f, 0.0f, 1.0f);
+    add_setting_slider(*left_settings, "Ridge", settings.ridge_weight, &m_ridge_text, &m_ridge_slider, &procgen::GreaterRealmGeneratorSettings::ridge_weight, 0.05f, 0.0f, 1.5f);
+    add_setting_slider(*left_settings, "Valley", settings.valley_weight, &m_valley_text, &m_valley_slider, &procgen::GreaterRealmGeneratorSettings::valley_weight, 0.05f, 0.0f, 1.5f);
+    add_setting_slider(*right_settings, "Terrain noise", settings.terrain_noise_weight, &m_noise_text, &m_noise_slider, &procgen::GreaterRealmGeneratorSettings::terrain_noise_weight, 0.10f, 0.0f, 2.0f);
+    add_setting_slider(*right_settings, "Ocean depth", settings.ocean_depth_weight, &m_ocean_depth_text, &m_ocean_depth_slider, &procgen::GreaterRealmGeneratorSettings::ocean_depth_weight, 0.25f, 0.0f, 3.0f);
+    add_setting_slider(*right_settings, "Channel threshold", settings.river_min_drainage_area, &m_channel_threshold_text, &m_channel_threshold_slider, &procgen::GreaterRealmGeneratorSettings::river_min_drainage_area, 100.0f, 0.0f, 2000.0f);
 
     tuning_columns->addChild(std::move(left_settings));
     tuning_columns->addChild(std::move(right_settings));
@@ -381,17 +439,68 @@ std::unique_ptr<ui::UIElement> GreaterRealmDebugPanel::build(
             select_constraint_tool(tool);
         };
     };
+    auto brush_title = make_text("Paint type");
+    brush_title->setColour(ui::Colour{10, 18, 24, 255});
+    root->addChild(std::move(brush_title));
+
     auto constraint_row_one = std::make_unique<ui::StackPanel>(ui::Orientation::Horizontal);
     constraint_row_one->setSpacing(6.0f);
-    constraint_row_one->addChild(make_debug_button("Ocean", select_tool(procgen::TerrainConstraintTool::Ocean), 96.0f, &m_ocean_tool_button));
-    constraint_row_one->addChild(make_debug_button("Shallow", select_tool(procgen::TerrainConstraintTool::ShallowWater), 96.0f, &m_shallow_tool_button));
-    constraint_row_one->addChild(make_debug_button("Valley", select_tool(procgen::TerrainConstraintTool::Valley), 96.0f, &m_valley_tool_button));
-    constraint_row_one->addChild(make_debug_button("Mountain", select_tool(procgen::TerrainConstraintTool::Mountain), 96.0f, &m_mountain_tool_button));
+    constraint_row_one->addChild(make_debug_button("Ocean", select_tool(procgen::TerrainConstraintTool::Ocean), 145.0f, &m_ocean_tool_button));
+    constraint_row_one->addChild(make_debug_button("Shallow", select_tool(procgen::TerrainConstraintTool::ShallowWater), 145.0f, &m_shallow_tool_button));
+    constraint_row_one->addChild(make_debug_button("Valley", select_tool(procgen::TerrainConstraintTool::Valley), 145.0f, &m_valley_tool_button));
+    constraint_row_one->addChild(make_debug_button("Mountain", select_tool(procgen::TerrainConstraintTool::Mountain), 145.0f, &m_mountain_tool_button));
     root->addChild(std::move(constraint_row_one));
     update_constraint_tool_buttons();
     if (m_on_tool_changed) {
         m_on_tool_changed(m_selected_tool);
     }
+    notify_brush_settings_changed();
+
+    auto brush_settings_row = std::make_unique<ui::StackPanel>(ui::Orientation::Horizontal);
+    brush_settings_row->setSpacing(10.0f);
+    brush_settings_row->addChild(make_slider_row(
+        make_text(percent_text("Brush size", brush_settings.normalized_radius), &m_brush_size_text),
+        make_debug_slider(
+            brush_settings.normalized_radius,
+            procgen::MIN_TERRAIN_CONSTRAINT_BRUSH_RADIUS,
+            procgen::MAX_TERRAIN_CONSTRAINT_BRUSH_RADIUS,
+            0.01f,
+            [this](float adjusted) {
+                if (!m_brush_settings) {
+                    return;
+                }
+                m_brush_settings->normalized_radius = adjusted;
+                *m_brush_settings = procgen::clamp_terrain_constraint_brush_settings(*m_brush_settings);
+                if (m_brush_size_text) {
+                    m_brush_size_text->setText(percent_text("Brush size", m_brush_settings->normalized_radius));
+                }
+                notify_brush_settings_changed();
+            },
+            &m_brush_size_slider
+        )
+    ));
+    brush_settings_row->addChild(make_slider_row(
+        make_text(percent_text("Brush strength", brush_settings.strength), &m_brush_strength_text),
+        make_debug_slider(
+            brush_settings.strength,
+            0.0f,
+            1.0f,
+            0.05f,
+            [this](float adjusted) {
+                if (!m_brush_settings) {
+                    return;
+                }
+                m_brush_settings->strength = adjusted;
+                *m_brush_settings = procgen::clamp_terrain_constraint_brush_settings(*m_brush_settings);
+                if (m_brush_strength_text) {
+                    m_brush_strength_text->setText(percent_text("Brush strength", m_brush_settings->strength));
+                }
+                notify_brush_settings_changed();
+            },
+            &m_brush_strength_slider
+        )
+    ));
+    root->addChild(std::move(brush_settings_row));
 
     auto constraint_row_two = std::make_unique<ui::StackPanel>(ui::Orientation::Horizontal);
     constraint_row_two->setSpacing(6.0f);
@@ -457,6 +566,38 @@ void GreaterRealmDebugPanel::update(const procgen::GreaterRealmMap& map) {
     if (m_channel_threshold_text) m_channel_threshold_text->setText(setting_text("Channel threshold", m_settings->river_min_drainage_area));
     if (m_elevation_scale_text && m_presentation_settings) {
         m_elevation_scale_text->setText(setting_text("Elevation scale", m_presentation_settings->elevation_scale));
+    }
+
+    if (m_sea_slider) m_sea_slider->setValue(m_settings->sea_level);
+    if (m_island_bias_slider) m_island_bias_slider->setValue(m_settings->island_bias);
+    if (m_coastline_noise_slider) m_coastline_noise_slider->setValue(m_settings->coastline_noise_weight);
+    if (m_base_elevation_slider) m_base_elevation_slider->setValue(m_settings->base_elevation_weight);
+    if (m_mountain_slider) m_mountain_slider->setValue(m_settings->mountain_weight);
+    if (m_peak_spacing_slider) m_peak_spacing_slider->setValue(m_settings->mountain_peak_spacing);
+    if (m_peak_radius_slider) m_peak_radius_slider->setValue(m_settings->mountain_peak_radius);
+    if (m_peak_jaggedness_slider) m_peak_jaggedness_slider->setValue(m_settings->mountain_peak_jaggedness);
+    if (m_ridge_slider) m_ridge_slider->setValue(m_settings->ridge_weight);
+    if (m_valley_slider) m_valley_slider->setValue(m_settings->valley_weight);
+    if (m_noise_slider) m_noise_slider->setValue(m_settings->terrain_noise_weight);
+    if (m_ocean_depth_slider) m_ocean_depth_slider->setValue(m_settings->ocean_depth_weight);
+    if (m_channel_threshold_slider) m_channel_threshold_slider->setValue(m_settings->river_min_drainage_area);
+    if (m_elevation_scale_slider && m_presentation_settings) {
+        m_elevation_scale_slider->setValue(m_presentation_settings->elevation_scale);
+    }
+    if (m_brush_settings) {
+        *m_brush_settings = procgen::clamp_terrain_constraint_brush_settings(*m_brush_settings);
+        if (m_brush_size_text) {
+            m_brush_size_text->setText(percent_text("Brush size", m_brush_settings->normalized_radius));
+        }
+        if (m_brush_strength_text) {
+            m_brush_strength_text->setText(percent_text("Brush strength", m_brush_settings->strength));
+        }
+        if (m_brush_size_slider) {
+            m_brush_size_slider->setValue(m_brush_settings->normalized_radius);
+        }
+        if (m_brush_strength_slider) {
+            m_brush_strength_slider->setValue(m_brush_settings->strength);
+        }
     }
 
     if (m_coverage_text || m_terrain_text || m_hydrology_text) {
@@ -565,6 +706,12 @@ void GreaterRealmDebugPanel::select_constraint_tool(procgen::TerrainConstraintTo
     }
 }
 
+void GreaterRealmDebugPanel::notify_brush_settings_changed() {
+    if (m_on_brush_settings_changed && m_brush_settings) {
+        m_on_brush_settings_changed(*m_brush_settings);
+    }
+}
+
 void GreaterRealmDebugPanel::update_constraint_tool_buttons() {
     const auto update_button = [this](
         ui::Button* button,
@@ -575,10 +722,16 @@ void GreaterRealmDebugPanel::update_constraint_tool_buttons() {
         }
         const bool selected = tool == m_selected_tool;
         button->setBackgroundColour(selected
-            ? ui::Colour{42, 116, 82, 255}
+            ? ui::Colour{124, 84, 38, 255}
             : ui::Colour{54, 88, 128, 255});
+        button->setHoverColour(selected
+            ? ui::Colour{148, 102, 48, 255}
+            : ui::Colour{72, 108, 152, 255});
+        button->setPressedColour(selected
+            ? ui::Colour{96, 62, 28, 255}
+            : ui::Colour{38, 68, 102, 255});
         button->setBorderColour(selected
-            ? ui::Colour{24, 76, 52, 255}
+            ? ui::Colour{86, 54, 24, 255}
             : ui::Colour{28, 52, 78, 255});
     };
 

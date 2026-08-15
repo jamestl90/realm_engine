@@ -81,10 +81,10 @@ TerrainMesh build_heightfield_mesh(
 
             TerrainVertex vertex;
             vertex.x = static_cast<float>(x) * cell_size - origin_x;
-            vertex.y = static_cast<float>(y) * cell_size - origin_y;
+            vertex.y = origin_y - static_cast<float>(y) * cell_size;
             vertex.elevation = elevation;
             vertex.gradient_x = (elevation_at(right_x, y) - elevation_at(left_x, y)) / x_distance;
-            vertex.gradient_y = (elevation_at(x, bottom_y) - elevation_at(x, top_y)) / y_distance;
+            vertex.gradient_y = (elevation_at(x, top_y) - elevation_at(x, bottom_y)) / y_distance;
 
             if (!rgba.empty()) {
                 const std::size_t colour_offset = (static_cast<std::size_t>(y) * width + x) * 4;

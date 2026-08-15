@@ -11,6 +11,8 @@ enum class GreaterRealmDebugView : std::uint8_t {
     Terrain,
     Elevation,
     Landmass,
+    HillRelief,
+    MountainRelief,
     MountainInfluence,
     Slope,
     CoastDistance,

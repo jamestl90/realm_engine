@@ -37,6 +37,8 @@ bool complete_maps_match(const procgen::GreaterRealmMap& a, const procgen::Great
         const auto& left = a.cells[index];
         const auto& right = b.cells[index];
         if (left.landmass_elevation != right.landmass_elevation
+            || left.hill_relief != right.hill_relief
+            || left.mountain_relief != right.mountain_relief
             || left.elevation != right.elevation
             || left.drainage_elevation != right.drainage_elevation
             || left.drainage_area != right.drainage_area
@@ -71,6 +73,50 @@ bool topology_matches(const procgen::GreaterRealmMap& a, const procgen::GreaterR
         }
     }
     return true;
+}
+
+bool river_export_candidate(
+    const procgen::GreaterRealmMap& map,
+    std::uint32_t source_index,
+    float minimum_area
+) {
+    if (source_index >= map.cells.size()) {
+        return false;
+    }
+
+    const auto& source = map.cells[source_index];
+    if (source.is_water
+        || source.is_coastal
+        || source.downslope_index == procgen::INVALID_CELL_INDEX
+        || source.downslope_index >= map.cells.size()
+        || source.drainage_area < minimum_area) {
+        return false;
+    }
+
+    const auto& destination = map.cells[source.downslope_index];
+    if (destination.is_coastal
+        || destination.drainage_elevation > source.drainage_elevation) {
+        return false;
+    }
+    if (source.distance_to_coast <= 3.0f
+        && destination.distance_to_coast >= source.distance_to_coast) {
+        return false;
+    }
+    return true;
+}
+
+bool has_upstream_river_candidate(
+    const procgen::GreaterRealmMap& map,
+    std::uint32_t destination_index,
+    float minimum_area
+) {
+    for (std::uint32_t source_index = 0; source_index < map.cells.size(); ++source_index) {
+        if (map.cells[source_index].downslope_index == destination_index
+            && river_export_candidate(map, source_index, minimum_area)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 bool test_constraint_tools_sampling_and_serialization() {
@@ -205,11 +251,12 @@ bool test_river_accumulation_connectivity_and_thresholding() {
 
     settings.river_min_drainage_area = 80.0f;
     const auto previous_default = procgen::generate_greater_realm(settings);
-    settings.river_min_drainage_area = 800.0f;
+    settings.river_min_drainage_area = procgen::GreaterRealmGeneratorSettings{}.river_min_drainage_area;
     const auto tuned_default = procgen::generate_greater_realm(settings);
 
     settings.river_min_drainage_area = 1.0f;
     const auto rivers = procgen::generate_greater_realm(settings);
+    const float visible_river_minimum = settings.river_min_drainage_area;
 
     settings.river_min_drainage_area = 1000000.0f;
     const auto hidden = procgen::generate_greater_realm(settings);
@@ -224,6 +271,12 @@ bool test_river_accumulation_connectivity_and_thresholding() {
         const auto& source = rivers.cells[river.source_index];
         const auto& destination = rivers.cells[river.destination_index];
         valid &= source.downslope_index == river.destination_index;
+        valid &= !source.is_coastal;
+        valid &= !destination.is_coastal;
+        if (source.distance_to_coast <= 3.0f) {
+            valid &= destination.distance_to_coast < source.distance_to_coast;
+        }
+        valid &= has_upstream_river_candidate(rivers, river.source_index, visible_river_minimum);
         valid &= destination.drainage_area >= source.drainage_area;
         valid &= destination.drainage_elevation <= source.drainage_elevation;
         valid &= river.drainage_area == source.drainage_area && river.width >= 1.0f;
@@ -239,6 +292,33 @@ bool test_river_accumulation_connectivity_and_thresholding() {
     ok &= require(topology_matches(rivers, hidden), "channel visualization parameters do not alter generated terrain");
     ok &= require(rivers.drainage_order == hidden.drainage_order, "channel threshold does not alter drainage topology");
     return ok;
+}
+
+bool test_default_rivers_do_not_export_coastal_land_segments() {
+    procgen::GreaterRealmGeneratorSettings settings;
+    const auto map = procgen::generate_greater_realm(settings);
+
+    bool valid = true;
+    for (const auto& river : map.rivers) {
+        valid &= river.source_index < map.cells.size();
+        valid &= river.destination_index < map.cells.size();
+        if (!valid) {
+            break;
+        }
+        valid &= !map.cells[river.source_index].is_coastal;
+        valid &= !map.cells[river.destination_index].is_coastal;
+        if (map.cells[river.source_index].distance_to_coast <= 3.0f) {
+            valid &= map.cells[river.destination_index].distance_to_coast
+                < map.cells[river.source_index].distance_to_coast;
+        }
+        valid &= has_upstream_river_candidate(
+            map,
+            river.source_index,
+            settings.river_min_drainage_area
+        );
+    }
+
+    return require(valid, "default river overlay does not export coastal specks or isolated starts");
 }
 
 bool test_rivers_reach_debug_visualization() {
@@ -276,6 +356,7 @@ int main() {
         test_drainage_is_complete_acyclic_and_downhill,
         test_catchment_area_accumulates_without_weather,
         test_river_accumulation_connectivity_and_thresholding,
+        test_default_rivers_do_not_export_coastal_land_segments,
         test_rivers_reach_debug_visualization
     };
 

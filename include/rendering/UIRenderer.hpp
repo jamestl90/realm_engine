@@ -6,6 +6,7 @@
 #include "../ui/Button.hpp"
 #include "../ui/TextBox.hpp"
 #include "../ui/ComboBox.hpp"
+#include "../ui/Slider.hpp"
 #include "Sprite.hpp"
 #include "Texture.hpp"
 #include "FontManager.hpp"
@@ -103,6 +104,7 @@ private:
     // Collect commands for specific element types
     void collectLayoutContainerCommands(ui::LayoutContainer* container);
     void collectButtonCommands(ui::Button* button);
+    void collectSliderCommands(ui::Slider* slider);
     void collectTextBoxCommands(ui::TextBox* textBox);
     void collectComboBoxCommands(ui::ComboBox* comboBox);
     void collectComboBoxDropdownCommands(ui::ComboBox* comboBox);

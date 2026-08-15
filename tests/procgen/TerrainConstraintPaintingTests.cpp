@@ -99,13 +99,88 @@ bool test_samples_apply_to_constraint_field() {
     return ok;
 }
 
+bool test_brush_settings_clamp_and_affect_samples() {
+    const procgen::TerrainPreviewBounds bounds{0.0f, 0.0f, 320.0f, 240.0f};
+    procgen::TerrainConstraintPaintSession session;
+    session.set_brush_settings({99.0f, 2.0f});
+
+    const auto sample = session.pointer_down(bounds, 160.0f, 120.0f, false);
+    bool ok = require(sample.has_value(), "valid brush sample is emitted");
+    if (sample) {
+        ok &= require(
+            sample->normalized_radius == procgen::MAX_TERRAIN_CONSTRAINT_BRUSH_RADIUS,
+            "brush radius clamps to maximum"
+        );
+        ok &= require(sample->strength == 1.0f, "brush strength clamps to maximum");
+    }
+
+    session.set_brush_settings({-1.0f, -1.0f});
+    const auto clamped = session.brush_settings();
+    ok &= require(
+        clamped.normalized_radius == procgen::MIN_TERRAIN_CONSTRAINT_BRUSH_RADIUS,
+        "brush radius clamps to minimum"
+    );
+    return ok && require(clamped.strength == 0.0f, "brush strength clamps to minimum");
+}
+
+bool test_sample_radius_and_strength_drive_constraint_field() {
+    procgen::TerrainConstraintField weak(32, 32);
+    procgen::TerrainConstraintField strong(32, 32);
+    const procgen::TerrainPreviewBounds bounds{0.0f, 0.0f, 320.0f, 320.0f};
+
+    const auto weak_sample = procgen::terrain_constraint_paint_sample(
+        bounds,
+        procgen::TerrainConstraintTool::Mountain,
+        160.0f,
+        160.0f,
+        {0.05f, 0.25f}
+    );
+    const auto strong_sample = procgen::terrain_constraint_paint_sample(
+        bounds,
+        procgen::TerrainConstraintTool::Mountain,
+        160.0f,
+        160.0f,
+        {0.20f, 1.0f}
+    );
+    if (!weak_sample || !strong_sample) {
+        return require(false, "configured brush samples are emitted");
+    }
+
+    weak.paint(
+        weak_sample->tool,
+        weak_sample->normalized_x,
+        weak_sample->normalized_y,
+        weak_sample->normalized_radius,
+        weak_sample->strength
+    );
+    strong.paint(
+        strong_sample->tool,
+        strong_sample->normalized_x,
+        strong_sample->normalized_y,
+        strong_sample->normalized_radius,
+        strong_sample->strength
+    );
+
+    const auto weak_center = weak.sample(0.5f, 0.5f);
+    const auto strong_center = strong.sample(0.5f, 0.5f);
+    const auto weak_shoulder = weak.sample(0.60f, 0.5f);
+    const auto strong_shoulder = strong.sample(0.60f, 0.5f);
+
+    bool ok = true;
+    ok &= require(strong_center.influence > weak_center.influence, "brush strength controls effective center influence");
+    ok &= require(weak_shoulder.influence == 0.0f, "small brush leaves distant shoulder untouched");
+    return ok && require(strong_shoulder.influence > 0.0f, "larger brush reaches the shoulder");
+}
+
 } // namespace
 
 int main() {
     const std::array tests{
         test_preview_coordinate_conversion,
         test_paint_session_lifecycle_and_blocking,
-        test_samples_apply_to_constraint_field
+        test_samples_apply_to_constraint_field,
+        test_brush_settings_clamp_and_affect_samples,
+        test_sample_radius_and_strength_drive_constraint_field
     };
 
     bool ok = true;

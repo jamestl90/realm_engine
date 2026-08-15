@@ -45,6 +45,7 @@ private:
     procgen::GreaterRealmMap m_procgen_map;
     procgen::GreaterRealmDebugOptions m_procgen_debug_options;
     GreaterRealmPresentationSettings m_procgen_presentation;
+    procgen::TerrainConstraintBrushSettings m_procgen_brush_settings;
     procgen::TerrainConstraintPaintSession m_procgen_paint_session;
     GreaterRealmDebugPanel m_procgen_debug_panel;
     bool m_procgen_paint_dirty{false};

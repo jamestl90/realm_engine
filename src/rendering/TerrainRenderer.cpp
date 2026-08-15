@@ -108,11 +108,11 @@ Matrix4 terrain_view_projection(
     const float horizontal_extent = std::max(mesh.extent_x, mesh.extent_y);
     const Vec3 target{0.0f, 0.0f, centre_elevation};
     const Vec3 eye{
-        horizontal_extent * 0.78f,
-        -horizontal_extent * 1.12f,
-        centre_elevation + horizontal_extent * 0.82f
+        0.0f,
+        0.0f,
+        centre_elevation + std::max(horizontal_extent, 1.0f)
     };
-    const Matrix4 view = look_at(eye, target, {0.0f, 0.0f, 1.0f});
+    const Matrix4 view = look_at(eye, target, {0.0f, 1.0f, 0.0f});
 
     const float half_x = mesh.extent_x * 0.5f;
     const float half_y = mesh.extent_y * 0.5f;
@@ -144,7 +144,7 @@ Matrix4 terrain_view_projection(
 
     const float centre_x = (minimum_view_x + maximum_view_x) * 0.5f;
     const float centre_y = (minimum_view_y + maximum_view_y) * 0.5f;
-    constexpr float framing_margin = 0.95f;
+    constexpr float framing_margin = 0.68f;
     float view_half_width = (maximum_view_x - minimum_view_x) * framing_margin;
     float view_half_height = (maximum_view_y - minimum_view_y) * framing_margin;
     const float safe_aspect = std::max(viewport_aspect, 0.01f);

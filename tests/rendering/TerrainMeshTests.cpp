@@ -39,7 +39,7 @@ bool test_mesh_shape_positions_and_colours() {
     ok &= require(nearly_equal(mesh.extent_x, 4.0f), "mesh records horizontal extent");
     ok &= require(nearly_equal(mesh.extent_y, 2.0f), "mesh records vertical extent");
     ok &= require(nearly_equal(mesh.vertices.front().x, -2.0f), "mesh is horizontally centred");
-    ok &= require(nearly_equal(mesh.vertices.front().y, -1.0f), "mesh is vertically centred");
+    ok &= require(nearly_equal(mesh.vertices.front().y, 1.0f), "top map row maps to positive world y");
     ok &= require(mesh.vertices.front().r == 12
         && mesh.vertices.front().g == 34
         && mesh.vertices.front().b == 56,
@@ -60,6 +60,22 @@ bool test_gradients_use_central_and_edge_differences() {
     for (const auto& vertex : mesh.vertices) {
         ok &= require(nearly_equal(vertex.gradient_x, 1.0f), "linear x ramp has stable x gradient");
         ok &= require(nearly_equal(vertex.gradient_y, 0.0f), "linear x ramp has zero y gradient");
+    }
+    return ok;
+}
+
+bool test_vertical_map_ramp_uses_y_up_world_gradient() {
+    const std::vector<float> elevations{
+        0.0f, 0.0f, 0.0f,
+        2.0f, 2.0f, 2.0f,
+        4.0f, 4.0f, 4.0f
+    };
+    const auto mesh = rendering::build_heightfield_mesh(3, 3, 2.0f, elevations);
+
+    bool ok = require(mesh.has_expected_shape(), "vertical ramp mesh is valid");
+    for (const auto& vertex : mesh.vertices) {
+        ok &= require(nearly_equal(vertex.gradient_x, 0.0f), "linear y ramp has zero x gradient");
+        ok &= require(nearly_equal(vertex.gradient_y, -1.0f), "map rows increasing downward produce negative y-up gradient");
     }
     return ok;
 }
@@ -91,6 +107,7 @@ int main() {
     bool ok = true;
     ok &= test_mesh_shape_positions_and_colours();
     ok &= test_gradients_use_central_and_edge_differences();
+    ok &= test_vertical_map_ramp_uses_y_up_world_gradient();
     ok &= test_invalid_inputs_are_rejected();
 
     if (!ok) {

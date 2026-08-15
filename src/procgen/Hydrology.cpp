@@ -27,6 +27,8 @@ constexpr std::array<std::array<std::int32_t, 2>, 8> NEIGHBORS{{
     {{1, 0}}, {{-1, 1}}, {{0, 1}}, {{1, 1}}
 }};
 
+constexpr float COASTAL_RIVER_APPROACH_DISTANCE = 3.0f;
+
 } // namespace
 
 void build_greater_realm_drainage(GreaterRealmMap& map) {
@@ -129,18 +131,41 @@ void build_greater_realm_river_channels(
         }
     }
 
-    for (std::uint32_t source_index = 0; source_index < map.cells.size(); ++source_index) {
+    const auto is_export_candidate = [&map, minimum_area](std::uint32_t source_index) {
         const auto& source = map.cells[source_index];
         if (source.is_water
+            || source.is_coastal
             || source.downslope_index == INVALID_CELL_INDEX
             || source.drainage_area < minimum_area) {
-            continue;
+            return false;
         }
 
         const auto& destination = map.cells[source.downslope_index];
-        if (destination.drainage_elevation > source.drainage_elevation) {
+        if (destination.is_coastal
+            || destination.drainage_elevation > source.drainage_elevation) {
+            return false;
+        }
+        if (source.distance_to_coast <= COASTAL_RIVER_APPROACH_DISTANCE
+            && destination.distance_to_coast >= source.distance_to_coast) {
+            return false;
+        }
+        return true;
+    };
+
+    std::vector<bool> export_candidates(map.cells.size(), false);
+    std::vector<bool> has_upstream_candidate(map.cells.size(), false);
+    for (std::uint32_t source_index = 0; source_index < map.cells.size(); ++source_index) {
+        export_candidates[source_index] = is_export_candidate(source_index);
+        if (export_candidates[source_index]) {
+            has_upstream_candidate[map.cells[source_index].downslope_index] = true;
+        }
+    }
+
+    for (std::uint32_t source_index = 0; source_index < map.cells.size(); ++source_index) {
+        if (!export_candidates[source_index] || !has_upstream_candidate[source_index]) {
             continue;
         }
+        const auto& source = map.cells[source_index];
 
         map.rivers.push_back({
             source_index,

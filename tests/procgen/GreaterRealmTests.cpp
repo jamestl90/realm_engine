@@ -28,6 +28,8 @@ bool maps_match(const procgen::GreaterRealmMap& a, const procgen::GreaterRealmMa
         if (left.x != right.x
             || left.y != right.y
             || left.landmass_elevation != right.landmass_elevation
+            || left.hill_relief != right.hill_relief
+            || left.mountain_relief != right.mountain_relief
             || left.elevation != right.elevation
             || left.is_water != right.is_water
             || left.is_ocean != right.is_ocean
@@ -51,6 +53,49 @@ float elevation_difference_sum(const procgen::GreaterRealmMap& a, const procgen:
     }
 
     return total;
+}
+
+float land_elevation_difference_sum(const procgen::GreaterRealmMap& a, const procgen::GreaterRealmMap& b) {
+    const std::size_t count = std::min(a.cells.size(), b.cells.size());
+    float total = 0.0f;
+
+    for (std::size_t i = 0; i < count; ++i) {
+        if (!a.cells[i].is_water) {
+            total += std::abs(a.cells[i].elevation - b.cells[i].elevation);
+        }
+    }
+
+    return total;
+}
+
+bool water_elevations_match(const procgen::GreaterRealmMap& a, const procgen::GreaterRealmMap& b) {
+    const std::size_t count = std::min(a.cells.size(), b.cells.size());
+    for (std::size_t i = 0; i < count; ++i) {
+        if (a.cells[i].is_water && a.cells[i].elevation != b.cells[i].elevation) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool land_elevation_monotonic(
+    const procgen::GreaterRealmMap& lower,
+    const procgen::GreaterRealmMap& upper,
+    bool expect_non_decreasing
+) {
+    const std::size_t count = std::min(lower.cells.size(), upper.cells.size());
+    for (std::size_t i = 0; i < count; ++i) {
+        if (lower.cells[i].is_water) {
+            continue;
+        }
+        if (expect_non_decreasing && upper.cells[i].elevation < lower.cells[i].elevation) {
+            return false;
+        }
+        if (!expect_non_decreasing && upper.cells[i].elevation > lower.cells[i].elevation) {
+            return false;
+        }
+    }
+    return true;
 }
 
 std::size_t count_land(const procgen::GreaterRealmMap& map) {
@@ -294,6 +339,191 @@ bool test_mountain_strength_changes_only_local_mountain_relief() {
     ok &= require(uninfluenced_land_unchanged, "mountain strength does not shift land outside mountain influence");
     ok &= require(land_never_lowered, "stronger mountains never lower land elevation");
     return ok && require(influenced_elevation_gain > 1.0f, "mountain strength raises localized influenced terrain");
+}
+
+bool test_land_relief_stages_are_inspectable_and_separated() {
+    procgen::GreaterRealmGeneratorSettings settings;
+    settings.seed = 314159;
+    settings.width = 128;
+    settings.height = 96;
+    const auto map = procgen::generate_greater_realm(settings);
+
+    std::size_t land_count = 0;
+    std::size_t peak_like_count = 0;
+    std::size_t hill_stage_count = 0;
+    float peak_relief_sum = 0.0f;
+    float hill_relief_sum = 0.0f;
+    bool stages_valid = true;
+
+    for (const auto& cell : map.cells) {
+        if (cell.is_water) {
+            stages_valid &= cell.hill_relief == 0.0f && cell.mountain_relief == 0.0f;
+            continue;
+        }
+
+        ++land_count;
+        stages_valid &= cell.hill_relief >= 0.0f && cell.hill_relief <= 1.0f;
+        stages_valid &= cell.mountain_relief >= 0.0f && cell.mountain_relief <= 1.0f;
+        stages_valid &= cell.mountain_relief >= cell.hill_relief;
+        ++hill_stage_count;
+        hill_relief_sum += cell.hill_relief;
+        if (cell.mountain_influence > 0.90f && cell.landmass_elevation > 0.35f) {
+            ++peak_like_count;
+            peak_relief_sum += cell.mountain_relief;
+        }
+    }
+
+    const float average_peak_relief = peak_like_count > 0 ? peak_relief_sum / static_cast<float>(peak_like_count) : 0.0f;
+    const float average_hill_relief = hill_stage_count > 0 ? hill_relief_sum / static_cast<float>(hill_stage_count) : 0.0f;
+
+    bool ok = true;
+    ok &= require(land_count > 0, "relief-stage test map contains land");
+    ok &= require(stages_valid, "hill and mountain relief stages are valid normalized cell data");
+    ok &= require(peak_like_count > 0, "test map contains peak-distance mountain cells");
+    ok &= require(average_peak_relief > average_hill_relief + 0.20f, "mountain target is visibly separated from low hill relief");
+    return ok;
+}
+
+bool test_relief_control_ranges_preserve_topology_and_monotonicity() {
+    constexpr std::array seeds{314159ull, 515151ull, 616161ull};
+    bool ok = true;
+
+    for (const auto seed : seeds) {
+        procgen::GreaterRealmGeneratorSettings settings;
+        settings.seed = seed;
+        settings.width = 96;
+        settings.height = 72;
+
+        auto lower = settings;
+        auto upper = settings;
+
+        lower.base_elevation_weight = 0.0f;
+        upper.base_elevation_weight = 2.0f;
+        const auto low_base = procgen::generate_greater_realm(lower);
+        const auto default_base = procgen::generate_greater_realm(settings);
+        const auto high_base = procgen::generate_greater_realm(upper);
+        ok &= require(topology_matches(low_base, default_base) && topology_matches(default_base, high_base), "base relief does not change topology");
+        ok &= require(water_elevations_match(low_base, high_base), "base relief does not change water elevation");
+        ok &= require(land_elevation_monotonic(low_base, default_base, true) && land_elevation_monotonic(default_base, high_base, true), "base relief is monotonic across lower/default/upper settings");
+        ok &= require(land_elevation_difference_sum(low_base, high_base) > 5.0f, "base relief has visible land significance");
+
+        lower = settings;
+        upper = settings;
+        lower.ridge_weight = 0.0f;
+        upper.ridge_weight = 1.5f;
+        const auto low_ridge = procgen::generate_greater_realm(lower);
+        const auto default_ridge = procgen::generate_greater_realm(settings);
+        const auto high_ridge = procgen::generate_greater_realm(upper);
+        ok &= require(topology_matches(low_ridge, high_ridge), "ridge relief does not change topology");
+        ok &= require(water_elevations_match(low_ridge, high_ridge), "ridge relief does not change water elevation");
+        ok &= require(land_elevation_monotonic(low_ridge, default_ridge, true) && land_elevation_monotonic(default_ridge, high_ridge, true), "ridge relief is monotonic across lower/default/upper settings");
+        ok &= require(land_elevation_difference_sum(low_ridge, high_ridge) > 1.0f, "ridge relief has visible land significance");
+
+        lower = settings;
+        upper = settings;
+        lower.valley_weight = 0.0f;
+        upper.valley_weight = 1.5f;
+        const auto low_valley = procgen::generate_greater_realm(lower);
+        const auto default_valley = procgen::generate_greater_realm(settings);
+        const auto high_valley = procgen::generate_greater_realm(upper);
+        ok &= require(topology_matches(low_valley, high_valley), "valley relief does not change topology");
+        ok &= require(water_elevations_match(low_valley, high_valley), "valley relief does not change water elevation");
+        ok &= require(land_elevation_monotonic(low_valley, default_valley, false) && land_elevation_monotonic(default_valley, high_valley, false), "valley relief is monotonic across lower/default/upper settings");
+        ok &= require(land_elevation_difference_sum(low_valley, high_valley) > 1.0f, "valley relief has visible land significance");
+    }
+
+    return ok;
+}
+
+bool test_mountain_blend_uses_local_positive_constraint() {
+    procgen::GreaterRealmGeneratorSettings settings;
+    settings.seed = 818181;
+    settings.width = 128;
+    settings.height = 96;
+    settings.mountain_weight = 0.0f;
+    const auto low = procgen::generate_greater_realm(settings);
+
+    settings.mountain_weight = 1.2f;
+    const auto high = procgen::generate_greater_realm(settings);
+
+    std::size_t low_constraint_count = 0;
+    std::size_t high_constraint_count = 0;
+    float low_constraint_gain = 0.0f;
+    float high_constraint_gain = 0.0f;
+    bool uninfluenced_unchanged = true;
+    bool monotonic = true;
+
+    for (std::size_t i = 0; i < low.cells.size(); ++i) {
+        const auto& baseline = low.cells[i];
+        const auto& raised = high.cells[i];
+        if (baseline.is_water) {
+            continue;
+        }
+
+        monotonic &= raised.elevation >= baseline.elevation;
+        if (baseline.mountain_influence == 0.0f) {
+            uninfluenced_unchanged &= raised.elevation == baseline.elevation;
+            continue;
+        }
+
+        const float gain = raised.elevation - baseline.elevation;
+        if (baseline.landmass_elevation < 0.20f) {
+            ++low_constraint_count;
+            low_constraint_gain += gain;
+        } else if (baseline.landmass_elevation > 0.60f) {
+            ++high_constraint_count;
+            high_constraint_gain += gain;
+        }
+    }
+
+    const float low_average = low_constraint_count > 0 ? low_constraint_gain / static_cast<float>(low_constraint_count) : 0.0f;
+    const float high_average = high_constraint_count > 0 ? high_constraint_gain / static_cast<float>(high_constraint_count) : 0.0f;
+
+    bool ok = true;
+    ok &= require(topology_matches(low, high), "mountain blend does not change topology");
+    ok &= require(water_elevations_match(low, high), "mountain blend does not change water elevation");
+    ok &= require(monotonic, "mountain strength remains monotonic on land");
+    ok &= require(uninfluenced_unchanged, "mountain strength remains local to peak-distance influence");
+    ok &= require(low_constraint_count > 0 && high_constraint_count > 0, "test map contains low and high positive-constraint mountain cells");
+    ok &= require(high_average > low_average * 2.0f, "positive signed constraint locally controls the mountain blend strength");
+    return ok;
+}
+
+bool test_terrain_noise_range_is_masked_to_land_relief() {
+    constexpr std::array seeds{314159ull, 515151ull, 616161ull};
+    bool ok = true;
+
+    for (const auto seed : seeds) {
+        procgen::GreaterRealmGeneratorSettings settings;
+        settings.seed = seed;
+        settings.width = 96;
+        settings.height = 72;
+        settings.terrain_noise_weight = 0.0f;
+        const auto smooth = procgen::generate_greater_realm(settings);
+
+        settings.terrain_noise_weight = 2.0f;
+        const auto noisy = procgen::generate_greater_realm(settings);
+
+        std::size_t raised_count = 0;
+        std::size_t lowered_count = 0;
+        for (std::size_t i = 0; i < smooth.cells.size(); ++i) {
+            if (smooth.cells[i].is_water) {
+                continue;
+            }
+            if (noisy.cells[i].elevation > smooth.cells[i].elevation) {
+                ++raised_count;
+            } else if (noisy.cells[i].elevation < smooth.cells[i].elevation) {
+                ++lowered_count;
+            }
+        }
+
+        ok &= require(topology_matches(smooth, noisy), "terrain noise range does not change topology");
+        ok &= require(water_elevations_match(smooth, noisy), "terrain noise range does not change water elevation");
+        ok &= require(raised_count > 0 && lowered_count > 0, "terrain noise can raise and lower local land relief");
+        ok &= require(land_elevation_difference_sum(smooth, noisy) > 1.0f, "terrain noise range has visible land significance");
+    }
+
+    return ok;
 }
 
 bool test_terrain_noise_changes_land_relief_only() {
@@ -541,6 +771,8 @@ bool test_debug_base_views() {
     low.terrain_form = procgen::TerrainForm::Plains;
     low.elevation = 0.55f;
     low.landmass_elevation = -0.8f;
+    low.hill_relief = 0.05f;
+    low.mountain_relief = 0.05f;
     low.mountain_influence = 0.0f;
     low.slope = 0.0f;
     low.distance_to_coast = 0.0f;
@@ -550,6 +782,8 @@ bool test_debug_base_views() {
     high.terrain_form = procgen::TerrainForm::Mountains;
     high.elevation = 0.95f;
     high.landmass_elevation = 0.8f;
+    high.hill_relief = 0.20f;
+    high.mountain_relief = 0.80f;
     high.mountain_influence = 1.0f;
     high.slope = 2.0f;
     high.distance_to_coast = 20.0f;
@@ -687,7 +921,11 @@ int main() {
         test_coastal_land_preserves_elevation_form,
         test_inland_relief_preserves_landmass_topology,
         test_mountain_strength_changes_only_local_mountain_relief,
+        test_land_relief_stages_are_inspectable_and_separated,
+        test_relief_control_ranges_preserve_topology_and_monotonicity,
+        test_mountain_blend_uses_local_positive_constraint,
         test_terrain_noise_changes_land_relief_only,
+        test_terrain_noise_range_is_masked_to_land_relief,
         test_sea_level_controls_landmass_topology,
         test_ocean_depth_preserves_topology,
         test_island_bias_matches_mapgen4_contract,

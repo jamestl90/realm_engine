@@ -16,6 +16,12 @@ namespace procgen {
 namespace {
 
 constexpr float INF_DISTANCE = 1.0e20f;
+constexpr float MIN_LAND_RELIEF = 0.01f;
+constexpr float HILL_RELIEF_SCALE = 0.20f;
+constexpr float MOUNTAIN_RELIEF_SCALE = 0.74f;
+constexpr float RIDGE_RELIEF_SCALE = 0.14f;
+constexpr float VALLEY_RELIEF_SCALE = 0.12f;
+constexpr float TERRAIN_NOISE_RELIEF_SCALE = 0.10f;
 
 [[nodiscard]] float clamp01(float value) noexcept {
     return std::clamp(value, 0.0f, 1.0f);
@@ -337,8 +343,6 @@ static GreaterRealmMap generate_greater_realm_impl(
         float valley{0.0f};
         float terrain_noise{0.0f};
         float ocean_noise{0.0f};
-        float constraint_elevation{0.0f};
-        float constraint_influence{0.0f};
     };
 
     std::vector<TerrainLayers> layers(map.cells.size());
@@ -364,12 +368,25 @@ static GreaterRealmMap generate_greater_realm_impl(
                 5
             ) * 2.0f - 1.0f;
             const float island_constraint = 0.75f - 2.0f * square_distance * square_distance;
-            const float automatic_constraint = std::clamp(
+            float automatic_constraint = std::clamp(
                 0.5f * (land_noise + island_constraint * island_bias)
                 + sea_level_offset,
                 -1.0f,
                 1.0f
             );
+            if (automatic_constraint > 0.0f) {
+                const float mountain_hint_noise =
+                    (value_noise(settings.seed, centered_x + 30.0f, centered_y + 50.0f, 1.0f, 701ull) * 2.0f - 1.0f) * 0.5f
+                    + (value_noise(settings.seed, centered_x * 2.0f + 33.0f, centered_y * 2.0f + 55.0f, 1.0f, 709ull) * 2.0f - 1.0f) * 0.5f;
+                const float mountain_hint = std::min(1.0f, automatic_constraint * 5.0f)
+                    * (1.0f - std::abs(mountain_hint_noise) / 0.5f);
+                if (mountain_hint > 0.0f) {
+                    automatic_constraint = std::max(
+                        automatic_constraint,
+                        std::min(automatic_constraint * 3.0f, mountain_hint)
+                    );
+                }
+            }
             const TerrainConstraintSample authored = constraints
                 ? constraints->sample(u, v)
                 : TerrainConstraintSample{};
@@ -412,9 +429,7 @@ static GreaterRealmMap generate_greater_realm_impl(
                 ridge_influence,
                 valley_influence,
                 terrain_noise,
-                ocean_noise,
-                authored.elevation,
-                authored_influence
+                ocean_noise
             };
 
             auto& cell = map.cells[index];
@@ -440,9 +455,6 @@ static GreaterRealmMap generate_greater_realm_impl(
     const float ridge_weight = std::max(settings.ridge_weight, 0.0f);
     const float valley_weight = std::max(settings.valley_weight, 0.0f);
     const float terrain_noise_weight = std::max(settings.terrain_noise_weight, 0.0f);
-    const float relief_min = -valley_weight;
-    const float relief_max = base_weight + DEFAULT_MOUNTAIN_STRENGTH + ridge_weight;
-    const float relief_range = std::max(relief_max - relief_min, 0.0001f);
 
     for (std::size_t i = 0; i < map.cells.size(); ++i) {
         auto& cell = map.cells[i];
@@ -459,17 +471,22 @@ static GreaterRealmMap generate_greater_realm_impl(
             continue;
         }
 
-        const float raw_relief =
-            layer.base_elevation * base_weight
-            + cell.mountain_influence * mountain_weight
-            + layer.ridge * ridge_weight
-            - layer.valley * valley_weight;
-        const float normalized_relief = clamp01((raw_relief - relief_min) / relief_range);
-        float relief = clamp01(normalized_relief + layer.terrain_noise * terrain_noise_weight);
-        if (layer.constraint_influence > 0.0f) {
-            const float constrained_relief = clamp01(layer.constraint_elevation);
-            relief = lerp(relief, constrained_relief, layer.constraint_influence);
-        }
+        const float positive_constraint = clamp01(cell.landmass_elevation);
+        const float constraint_blend = positive_constraint * positive_constraint;
+        const float hill_relief = clamp01(MIN_LAND_RELIEF + layer.base_elevation * base_weight * HILL_RELIEF_SCALE);
+        const float mountain_profile = std::pow(clamp01(cell.mountain_influence), 0.75f);
+        const float mountain_relief = clamp01(hill_relief + mountain_profile * mountain_weight * MOUNTAIN_RELIEF_SCALE);
+
+        float relief = lerp(hill_relief, mountain_relief, constraint_blend);
+        const float extension_mask = smoothstep(0.02f, 0.65f, positive_constraint);
+        const float ridge_extension = layer.ridge * ridge_weight * RIDGE_RELIEF_SCALE * extension_mask;
+        const float valley_extension = layer.valley * valley_weight * VALLEY_RELIEF_SCALE * extension_mask;
+        const float noise_extension = layer.terrain_noise * terrain_noise_weight * TERRAIN_NOISE_RELIEF_SCALE * extension_mask;
+        relief = clamp01(relief + ridge_extension - valley_extension + noise_extension);
+        relief = std::max(relief, MIN_LAND_RELIEF);
+
+        cell.hill_relief = hill_relief;
+        cell.mountain_relief = mountain_relief;
         const float inland_influence = smoothstep(0.0f, 0.45f, cell.landmass_elevation);
         const float coastal_rise = 0.01f + 0.14f * clamp01(cell.landmass_elevation / 0.45f);
         const float land_height = clamp01(lerp(coastal_rise, relief, inland_influence));

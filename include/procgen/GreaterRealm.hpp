@@ -27,6 +27,8 @@ struct GreaterRealmCell {
     std::int32_t x{0};
     std::int32_t y{0};
     float landmass_elevation{0.0f};
+    float hill_relief{0.0f};
+    float mountain_relief{0.0f};
     float elevation{0.0f};
     bool is_water{false};
     bool is_ocean{false};
@@ -90,7 +92,7 @@ struct GreaterRealmGeneratorSettings {
     float terrain_noise_weight{0.12f};
     float ocean_depth_weight{1.0f};
 
-    float river_min_drainage_area{800.0f};
+    float river_min_drainage_area{700.0f};
     float river_width_scale{0.25f};
 };
 

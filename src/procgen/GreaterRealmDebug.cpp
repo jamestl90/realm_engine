@@ -48,6 +48,8 @@ float scalar_maximum_for_view(const GreaterRealmMap& map, GreaterRealmDebugView 
             case GreaterRealmDebugView::CatchmentArea:
                 maximum = std::max(maximum, cell.drainage_area);
                 break;
+            case GreaterRealmDebugView::HillRelief:
+            case GreaterRealmDebugView::MountainRelief:
             default:
                 return 1.0f;
         }
@@ -111,6 +113,8 @@ const char* to_string(GreaterRealmDebugView view) noexcept {
         case GreaterRealmDebugView::Terrain: return "Terrain";
         case GreaterRealmDebugView::Elevation: return "Elevation";
         case GreaterRealmDebugView::Landmass: return "Landmass";
+        case GreaterRealmDebugView::HillRelief: return "Hill relief";
+        case GreaterRealmDebugView::MountainRelief: return "Mountain relief";
         case GreaterRealmDebugView::MountainInfluence: return "Mountain influence";
         case GreaterRealmDebugView::Slope: return "Slope";
         case GreaterRealmDebugView::CoastDistance: return "Coast distance";
@@ -141,6 +145,20 @@ DebugColour greater_realm_debug_colour(
             }
             return mix_colour({116, 172, 92, 255}, {238, 236, 218, 255}, signed_value);
         }
+        case GreaterRealmDebugView::HillRelief:
+            return three_colour_gradient(
+                cell.hill_relief,
+                {24, 36, 44, 255},
+                {92, 156, 102, 255},
+                {224, 216, 146, 255}
+            );
+        case GreaterRealmDebugView::MountainRelief:
+            return three_colour_gradient(
+                cell.mountain_relief,
+                {24, 30, 42, 255},
+                {138, 116, 94, 255},
+                {244, 244, 232, 255}
+            );
         case GreaterRealmDebugView::MountainInfluence:
             return three_colour_gradient(
                 cell.mountain_influence,
