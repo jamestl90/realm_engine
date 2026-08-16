@@ -1,0 +1,67 @@
+{
+  "version": 3,
+  "configurePresets": [
+    {
+      "name": "debug-no-tests",
+      "displayName": "Debug runtime (tests excluded)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/out/build/debug-no-tests",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "REALM_BUILD_TESTS": "OFF",
+        "REALM_ENABLE_PROCGEN_DEBUG_VIEW": "ON"
+      }
+    },
+    {
+      "name": "release-no-tests",
+      "displayName": "Release runtime (tests excluded)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/out/build/release-no-tests",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "REALM_BUILD_TESTS": "OFF",
+        "REALM_ENABLE_PROCGEN_DEBUG_VIEW": "OFF"
+      }
+    },
+    {
+      "name": "debug-with-tests",
+      "displayName": "Debug with tests",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/out/build/debug-with-tests",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "REALM_BUILD_TESTS": "ON",
+        "REALM_ENABLE_PROCGEN_DEBUG_VIEW": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "debug-no-tests",
+      "configurePreset": "debug-no-tests",
+      "targets": [
+        "realm_engine"
+      ]
+    },
+    {
+      "name": "release-no-tests",
+      "configurePreset": "release-no-tests",
+      "targets": [
+        "realm_engine"
+      ]
+    },
+    {
+      "name": "debug-with-tests",
+      "configurePreset": "debug-with-tests"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "debug-with-tests",
+      "configurePreset": "debug-with-tests",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ]
+}

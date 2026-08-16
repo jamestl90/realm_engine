@@ -1,6 +1,7 @@
 #include "../../include/rendering/PipelineManager.hpp"
 #include "../../include/rendering/GPUDevice.hpp"
 #include "../../include/rendering/Sprite.hpp"
+#include "../../include/rendering/TerrainMesh.hpp"
 #include "../../include/rendering/ShaderReflection.hpp"
 #include "../../include/core/Config.hpp"
 #include "../../include/rendering/UniformBuffers.hpp"
@@ -110,6 +111,11 @@ bool PipelineManager::initialise(SDL_GPUTextureFormat swapchain_format) {
         return false;
     }
 
+    if (!initialise_terrain_pipeline(swapchain_format)) {
+        SDL_LogError(SDL_LOG_CATEGORY_RENDER, "Failed to initialise terrain pipeline");
+        return false;
+    }
+
     // init other pipelines here
     
     SDL_Log("PipelineManager initialised successfully");
@@ -134,13 +140,16 @@ PipelineHandle PipelineManager::get_or_create_pipeline(
     }
 
     // Load shader reflection data
-    const auto base_path = config::get_executable_dir().string() + path_to_assets_ + "shaders\\";
+    const auto base_path = config::get_executable_dir() / "assets" / "Shaders";
     
     std::string shader_prefix;
     switch (base_type) {
         case PipelineType::Sprite:
         case PipelineType::Text:
             shader_prefix = "sprite";
+            break;
+        case PipelineType::Terrain:
+            shader_prefix = "terrain";
             break;
         case PipelineType::Shape:
             shader_prefix = "shape";
@@ -150,8 +159,8 @@ PipelineHandle PipelineManager::get_or_create_pipeline(
             break;
     }
     
-    auto vert_reflection = load_shader_reflection(base_path + shader_prefix + ".vert.reflect.json");
-    auto frag_reflection = load_shader_reflection(base_path + shader_prefix + ".frag.reflect.json");
+    auto vert_reflection = load_shader_reflection((base_path / (shader_prefix + ".vert.reflect.json")).string());
+    auto frag_reflection = load_shader_reflection((base_path / (shader_prefix + ".frag.reflect.json")).string());
 
     SDL_GPUGraphicsPipeline* pipeline = create_pipeline(base_type, config, swapchain_format_, vert_reflection, frag_reflection);
     if (!pipeline) {
@@ -271,6 +280,13 @@ PipelineConfig PipelineManager::get_default_config(PipelineType type) noexcept {
             config.cull_mode = SDL_GPU_CULLMODE_NONE;
             break;
 
+        case PipelineType::Terrain:
+            config.blend.enable = false;
+            config.depth_stencil.depth_test = true;
+            config.depth_stencil.depth_write = true;
+            config.cull_mode = SDL_GPU_CULLMODE_NONE;
+            break;
+
         case PipelineType::PostProcess:
             config.blend.enable = false;
             config.depth_stencil.depth_test = false;
@@ -366,6 +382,12 @@ SDL_GPUGraphicsPipeline* PipelineManager::create_pipeline(
     pipeline_info.primitive_type = config.primitive_type;
     pipeline_info.vertex_input_state = vertex_input;
     pipeline_info.rasterizer_state = rasterizer;
+    pipeline_info.depth_stencil_state.compare_op = config.depth_stencil.depth_compare;
+    pipeline_info.depth_stencil_state.enable_depth_test = config.depth_stencil.depth_test;
+    pipeline_info.depth_stencil_state.enable_depth_write = config.depth_stencil.depth_write;
+    pipeline_info.depth_stencil_state.enable_stencil_test = config.depth_stencil.stencil_test;
+    pipeline_info.depth_stencil_state.compare_mask = config.depth_stencil.stencil_read_mask;
+    pipeline_info.depth_stencil_state.write_mask = config.depth_stencil.stencil_write_mask;
     
     pipeline_info.target_info.num_color_targets = 1;
     pipeline_info.target_info.color_target_descriptions = &color_target;
@@ -390,6 +412,8 @@ SDL_GPUVertexInputState PipelineManager::build_vertex_input_state(PipelineType t
     
     static SDL_GPUVertexBufferDescription shape_buffer_desc{};
     static SDL_GPUVertexAttribute shape_attributes[2]{};
+    static SDL_GPUVertexBufferDescription terrain_buffer_desc{};
+    static SDL_GPUVertexAttribute terrain_attributes[3]{};
 
     SDL_GPUVertexInputState state{};
 
@@ -421,6 +445,32 @@ SDL_GPUVertexInputState PipelineManager::build_vertex_input_state(PipelineType t
             state.num_vertex_attributes = 3;
             state.vertex_attributes = sprite_attributes;
             break;
+        case PipelineType::Terrain:
+            terrain_attributes[0].location = 0;
+            terrain_attributes[0].buffer_slot = 0;
+            terrain_attributes[0].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3;
+            terrain_attributes[0].offset = offsetof(TerrainVertex, x);
+
+            terrain_attributes[1].location = 1;
+            terrain_attributes[1].buffer_slot = 0;
+            terrain_attributes[1].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2;
+            terrain_attributes[1].offset = offsetof(TerrainVertex, gradient_x);
+
+            terrain_attributes[2].location = 2;
+            terrain_attributes[2].buffer_slot = 0;
+            terrain_attributes[2].format = SDL_GPU_VERTEXELEMENTFORMAT_UBYTE4_NORM;
+            terrain_attributes[2].offset = offsetof(TerrainVertex, r);
+
+            terrain_buffer_desc.slot = 0;
+            terrain_buffer_desc.pitch = sizeof(TerrainVertex);
+            terrain_buffer_desc.input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX;
+            terrain_buffer_desc.instance_step_rate = 0;
+
+            state.num_vertex_buffers = 1;
+            state.vertex_buffer_descriptions = &terrain_buffer_desc;
+            state.num_vertex_attributes = 3;
+            state.vertex_attributes = terrain_attributes;
+            break;
         default:
             break;
     }
@@ -429,15 +479,15 @@ SDL_GPUVertexInputState PipelineManager::build_vertex_input_state(PipelineType t
 }
 
 bool PipelineManager::initialise_sprite_pipeline(SDL_GPUTextureFormat format) {
-    const auto base_path = config::get_executable_dir().string() + path_to_assets_ + "shaders\\";
+    const auto base_path = config::get_executable_dir() / "assets" / "Shaders";
     
-    auto vert_bytecode = load_shader(base_path + "sprite.vert.spv", SDL_GPU_SHADERSTAGE_VERTEX);
+    auto vert_bytecode = load_shader((base_path / "sprite.vert.spv").string(), SDL_GPU_SHADERSTAGE_VERTEX);
     if (!vert_bytecode) {
         SDL_LogError(SDL_LOG_CATEGORY_RENDER, "Failed to load sprite vertex shader");
         return false;
     }
 
-    auto vert_reflection = load_shader_reflection(base_path + "sprite.vert.reflect.json");
+    auto vert_reflection = load_shader_reflection((base_path / "sprite.vert.reflect.json").string());
 
     if (vert_reflection.num_uniform_buffers > 0 && !vert_reflection.validate_ubo_size<CameraData>()) {
         SDL_LogError(SDL_LOG_CATEGORY_RENDER, 
@@ -451,13 +501,13 @@ bool PipelineManager::initialise_sprite_pipeline(SDL_GPUTextureFormat format) {
     vert_bytecode->num_storage_buffers = vert_reflection.num_storage_buffers;
     vert_bytecode->num_samplers = vert_reflection.num_samplers;
 
-    auto frag_bytecode = load_shader(base_path + "sprite.frag.spv", SDL_GPU_SHADERSTAGE_FRAGMENT);
+    auto frag_bytecode = load_shader((base_path / "sprite.frag.spv").string(), SDL_GPU_SHADERSTAGE_FRAGMENT);
     if (!frag_bytecode) {
         SDL_LogError(SDL_LOG_CATEGORY_RENDER, "Failed to load sprite fragment shader");
         return false;
     }
 
-    auto frag_reflection = load_shader_reflection(base_path + "sprite.frag.reflect.json");
+    auto frag_reflection = load_shader_reflection((base_path / "sprite.frag.reflect.json").string());
 
     frag_bytecode->num_uniform_buffers = frag_reflection.num_uniform_buffers;
     frag_bytecode->num_storage_textures = frag_reflection.num_storage_textures;
@@ -486,6 +536,87 @@ bool PipelineManager::initialise_sprite_pipeline(SDL_GPUTextureFormat format) {
     }
 
     SDL_Log("Sprite pipeline initialised");
+    return true;
+}
+
+bool PipelineManager::initialise_terrain_pipeline(SDL_GPUTextureFormat format) {
+    const auto base_path = config::get_executable_dir() / "assets" / "Shaders";
+
+    auto vert_bytecode = load_shader((base_path / "terrain.vert.spv").string(), SDL_GPU_SHADERSTAGE_VERTEX);
+    if (!vert_bytecode) {
+        SDL_LogError(SDL_LOG_CATEGORY_RENDER, "Failed to load terrain vertex shader");
+        return false;
+    }
+
+    const auto vert_reflection = load_shader_reflection(
+        (base_path / "terrain.vert.reflect.json").string()
+    );
+    if (vert_reflection.num_uniform_buffers > 0
+        && !vert_reflection.validate_ubo_size<TerrainViewData>()) {
+        SDL_LogError(
+            SDL_LOG_CATEGORY_RENDER,
+            "TerrainViewData size mismatch! CPU struct=%zu bytes, GPU expects=%u bytes",
+            sizeof(TerrainViewData),
+            vert_reflection.ubo_block_size
+        );
+        return false;
+    }
+    vert_bytecode->num_uniform_buffers = vert_reflection.num_uniform_buffers;
+    vert_bytecode->num_storage_textures = vert_reflection.num_storage_textures;
+    vert_bytecode->num_storage_buffers = vert_reflection.num_storage_buffers;
+    vert_bytecode->num_samplers = vert_reflection.num_samplers;
+
+    auto frag_bytecode = load_shader((base_path / "terrain.frag.spv").string(), SDL_GPU_SHADERSTAGE_FRAGMENT);
+    if (!frag_bytecode) {
+        SDL_LogError(SDL_LOG_CATEGORY_RENDER, "Failed to load terrain fragment shader");
+        return false;
+    }
+
+    const auto frag_reflection = load_shader_reflection(
+        (base_path / "terrain.frag.reflect.json").string()
+    );
+    if (frag_reflection.num_uniform_buffers > 0
+        && !frag_reflection.validate_ubo_size<TerrainLightData>()) {
+        SDL_LogError(
+            SDL_LOG_CATEGORY_RENDER,
+            "TerrainLightData size mismatch! CPU struct=%zu bytes, GPU expects=%u bytes",
+            sizeof(TerrainLightData),
+            frag_reflection.ubo_block_size
+        );
+        return false;
+    }
+    frag_bytecode->num_uniform_buffers = frag_reflection.num_uniform_buffers;
+    frag_bytecode->num_storage_textures = frag_reflection.num_storage_textures;
+    frag_bytecode->num_storage_buffers = frag_reflection.num_storage_buffers;
+    frag_bytecode->num_samplers = frag_reflection.num_samplers;
+
+    const auto type_index = static_cast<std::size_t>(PipelineType::Terrain);
+    vertex_shaders_[type_index] = create_shader(*vert_bytecode);
+    if (!vertex_shaders_[type_index]) {
+        SDL_LogError(SDL_LOG_CATEGORY_RENDER, "Failed to create terrain vertex shader");
+        return false;
+    }
+
+    fragment_shaders_[type_index] = create_shader(*frag_bytecode);
+    if (!fragment_shaders_[type_index]) {
+        SDL_LogError(SDL_LOG_CATEGORY_RENDER, "Failed to create terrain fragment shader");
+        return false;
+    }
+
+    const PipelineConfig pipeline_config = get_default_config(PipelineType::Terrain);
+    core_pipelines_[type_index] = create_pipeline(
+        PipelineType::Terrain,
+        pipeline_config,
+        format,
+        vert_reflection,
+        frag_reflection
+    );
+    if (!core_pipelines_[type_index]) {
+        SDL_LogError(SDL_LOG_CATEGORY_RENDER, "Failed to create terrain pipeline");
+        return false;
+    }
+
+    SDL_Log("Terrain pipeline initialised");
     return true;
 }
 

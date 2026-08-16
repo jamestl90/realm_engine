@@ -2,6 +2,7 @@
 #include "../../include/rendering/GPUDevice.hpp"
 #include "../../include/rendering/TextureManager.hpp"
 #include <cassert>
+#include <cmath>
 #include <sstream>
 
 namespace rendering {
@@ -90,12 +91,14 @@ FontID FontManager::load(const char* path, float pointSize) {
     auto font = std::make_unique<Font>();
     font->ttf_font = ttfFont;
     font->id = m_nextId++;
+    font->path = path;
     font->pointSize = pointSize;
 
     // Get font metrics
     font->metrics.height = TTF_GetFontHeight(ttfFont);
     font->metrics.ascent = TTF_GetFontAscent(ttfFont);
     font->metrics.descent = TTF_GetFontDescent(ttfFont);
+    font->metrics.lineSkip = TTF_GetFontLineSkip(ttfFont);
 
     FontID newId = font->id;
     m_fonts[newId] = std::move(font);
@@ -105,6 +108,19 @@ FontID FontManager::load(const char* path, float pointSize) {
             path, pointSize, newId, m_fonts[newId]->metrics.height);
 
     return newId;
+}
+
+FontID FontManager::loadVariant(FontID baseFontId, float pointSize) {
+    const Font* baseFont = get(baseFontId);
+    if (!baseFont || pointSize <= 0.0f) {
+        return INVALID_FONT_ID;
+    }
+
+    if (std::abs(baseFont->pointSize - pointSize) < 0.01f) {
+        return baseFontId;
+    }
+
+    return load(baseFont->path.c_str(), pointSize);
 }
 
 const Font* FontManager::get(FontID id) const noexcept {

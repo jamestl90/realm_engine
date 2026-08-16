@@ -1,5 +1,3 @@
-.build_mode
-
 .aider*
 AGENTS.md
 CLAUDE.md
@@ -8,9 +6,9 @@ codex.md
 docs/*AGENTS*.md
 docs/*CLAUDE*.md
 
-build/
 bin/
 obj/
+/out/
 ai/prompts/
 
 *.exe
@@ -29,6 +27,8 @@ ai/prompts/
 docs/todo today.txt
 docs/.SDL3_gpu_reference.md
 docs/prompts.txt
-scripts/build.ps1
 scripts/dev.ps1
-/assets/test
+/assets/Tile sheets/test
+.DS_Store
+__MACOSX/
+/assets

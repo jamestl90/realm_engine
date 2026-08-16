@@ -47,6 +47,7 @@ bool Engine::initialize(const char* title, int width, int height) {
 
     // Create subsystems
     renderer_ = std::make_unique<rendering::Renderer>(gpu_device_.get(), window_);
+    terrain_renderer_ = std::make_unique<rendering::TerrainRenderer>(gpu_device_.get());
     texture_manager_ = std::make_unique<rendering::TextureManager>(gpu_device_.get());
     font_manager_ = std::make_unique<rendering::FontManager>(gpu_device_.get(), texture_manager_.get());
     ui_renderer_ = std::make_unique<rendering::UIRenderer>(gpu_device_.get());
@@ -74,12 +75,13 @@ void Engine::shutdown() noexcept {
         return;
     }
 
-    // Notify game of shutdown
+    // Notify host application of shutdown
     if (game_) {
         game_->on_shutdown(*this);
+        ui_manager_.setRoot(nullptr);
         game_.reset();
     }
-    SDL_Log("Game Shutdown");
+    SDL_Log("Host application shutdown");
 
     // Remove texture manager from world resources
     world_.remove_resource<rendering::TextureManager>();
@@ -95,6 +97,9 @@ void Engine::shutdown() noexcept {
         SDL_Log("Asset Manager Reset");
     }
 
+    ui_renderer_.reset();
+    SDL_Log("UI Renderer Reset");
+
     if (font_manager_) {
         font_manager_->clear();
         font_manager_.reset();
@@ -107,8 +112,8 @@ void Engine::shutdown() noexcept {
         SDL_Log("Texture Manager Reset");
     }
 
-    ui_renderer_.reset();
-    SDL_Log("UI Renderer Reset");
+    terrain_renderer_.reset();
+    SDL_Log("Terrain Renderer Reset");
 
     renderer_.reset();
     SDL_Log("Renderer Reset");
@@ -140,7 +145,7 @@ void Engine::run() {
         return;
     }
 
-    // Call game startup hook
+    // Call host application startup hook
     if (game_) {
         game_->on_startup(*this);
     }
@@ -233,7 +238,11 @@ void Engine::process_events() {
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
         // Let UI manager handle the event first
-        if (ui_manager_.handleEvent(event)) {
+        const bool ui_consumed = ui_manager_.handleEvent(event);
+        if (game_) {
+            game_->on_event(*this, event, ui_consumed);
+        }
+        if (ui_consumed) {
             continue; // Event was consumed by UI
         }
 
@@ -271,7 +280,7 @@ void Engine::update(double dt) {
     // Update UI manager
     ui_manager_.update(static_cast<float>(dt));
 
-    // Call game update hook
+    // Call host application update hook
     if (game_) {
         game_->on_update(*this, dt);
     }
@@ -281,22 +290,55 @@ void Engine::render(double alpha) {
     if (!renderer_->begin_frame()) {
         quit();
     }
+    if (!renderer_->swapchain_texture()) {
+        return;
+    }
 
     // Set logical resolution for coordinate mapping
     renderer_->set_logical_size(LOGICAL_W, LOGICAL_H);
 
-    renderer_->clear(0, 0, 51, 255);
+    const bool terrain_pass_enabled = terrain_renderer_ && terrain_renderer_->is_enabled();
+    if (!renderer_->clear(0, 0, 51, 255, terrain_pass_enabled)) {
+        quit();
+        return;
+    }
 
-    // Render ECS world sprites first
+    // Terrain is an engine-owned world pass rendered before ECS sprites.
+    if (terrain_renderer_) {
+        terrain_renderer_->render(*renderer_);
+    }
+
+    if (terrain_pass_enabled && !renderer_->begin_sprite_pass()) {
+        quit();
+        return;
+    }
+
+    // Render ECS world sprites over the terrain pass.
     renderer_->render(world_, alpha);
 
-    // Call game render hook for custom rendering (UI, overlays, etc.)
-    // UI should render on top of sprites
+    // Call host application render hook for custom rendering between world sprites and retained UI.
     if (game_) {
         game_->on_render(*this, alpha);
     }
 
+    render_ui();
     renderer_->present();
+}
+
+void Engine::render_ui() {
+    auto* root = ui_manager_.root();
+    if (!renderer_ || !ui_renderer_ || !root) {
+        return;
+    }
+
+    renderer_->end_render_pass();
+    ui_renderer_->render(
+        renderer_->command_buffer(),
+        renderer_->swapchain_texture(),
+        root,
+        static_cast<float>(LOGICAL_W),
+        static_cast<float>(LOGICAL_H)
+    );
 }
 
 } // namespace core

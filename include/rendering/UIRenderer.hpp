@@ -6,13 +6,13 @@
 #include "../ui/Button.hpp"
 #include "../ui/TextBox.hpp"
 #include "../ui/ComboBox.hpp"
+#include "../ui/Slider.hpp"
 #include "Sprite.hpp"
 #include "Texture.hpp"
 #include "FontManager.hpp"
 #include <SDL3/SDL.h>
 #include <vector>
 #include <string>
-#include <unordered_map>
 
 namespace rendering {
 
@@ -104,8 +104,10 @@ private:
     // Collect commands for specific element types
     void collectLayoutContainerCommands(ui::LayoutContainer* container);
     void collectButtonCommands(ui::Button* button);
+    void collectSliderCommands(ui::Slider* slider);
     void collectTextBoxCommands(ui::TextBox* textBox);
     void collectComboBoxCommands(ui::ComboBox* comboBox);
+    void collectComboBoxDropdownCommands(ui::ComboBox* comboBox);
     void collectRectangleCommands(ui::Rectangle* rect);
     void collectTextBlockCommands(ui::TextBlock* text);
     void collectImageCommands(ui::Image* image);
@@ -126,47 +128,23 @@ private:
         float logicalHeight
     ) const;
 
-    // Get or create cached text texture
-    TextureID getOrCreateTextTexture(
+    [[nodiscard]] FontID resolveFont(FontID fontId, float fontSize);
+    bool measureText(
         const std::string& text,
         FontID fontId,
-        std::uint8_t r, std::uint8_t g, std::uint8_t b, std::uint8_t a,
-        int* outWidth, int* outHeight
+        float fontSize,
+        int* outWidth,
+        int* outHeight
     );
+    [[nodiscard]] bool ensureTextEngine();
 
     GPUDevice* m_device{nullptr};
     TextureManager* m_textureManager{nullptr};
     FontManager* m_fontManager{nullptr};
     FontID m_defaultFont{INVALID_FONT_ID};
+    TTF_TextEngine* m_textEngine{nullptr};
     std::vector<UIRenderCommand> m_commands;
-
-    // Simple text texture cache (text+font+color -> textureId)
-    struct TextCacheKey {
-        std::string text;
-        FontID fontId;
-        std::uint32_t color;  // packed RGBA
-
-        bool operator==(const TextCacheKey& other) const {
-            return text == other.text && fontId == other.fontId && color == other.color;
-        }
-    };
-
-    struct TextCacheKeyHash {
-        std::size_t operator()(const TextCacheKey& key) const {
-            std::size_t h1 = std::hash<std::string>{}(key.text);
-            std::size_t h2 = std::hash<FontID>{}(key.fontId);
-            std::size_t h3 = std::hash<std::uint32_t>{}(key.color);
-            return h1 ^ (h2 << 1) ^ (h3 << 2);
-        }
-    };
-
-    struct TextCacheEntry {
-        TextureID textureId{INVALID_TEXTURE_ID};
-        int width{0};
-        int height{0};
-    };
-
-    std::unordered_map<TextCacheKey, TextCacheEntry, TextCacheKeyHash> m_textCache;
+    std::vector<ui::ComboBox*> m_openComboBoxes;
 
     // Vertex/index buffers for UI rendering
     std::vector<SpriteVertex> m_vertices;

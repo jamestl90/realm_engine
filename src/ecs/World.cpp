@@ -32,11 +32,8 @@ void World::destroy_entity(Entity entity) {
         return;
     }
     
-    // Remove all components for this entity
-    for (auto& [type_id, array] : component_arrays_) {
-        // Component arrays handle removal internally
-        // This is type-erased, so we can't call remove directly
-        // The actual removal will happen when systems process dead entities
+    for (auto& entry : component_arrays_) {
+        entry.second->remove(id);
     }
     
     // Increment generation to invalidate existing handles
@@ -68,7 +65,8 @@ void World::remove_system(ISystem* system) {
 }
 
 void World::update(float dt) {
-    // TODO: Collision - Process collision detection/response systems here.
+    // TODO: Collision - Process collision detection/response systems here?
+    // I'm still considering whether I should just use an event based system for collisions rather than utilising ECS. 
     // Collision checks should occur after movement systems but before rendering.
     // Consider spatial partitioning (grid, quadtree) for broad-phase culling.
 

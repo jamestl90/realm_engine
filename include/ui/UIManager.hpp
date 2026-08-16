@@ -73,7 +73,7 @@ public:
     void setFontManager(rendering::FontManager* fontManager, rendering::FontID defaultFont) noexcept;
 
 private:
-    // Configure text measurement on TextBox elements in tree
+    // Configure renderer-backed text measurement on the UI tree.
     void configureTextMeasurement(UIElement* element);
     // Input handling helpers
     bool handleMouseButtonDown(const SDL_Event& event);
@@ -83,6 +83,7 @@ private:
     bool handleKeyDown(const SDL_Event& event);
     bool handleKeyUp(const SDL_Event& event);
     bool handleTextInput(const SDL_Event& event);
+    bool cancelActivePointerInteraction() noexcept;
 
     // Update hover state
     void updateHover(float x, float y);
@@ -124,6 +125,9 @@ private:
 
     // Element that has captured mouse input
     InputSurface* m_capturedElement{nullptr};
+
+    // Surface that received the current mouse press.
+    InputSurface* m_pressedSurface{nullptr};
 
     // Previous hovered input surface (for enter/leave events)
     InputSurface* m_lastHoveredSurface{nullptr};

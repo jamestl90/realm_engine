@@ -106,6 +106,7 @@ private:
 
     // Initialise individual core pipelines
     [[nodiscard]] bool initialise_sprite_pipeline(SDL_GPUTextureFormat format);
+    [[nodiscard]] bool initialise_terrain_pipeline(SDL_GPUTextureFormat format);
 
     GPUDevice* device_{nullptr};
     SDL_GPUTextureFormat swapchain_format_{SDL_GPU_TEXTUREFORMAT_B8G8R8A8_UNORM};
@@ -122,7 +123,6 @@ private:
     std::vector<PipelineEntry> pipelines_;
     PipelineHandle next_handle_{1};
 
-    std::string path_to_assets_ = "\\assets\\";
 };
 
 } // namespace rendering

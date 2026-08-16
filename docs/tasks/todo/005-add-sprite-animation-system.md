@@ -22,3 +22,7 @@ Implement a system that advances `SpriteAnimation` and updates the sprite region
 ## Notes
 
 This task can start with simple atlas-region frame indices before asset-driven animation loading exists.
+
+## Dependencies
+
+- Task 006 must first define how sprites and animations identify atlas regions.

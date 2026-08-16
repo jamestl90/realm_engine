@@ -44,21 +44,18 @@ void TextBlock::setText(std::string text) {
 }
 
 void TextBlock::measure(float availableWidth, float availableHeight) {
-    // Estimate text size based on character count and font size
-    // Actual measurement would require font metrics from the renderer
-    float estimatedWidth = static_cast<float>(m_text.length()) * m_fontSize * 0.6f;
-    float estimatedHeight = m_fontSize * 1.2f;
+    const TextMetrics textMetrics = measureText(m_text, m_fontSize);
 
     const auto& constraints = sizeConstraints();
 
     m_measuredWidth = std::clamp(
-        constraints.preferred_width > 0 ? constraints.preferred_width : estimatedWidth,
+        constraints.preferred_width > 0 ? constraints.preferred_width : textMetrics.width,
         constraints.min_width,
         std::min(constraints.max_width, availableWidth)
     );
 
     m_measuredHeight = std::clamp(
-        constraints.preferred_height > 0 ? constraints.preferred_height : estimatedHeight,
+        constraints.preferred_height > 0 ? constraints.preferred_height : textMetrics.height,
         constraints.min_height,
         std::min(constraints.max_height, availableHeight)
     );

@@ -30,6 +30,7 @@ struct FontMetrics {
 struct Font {
     TTF_Font* ttf_font{nullptr};
     FontID id{INVALID_FONT_ID};
+    std::string path;
     float pointSize{0.0f};
     FontMetrics metrics;
 };
@@ -55,6 +56,9 @@ public:
 
     // Load font from file at specified point size
     [[nodiscard]] FontID load(const char* path, float pointSize);
+
+    // Resolve the same font face at another point size, loading it on demand.
+    [[nodiscard]] FontID loadVariant(FontID baseFontId, float pointSize);
 
     // Get font by ID
     [[nodiscard]] const Font* get(FontID id) const noexcept;

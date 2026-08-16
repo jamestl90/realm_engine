@@ -7,8 +7,11 @@
 #include <vector>
 #include <unordered_map>
 #include <algorithm>
+#include <array>
 #include <typeindex>
 #include <functional>
+#include <tuple>
+#include <utility>
 
 namespace ecs {
 
@@ -27,11 +30,17 @@ public:
     // Component management
     template<Component T>
     void add_component(Entity entity, const T& component) {
+        if (!is_valid(entity)) {
+            return;
+        }
         get_or_create_component_array<T>().insert(entity.id(), component);
     }
 
     template<Component T>
     void remove_component(Entity entity) {
+        if (!is_valid(entity)) {
+            return;
+        }
         if (auto* array = get_component_array<T>()) {
             array->remove(entity.id());
         }
@@ -39,6 +48,9 @@ public:
 
     template<Component T>
     [[nodiscard]] T* get_component(Entity entity) noexcept {
+        if (!is_valid(entity)) {
+            return nullptr;
+        }
         if (auto* array = get_component_array<T>()) {
             return array->get(entity.id());
         }
@@ -47,6 +59,9 @@ public:
 
     template<Component T>
     [[nodiscard]] const T* get_component(Entity entity) const noexcept {
+        if (!is_valid(entity)) {
+            return nullptr;
+        }
         if (auto* array = get_component_array<T>()) {
             return array->get(entity.id());
         }
@@ -55,6 +70,9 @@ public:
 
     template<Component T>
     [[nodiscard]] bool has_component(Entity entity) const noexcept {
+        if (!is_valid(entity)) {
+            return false;
+        }
         if (auto* array = get_component_array<T>()) {
             return array->has(entity.id());
         }
@@ -78,6 +96,18 @@ public:
         return it != component_arrays_.end() 
             ? static_cast<const ComponentArray<T>*>(it->second.get()) 
             : nullptr;
+    }
+
+    template<Component... Ts, typename Func>
+        requires (sizeof...(Ts) >= 2)
+    void each(Func&& callback) {
+        each_impl<Ts...>(*this, std::forward<Func>(callback));
+    }
+
+    template<Component... Ts, typename Func>
+        requires (sizeof...(Ts) >= 2)
+    void each(Func&& callback) const {
+        each_impl<Ts...>(*this, std::forward<Func>(callback));
     }
 
     // System management
@@ -129,6 +159,64 @@ public:
     }
 
 private:
+    template<Component... Ts, typename WorldType, typename Func>
+    static void each_impl(WorldType& world, Func&& callback) {
+        auto arrays = std::tuple{world.template get_component_array<Ts>()...};
+        const bool missing_array = std::apply(
+            [](const auto*... array) { return ((array == nullptr) || ...); },
+            arrays
+        );
+        if (missing_array) {
+            return;
+        }
+
+        std::array<std::size_t, sizeof...(Ts)> sizes{};
+        std::apply(
+            [&sizes](const auto*... array) { sizes = {array->size()...}; },
+            arrays
+        );
+
+        std::size_t smallest_index = 0;
+        for (std::size_t i = 1; i < sizes.size(); ++i) {
+            if (sizes[i] < sizes[smallest_index]) {
+                smallest_index = i;
+            }
+        }
+
+        auto iterate_array = [&]<std::size_t I>() {
+            const auto* primary_array = std::get<I>(arrays);
+            for (const EntityID entity_id : primary_array->entity_data()) {
+                const Entity entity(entity_id);
+                if (!world.is_valid(entity)) {
+                    continue;
+                }
+
+                auto components = std::apply(
+                    [entity_id](auto*... array) { return std::tuple{array->get(entity_id)...}; },
+                    arrays
+                );
+                const bool has_all_components = std::apply(
+                    [](const auto*... component) { return ((component != nullptr) && ...); },
+                    components
+                );
+                if (!has_all_components) {
+                    continue;
+                }
+
+                std::apply(
+                    [&callback, entity](auto*... component) {
+                        std::invoke(callback, entity, *component...);
+                    },
+                    components
+                );
+            }
+        };
+
+        [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+            ((smallest_index == Is ? iterate_array.template operator()<Is>() : void()), ...);
+        }(std::index_sequence_for<Ts...>{});
+    }
+
     template<Component T>
     ComponentArray<T>& get_or_create_component_array() {
         const auto type_id = detail::component_type_id<T>();

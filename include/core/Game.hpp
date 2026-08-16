@@ -1,10 +1,12 @@
 #pragma once
 
+#include <SDL3/SDL_events.h>
+
 namespace core {
 
 class Engine;
 
-// Base class for game-specific logic
+// Base class for host application logic
 // Inherit from this and implement the virtual methods
 class Game {
 public:
@@ -18,8 +20,15 @@ public:
     // Use for input handling, camera updates, UI, etc.
     virtual void on_update(Engine& engine, double dt) { (void)engine; (void)dt; }
 
-    // Called once per frame for rendering (with interpolation alpha)
-    // Default implementation does nothing; engine handles ECS rendering
+    // Called for every SDL event after retained UI has had the first chance to consume it.
+    virtual void on_event(Engine& engine, const SDL_Event& event, bool ui_consumed) {
+        (void)engine;
+        (void)event;
+        (void)ui_consumed;
+    }
+
+    // Called once per frame after ECS rendering and before retained UI rendering
+    // Default implementation does nothing; engine handles ECS and retained UI rendering
     virtual void on_render(Engine& engine, double alpha) { (void)engine; (void)alpha; }
 
     // Called once when the engine is shutting down

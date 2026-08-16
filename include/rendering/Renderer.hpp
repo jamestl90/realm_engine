@@ -37,7 +37,13 @@ public:
     void render(ecs::World& world, double alpha);
 
     // Clear screen
-    void clear(std::uint8_t r = 0, std::uint8_t g = 0, std::uint8_t b = 0, std::uint8_t a = 255);
+    [[nodiscard]] bool clear(
+        std::uint8_t r = 0,
+        std::uint8_t g = 0,
+        std::uint8_t b = 0,
+        std::uint8_t a = 255,
+        bool with_depth = false
+    );
 
     // Present frame
     void present();
@@ -70,9 +76,12 @@ public:
     [[nodiscard]] SDL_GPUTexture* swapchain_texture() const noexcept { return swapchain_texture_; }
     [[nodiscard]] Uint32 swapchain_width() const noexcept { return swapchain_width_; }
     [[nodiscard]] Uint32 swapchain_height() const noexcept { return swapchain_height_; }
+    [[nodiscard]] SDL_GPURenderPass* current_render_pass() const noexcept { return current_pass_; }
 
     // End current render pass (call before UI rendering)
     void end_render_pass() noexcept;
+    [[nodiscard]] bool resume_render_pass(bool with_depth);
+    [[nodiscard]] bool begin_sprite_pass();
 
 private:
     struct RenderCommand {
@@ -97,6 +106,8 @@ private:
     void upload_vertex_data();
     void draw_batches(const TextureManager& texture_manager);
     bool create_gpu_resources();
+    bool ensure_depth_target();
+    void release_depth_target() noexcept;
     void release_gpu_resources();
 
     GPUDevice* device_{nullptr};
@@ -110,8 +121,11 @@ private:
     SDL_GPURenderPass* current_pass_{nullptr};
     SDL_GPUTexture* current_texture_{nullptr};
     SDL_GPUTexture* swapchain_texture_{nullptr};
+    SDL_GPUTexture* depth_texture_{nullptr};
     Uint32 swapchain_width_{0};
     Uint32 swapchain_height_{0};
+    Uint32 depth_width_{0};
+    Uint32 depth_height_{0};
     std::vector<SpriteVertex> vertex_data_;
     std::vector<std::uint16_t> index_data_;
     std::vector<SpriteBatch> batches_;
