@@ -48,6 +48,7 @@ file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS "src/*.cpp")
 
 # Procgen visualization and its application panel are omitted from normal release builds.
 set(REALM_PROCGEN_DEBUG_SOURCES
+    "${CMAKE_SOURCE_DIR}/src/game/GreaterRealmDebugBiomes.cpp"
     "${CMAKE_SOURCE_DIR}/src/game/GreaterRealmDebugPanel.cpp"
 )
 set(REALM_PROCGEN_RUNTIME_SOURCES
@@ -159,6 +160,7 @@ if(REALM_BUILD_TESTS)
 
     add_executable(realm_biome_tests EXCLUDE_FROM_ALL
         tests/procgen/BiomeTests.cpp
+        src/game/GreaterRealmDebugBiomes.cpp
         src/procgen/Biome.cpp
         src/procgen/Climate.cpp
         src/procgen/GreaterRealm.cpp
@@ -170,6 +172,7 @@ if(REALM_BUILD_TESTS)
 
     target_include_directories(realm_biome_tests PRIVATE
         ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/src
     )
 
     target_compile_definitions(realm_biome_tests PRIVATE REALM_TEST_BUILD=1)

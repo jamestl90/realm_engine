@@ -37,7 +37,7 @@ This document tracks the procedural generation capabilities currently present in
 - Climate output belongs in a versioned `GreaterRealmClimateMap` with one `GreaterRealmClimateCell` per greater-realm cell. Source seed, dimensions, cell size, and a fingerprint of consumed terrain elevation/water data reject stale pairings.
 - The implemented `temperature_normal` and `precipitation_normal` use a fixed `0..1` scale whose meaning is retained across maps; observed per-map ranges are never renormalized.
 - Temperature normal consumes explicit latitude context, elevation, maritime moderation from ocean or inland-water proximity, and optional broad deterministic variation.
-- Precipitation normal is a long-term climatological tendency derived from ocean and inland-water sources, prevailing wind, elevation, orographic lift, and carried rain shadow without representing a specific rain event.
+- Precipitation normal is a long-term climatological tendency derived from ocean and inland-water sources, latitude-dependent circulation, elevation, orographic lift, and carried rain shadow without representing a specific rain event.
 - Humidity, soil moisture, current rainfall, runoff, and active river discharge remain runtime simulation state and are not climate-normal aliases.
 - Applications own biome definitions and IDs. The reusable classifier consumes application-supplied rules and produces a separate `GreaterRealmBiomeMap`; it does not add hard-coded biome labels to `GreaterRealmCell`.
 - Biome rules may inspect stable terrain and climate inputs. Applications separately own biome names, colours, art, resources, and gameplay behavior.
@@ -56,12 +56,13 @@ This document tracks the procedural generation capabilities currently present in
 
 ### Precipitation Normals
 
-- Prevailing wind defaults to `0` degrees, transporting moisture from west to east. Directions wrap to `0..360`; all transport controls reject non-finite values and clamp to documented ranges.
-- Upwind traversal is deterministic. Each cell blends already-processed eight-neighbor air state according to alignment with the wind direction, then applies map-unit transport retention.
+- Default circulation uses opposing diagonal tropical and mid-latitude transport in each hemisphere. Hemisphere direction blends smoothly across `-8..+8` degrees latitude, tropical-to-mid-latitude direction blends across `25..40` degrees absolute latitude, and a weaker opposing component defaults to `0.20` so the normal is not equivalent to one permanent weather event.
+- `prevailing_wind_degrees` defaults to `0` as a rotation offset for the entire circulation pattern. Directions wrap to `0..360`; setting `latitude_wind_band_strength` to `0` restores one authored global transport direction for controlled comparisons.
+- Each directional pass is deterministic. A cell blends already-processed eight-neighbor air state according to alignment with that pass, then applies map-unit transport retention. Smooth row weights compose the passes without an abrupt equatorial or band-transition seam.
 - Ambient moisture defaults to `0.18`. Ocean cells replenish air moisture to at least `1.0`; inland water replenishes it to at least `0.65`, preserving their distinct stable source influence.
 - Moisture retention defaults to `0.985` per map unit and background precipitation efficiency to `0.35`.
 - Rising normalized land elevation condenses additional precipitation with lift strength `1.50`. Lift consumes transported moisture and creates a downwind shadow with strength `0.70` and per-map-unit retention `0.92`.
-- A global precipitation scale defaults to `1.0` and supports deterministic drier or wetter realms. The final value is clamped to `0..1` without observed-range normalization.
+- A global precipitation scale defaults to `1.0`. Domain-separated seed character additionally varies effective precipitation scale from `0.70..1.75` and transport-loss severity from dry to humid realms; `precipitation_seed_variation` blends that character toward exact neutral values and `0` removes all seed influence. The final value is clamped to `0..1` without observed-range normalization.
 - The transport pass reads only cell elevation and stable water classification. Drainage area, channel thresholds, rivers, current rainfall, humidity, soil moisture, runoff, and discharge cannot affect it.
 
 ### Application-Driven Biomes
@@ -71,7 +72,7 @@ This document tracks the procedural generation capabilities currently present in
 - Validation rejects reserved or duplicate rule IDs, unknown enum values, non-finite bounds, inverted ranges, normalized bounds outside `0..1`, and negative slope or coast-distance bounds.
 - `GreaterRealmBiomeMap` stores only opaque IDs plus fingerprints for its terrain, climate, and complete ordered rule-set sources. Any source change rebuilds assignment without regenerating terrain or climate.
 - Debug rendering accepts an application-owned ID-to-colour table. IDs absent from the table use a deterministic neutral fallback palette; biome names, art, resources, spawning, and gameplay behavior never enter procgen data.
-- `TestApp` supplies a small in-memory inspection set covering ocean, inland water, alpine, polar, rainforest, desert, forest, tundra, and grassland IDs. Those definitions and colours are sandbox application data, not engine-standard biomes or an asset format.
+- `TestApp` supplies a small in-memory inspection set covering ocean, inland water, alpine, polar, rainforest, desert, forest, tundra, and grassland IDs. Those definitions and colours are sandbox application data, not engine-standard biomes or an asset format. A representative-map regression check requires at least four visible land classes and prevents any one class from covering `70%` of land; a `256x192` seed sweep additionally requires both limited-desert and heavily desert realms.
 
 ## Terrain Constraints
 
@@ -154,7 +155,7 @@ Task 049 records the alignment audit. Differences not listed above require an ex
 - Terrain noise and ocean depth use larger tuning steps and contrast-enhanced debug shading so changes are visible.
 - Debug builds report per-stage generation timings plus end-to-end control-to-preview timing through the Debug-only `REALM_ENABLE_PROCGEN_PROFILING` definition; profiling code is compiled out of production builds.
 - `REALM_OPTIMIZE_PROCGEN_DEBUG` defaults to `ON`, compiling the interactive procgen runtime with optimization in Debug builds while dedicated test targets retain their normal Debug checks. Disable it when stepping through procgen at instruction level is more important than interactive tuning speed.
-- Automated tests cover output shape, deterministic seeds, map lookup, signed constraints, topology stability, ocean connectivity, inland-water classification, sea-level invariance, Mapgen4 coastline attenuation, terrain statistics, hill/mountain relief-stage separation, land-relief control ranges, stable fixed peak selection/spacing/distribution/dormancy/distance fields, one-stage authored-constraint composition, constraint interpolation/serialization, preview-coordinate mapping, paint interaction state, brush setting clamping/effect, drainage invariants, catchment accumulation, channel connectivity, staged-regeneration equivalence and timing paths, climate shape/range/determinism/transport/responses/invalidation, biome validation/precedence/identity/invalidation, and debug-image output.
+- Automated tests cover output shape, deterministic seeds, map lookup, signed constraints, topology stability, ocean connectivity, inland-water classification, sea-level invariance, Mapgen4 coastline attenuation, terrain statistics, hill/mountain relief-stage separation, land-relief control ranges, stable fixed peak selection/spacing/distribution/dormancy/distance fields, one-stage authored-constraint composition, constraint interpolation/serialization, preview-coordinate mapping, paint interaction state, brush setting clamping/effect, drainage invariants, catchment accumulation, channel connectivity, staged-regeneration equivalence and timing paths, climate shape/range/determinism/latitude circulation/seed aridity/responses/invalidation, biome validation/precedence/identity/invalidation/distribution, and debug-image output.
 - Test code is compiled only when `REALM_BUILD_TESTS=ON` and does not enter release builds.
 
 ## Not Yet Supported

@@ -181,6 +181,14 @@ std::uint64_t greater_realm_climate_fingerprint(
     hash = mix_hash(hash, climate.source_height);
     hash = mix_hash(hash, std::bit_cast<std::uint32_t>(climate.source_cell_size));
     hash = mix_hash(hash, climate.source_terrain_fingerprint);
+    hash = mix_hash(
+        hash,
+        std::bit_cast<std::uint32_t>(climate.precipitation_character.wetness_scale)
+    );
+    hash = mix_hash(
+        hash,
+        std::bit_cast<std::uint32_t>(climate.precipitation_character.retention_scale)
+    );
     for (const auto& cell : climate.cells) {
         hash = mix_hash(hash, std::bit_cast<std::uint32_t>(cell.temperature_normal));
         hash = mix_hash(hash, std::bit_cast<std::uint32_t>(cell.precipitation_normal));

@@ -45,11 +45,14 @@ No branch is required unless implementation expands into application asset integ
 - Added `GreaterRealmBiomeGenerationCache`; changed terrain, climate values, rule content, rule order, version, or application identity rebuilds assignment without regenerating terrain or climate.
 - Added a `Biome` debug view that consumes an application colour table and uses a deterministic neutral fallback palette for unlisted IDs.
 - Added an in-memory `TestApp` inspection rule set and colour table. Its ocean, inland-water, alpine, polar, rainforest, desert, forest, tundra, and grassland meanings remain sandbox application data, not engine definitions.
+- Moved the sandbox policy into `GreaterRealmDebugBiomes` so the application-owned rules and colours are measured directly rather than duplicated in procgen tests.
+- Calibrated the debug rules against seed `8675309` at `256x192`. After Task 077's circulation correction, desert is about `40%` of land, grassland `28%`, tundra `22%`, forest `8%`, and alpine `2%`. A regression test rejects any single class at `70%` or more and requires at least four land classes above `1%`.
 - Kept names, art, resources, spawning, gameplay behavior, persistence formats, and asset loading out of the reusable biome module.
 
 ## Verification
 
 - Added `realm_biome_tests` for rule validation, all optional input contracts, deterministic assignment, priority, inclusive boundaries, declaration-order ties, fallback/unmatched behavior, water rules, source identity, climate/rule invalidation, and custom/fallback debug colours.
+- Added representative sandbox-distribution coverage after visual review showed the original thresholds classified roughly `90%` of land into similar desert/grassland colours.
 - Focused greater-realm, climate, biome, and debug-panel tests passed, 4/4.
 - Full `ctest --test-dir out/build/debug-with-tests --output-on-failure` passed, 16/16.
 - Explicit Debug builds passed for all runtime and test targets.

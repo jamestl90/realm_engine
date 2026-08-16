@@ -1,4 +1,5 @@
 #include "test_app.hpp"
+#include "GreaterRealmDebugBiomes.hpp"
 #include "../../include/core/Engine.hpp"
 #include "../../include/core/Config.hpp"
 #include "../../include/core/Utils.hpp"
@@ -25,99 +26,6 @@
 namespace game {
 
 #if defined(REALM_ENABLE_PROCGEN_DEBUG_VIEW)
-namespace {
-
-enum SandboxBiomeId : procgen::BiomeId {
-    OceanBiome = 1,
-    InlandWaterBiome = 2,
-    AlpineBiome = 3,
-    PolarBiome = 4,
-    RainforestBiome = 5,
-    DesertBiome = 6,
-    ForestBiome = 7,
-    TundraBiome = 8,
-    GrasslandBiome = 9
-};
-
-procgen::GreaterRealmBiomeRuleSet make_sandbox_biome_rules() {
-    procgen::GreaterRealmBiomeRuleSet rules;
-    rules.identity = 1;
-    rules.fallback_biome_id = GrasslandBiome;
-
-    procgen::GreaterRealmBiomeRule ocean;
-    ocean.biome_id = OceanBiome;
-    ocean.priority = 100;
-    ocean.water_class = procgen::BiomeWaterClass::Ocean;
-    rules.rules.push_back(ocean);
-
-    procgen::GreaterRealmBiomeRule inland_water;
-    inland_water.biome_id = InlandWaterBiome;
-    inland_water.priority = 100;
-    inland_water.water_class = procgen::BiomeWaterClass::InlandWater;
-    rules.rules.push_back(inland_water);
-
-    procgen::GreaterRealmBiomeRule alpine;
-    alpine.biome_id = AlpineBiome;
-    alpine.priority = 90;
-    alpine.water_class = procgen::BiomeWaterClass::Land;
-    alpine.elevation = procgen::BiomeValueRange{0.82f, 1.0f};
-    rules.rules.push_back(alpine);
-
-    procgen::GreaterRealmBiomeRule polar;
-    polar.biome_id = PolarBiome;
-    polar.priority = 80;
-    polar.water_class = procgen::BiomeWaterClass::Land;
-    polar.temperature_normal = procgen::BiomeValueRange{0.0f, 0.20f};
-    rules.rules.push_back(polar);
-
-    procgen::GreaterRealmBiomeRule rainforest;
-    rainforest.biome_id = RainforestBiome;
-    rainforest.priority = 70;
-    rainforest.water_class = procgen::BiomeWaterClass::Land;
-    rainforest.temperature_normal = procgen::BiomeValueRange{0.65f, 1.0f};
-    rainforest.precipitation_normal = procgen::BiomeValueRange{0.60f, 1.0f};
-    rules.rules.push_back(rainforest);
-
-    procgen::GreaterRealmBiomeRule desert;
-    desert.biome_id = DesertBiome;
-    desert.priority = 60;
-    desert.water_class = procgen::BiomeWaterClass::Land;
-    desert.temperature_normal = procgen::BiomeValueRange{0.45f, 1.0f};
-    desert.precipitation_normal = procgen::BiomeValueRange{0.0f, 0.20f};
-    rules.rules.push_back(desert);
-
-    procgen::GreaterRealmBiomeRule forest;
-    forest.biome_id = ForestBiome;
-    forest.priority = 50;
-    forest.water_class = procgen::BiomeWaterClass::Land;
-    forest.precipitation_normal = procgen::BiomeValueRange{0.42f, 1.0f};
-    rules.rules.push_back(forest);
-
-    procgen::GreaterRealmBiomeRule tundra;
-    tundra.biome_id = TundraBiome;
-    tundra.priority = 40;
-    tundra.water_class = procgen::BiomeWaterClass::Land;
-    tundra.temperature_normal = procgen::BiomeValueRange{0.20f, 0.40f};
-    rules.rules.push_back(tundra);
-    return rules;
-}
-
-std::vector<procgen::BiomeDebugColour> make_sandbox_biome_colours() {
-    return {
-        {OceanBiome, {28, 82, 154, 255}},
-        {InlandWaterBiome, {38, 142, 154, 255}},
-        {AlpineBiome, {196, 202, 204, 255}},
-        {PolarBiome, {224, 236, 238, 255}},
-        {RainforestBiome, {34, 112, 70, 255}},
-        {DesertBiome, {208, 176, 92, 255}},
-        {ForestBiome, {64, 132, 74, 255}},
-        {TundraBiome, {132, 146, 118, 255}},
-        {GrasslandBiome, {132, 168, 82, 255}}
-    };
-}
-
-} // namespace
-
 bool TestApp::regenerate_procgen_debug_map(core::Engine& engine, bool force_full) {
     m_procgen_paint_dirty = false;
     if (force_full) {
@@ -463,8 +371,8 @@ void TestApp::on_startup(core::Engine& engine) {
     m_procgen_settings.seed = 8675309;
     m_procgen_settings.width = 256;
     m_procgen_settings.height = 192;
-    m_procgen_biome_rules = make_sandbox_biome_rules();
-    m_procgen_biome_colours = make_sandbox_biome_colours();
+    m_procgen_biome_rules = make_greater_realm_debug_biome_rules();
+    m_procgen_biome_colours = make_greater_realm_debug_biome_colours();
     (void)m_procgen_generation_cache.regenerate(
         m_procgen_map,
         m_procgen_settings,

@@ -1,8 +1,11 @@
 #include "procgen/Biome.hpp"
 #include "procgen/GreaterRealmDebug.hpp"
+#include "game/GreaterRealmDebugBiomes.hpp"
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <iostream>
+#include <limits>
 
 #if !defined(REALM_TEST_BUILD)
 #error "BiomeTests.cpp must only be compiled for test builds"
@@ -270,6 +273,107 @@ bool test_debug_view_uses_application_colours_and_rejects_stale_sources() {
     );
 }
 
+bool test_sandbox_rules_produce_legible_representative_distribution() {
+    procgen::GreaterRealmGeneratorSettings terrain_settings;
+    terrain_settings.seed = 8675309;
+    terrain_settings.width = 256;
+    terrain_settings.height = 192;
+    const auto terrain = procgen::generate_greater_realm(terrain_settings);
+    const auto climate = procgen::generate_greater_realm_climate(terrain);
+    const auto rules = game::make_greater_realm_debug_biome_rules();
+    const auto biomes = procgen::generate_greater_realm_biomes(terrain, climate, rules);
+
+    std::array<std::size_t, 10> counts{};
+    std::size_t land_count = 0;
+    for (std::size_t index = 0; index < terrain.cells.size(); ++index) {
+        if (terrain.cells[index].is_water) {
+            continue;
+        }
+        ++land_count;
+        const auto id = biomes.cells[index].biome_id;
+        if (id < counts.size()) {
+            ++counts[id];
+        }
+    }
+
+    std::size_t dominant_count = 0;
+    std::size_t meaningful_land_biomes = 0;
+    for (procgen::BiomeId id = game::AlpineBiome; id <= game::GrasslandBiome; ++id) {
+        dominant_count = std::max(dominant_count, counts[id]);
+        if (counts[id] * 100 >= land_count) {
+            ++meaningful_land_biomes;
+        }
+        std::cout << "sandbox biome " << id << ": "
+                  << (land_count > 0 ? counts[id] * 100.0 / land_count : 0.0) << "% land\n";
+    }
+
+    return require(
+        land_count > 0
+            && dominant_count * 100 < land_count * 70
+            && meaningful_land_biomes >= 4,
+        "sandbox colours retain several visible land biomes without one covering 70 percent"
+    );
+}
+
+bool test_seeded_aridity_spans_low_and_high_desert_realms() {
+    const auto rules = game::make_greater_realm_debug_biome_rules();
+    float minimum_desert_fraction = std::numeric_limits<float>::max();
+    float maximum_desert_fraction = 0.0f;
+    procgen::Seed minimum_seed = 0;
+    procgen::Seed maximum_seed = 0;
+    procgen::GreaterRealmPrecipitationCharacter minimum_character;
+    procgen::GreaterRealmPrecipitationCharacter maximum_character;
+    constexpr std::array<procgen::Seed, 25> SEEDS{
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13,
+        14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 8675309
+    };
+
+    for (const procgen::Seed seed : SEEDS) {
+        procgen::GreaterRealmGeneratorSettings terrain_settings;
+        terrain_settings.seed = seed;
+        terrain_settings.width = 256;
+        terrain_settings.height = 192;
+        const auto terrain = procgen::generate_greater_realm(terrain_settings);
+        const auto climate = procgen::generate_greater_realm_climate(terrain);
+        const auto biomes = procgen::generate_greater_realm_biomes(terrain, climate, rules);
+
+        std::size_t land_count = 0;
+        std::size_t desert_count = 0;
+        for (std::size_t index = 0; index < terrain.cells.size(); ++index) {
+            if (terrain.cells[index].is_water) {
+                continue;
+            }
+            ++land_count;
+            desert_count += biomes.cells[index].biome_id == game::DesertBiome ? 1u : 0u;
+        }
+        const float desert_fraction = land_count > 0
+            ? static_cast<float>(desert_count) / static_cast<float>(land_count)
+            : 0.0f;
+        if (desert_fraction < minimum_desert_fraction) {
+            minimum_desert_fraction = desert_fraction;
+            minimum_seed = seed;
+            minimum_character = climate.precipitation_character;
+        }
+        if (desert_fraction > maximum_desert_fraction) {
+            maximum_desert_fraction = desert_fraction;
+            maximum_seed = seed;
+            maximum_character = climate.precipitation_character;
+        }
+    }
+
+    std::cout << "sandbox desert range: " << minimum_desert_fraction * 100.0f
+              << "% (seed " << minimum_seed << ", wetness "
+              << minimum_character.wetness_scale << ") to "
+              << maximum_desert_fraction * 100.0f << "% (seed " << maximum_seed
+              << ", wetness " << maximum_character.wetness_scale << ")\n";
+    return require(
+        minimum_desert_fraction < 0.08f
+            && maximum_desert_fraction > 0.30f
+            && maximum_desert_fraction - minimum_desert_fraction > 0.25f,
+        "seeded realm aridity spans limited-desert and heavily desert generations"
+    );
+}
+
 } // namespace
 
 int main() {
@@ -279,6 +383,8 @@ int main() {
     ok &= test_equal_priority_uses_declaration_order();
     ok &= test_source_identity_and_regeneration_locality();
     ok &= test_debug_view_uses_application_colours_and_rejects_stale_sources();
+    ok &= test_sandbox_rules_produce_legible_representative_distribution();
+    ok &= test_seeded_aridity_spans_low_and_high_desert_realms();
     if (!ok) {
         return 1;
     }

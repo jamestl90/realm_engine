@@ -234,10 +234,15 @@ bool test_precipitation_settings_validation_and_wind_response() {
     settings.precipitation_efficiency = 0.5f;
     settings.orographic_lift = 0.0f;
     settings.rain_shadow_strength = 0.0f;
+    settings.latitude_wind_band_strength = -1.0f;
+    settings.secondary_wind_strength = 2.0f;
+    settings.precipitation_seed_variation = 0.0f;
     const auto clamped = procgen::clamp_greater_realm_climate_settings(settings);
     bool ok = require(
         nearly_equal(clamped.prevailing_wind_degrees, 5.0f)
-            && clamped.ambient_moisture == 0.0f,
+            && clamped.ambient_moisture == 0.0f
+            && clamped.latitude_wind_band_strength == 0.0f
+            && clamped.secondary_wind_strength == 0.5f,
         "wind direction wraps to 0..360 and transport settings clamp to valid ranges"
     );
     settings.ocean_moisture_source = std::numeric_limits<float>::quiet_NaN();
@@ -274,6 +279,8 @@ bool test_ocean_and_inland_water_source_strengths() {
     settings.inland_water_moisture_source = 0.4f;
     settings.precipitation_efficiency = 0.5f;
     settings.orographic_lift = 0.0f;
+    settings.latitude_wind_band_strength = 0.0f;
+    settings.precipitation_seed_variation = 0.0f;
     const auto climate = procgen::generate_greater_realm_climate(terrain, settings);
     return require(
         nearly_equal(climate.cells[0].precipitation_normal, 0.5f)
@@ -299,6 +306,8 @@ bool test_orographic_lift_and_downwind_shadow() {
     settings.orographic_lift = 1.5f;
     settings.rain_shadow_strength = 0.7f;
     settings.rain_shadow_decay = 0.95f;
+    settings.latitude_wind_band_strength = 0.0f;
+    settings.precipitation_seed_variation = 0.0f;
     const auto climate = procgen::generate_greater_realm_climate(terrain, settings);
     return require(
         climate.cells[3].precipitation_normal > climate.cells[1].precipitation_normal
@@ -313,6 +322,7 @@ bool test_dry_wet_scale_and_hydrology_independence() {
     terrain.cells[0].is_ocean = true;
     terrain.cells[0].terrain_form = procgen::TerrainForm::Ocean;
     procgen::GreaterRealmClimateSettings settings;
+    settings.precipitation_seed_variation = 0.0f;
     settings.precipitation_scale = 0.5f;
     const auto dry = procgen::generate_greater_realm_climate(terrain, settings);
     settings.precipitation_scale = 1.5f;
@@ -332,6 +342,57 @@ bool test_dry_wet_scale_and_hydrology_independence() {
         wet_summary.mean > dry_summary.mean
             && precipitation_values_match(wet, unchanged),
         "wetness scale changes fixed output while drainage and channels do not affect climate"
+    );
+}
+
+bool test_latitude_wind_bands_reverse_coastal_influence() {
+    auto terrain = make_flat_map(31, 13, 31337);
+    for (std::uint32_t y = 0; y < terrain.height; ++y) {
+        for (const std::uint32_t x : {0u, terrain.width - 1}) {
+            auto& cell = terrain.cells[terrain.index(x, y)];
+            cell.is_water = true;
+            cell.is_ocean = true;
+            cell.terrain_form = procgen::TerrainForm::Ocean;
+            cell.elevation = 0.25f;
+        }
+    }
+
+    procgen::GreaterRealmClimateSettings settings;
+    settings.ambient_moisture = 0.0f;
+    settings.moisture_retention = 0.99f;
+    settings.precipitation_efficiency = 0.4f;
+    settings.orographic_lift = 0.0f;
+    settings.rain_shadow_strength = 0.0f;
+    settings.secondary_wind_strength = 0.0f;
+    settings.precipitation_seed_variation = 0.0f;
+    const auto climate = procgen::generate_greater_realm_climate(terrain, settings);
+
+    const auto precipitation = [&](std::uint32_t x, std::uint32_t y) {
+        return climate.cells[terrain.index(x, y)].precipitation_normal;
+    };
+    return require(
+        precipitation(2, 1) > precipitation(terrain.width - 3, 1)
+            && precipitation(2, terrain.height / 2)
+                < precipitation(terrain.width - 3, terrain.height / 2)
+            && precipitation(2, terrain.height - 2)
+                > precipitation(terrain.width - 3, terrain.height - 2),
+        "latitude circulation makes mid-latitudes and tropics favor opposing coasts"
+    );
+}
+
+bool test_seed_driven_precipitation_character() {
+    const auto first = procgen::derive_greater_realm_precipitation_character(101, 1.0f);
+    const auto repeated = procgen::derive_greater_realm_precipitation_character(101, 1.0f);
+    const auto different = procgen::derive_greater_realm_precipitation_character(202, 1.0f);
+    const auto neutral_first = procgen::derive_greater_realm_precipitation_character(101, 0.0f);
+    const auto neutral_second = procgen::derive_greater_realm_precipitation_character(202, 0.0f);
+
+    return require(
+        first == repeated
+            && first != different
+            && neutral_first == procgen::GreaterRealmPrecipitationCharacter{}
+            && neutral_first == neutral_second,
+        "realm precipitation character is deterministic and variation zero is exactly neutral"
     );
 }
 
@@ -459,6 +520,8 @@ int main() {
     ok &= test_ocean_and_inland_water_source_strengths();
     ok &= test_orographic_lift_and_downwind_shadow();
     ok &= test_dry_wet_scale_and_hydrology_independence();
+    ok &= test_latitude_wind_bands_reverse_coastal_influence();
+    ok &= test_seed_driven_precipitation_character();
     ok &= test_source_identity_debug_view_and_terrain_immutability();
     ok &= test_climate_regeneration_locality();
     if (!ok) {
