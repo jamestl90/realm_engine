@@ -32,3 +32,7 @@ The greater-realm generator provides world-scale landform and hydrology, but the
 ## Branch
 
 Use a dedicated branch. This introduces a new procgen data contract and generation pipeline with non-trivial continuity and determinism requirements.
+
+## Scheduling Note
+
+This task remains queued, but local terrain generation starts only after the current grand-scale greater-realm generation phase.

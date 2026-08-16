@@ -32,3 +32,7 @@ Local regions must have an explicit lifecycle before rendering, collision, entit
 ## Branch
 
 Use a dedicated branch. This establishes shared world-runtime state and lifecycle contracts that later rendering, persistence, ECS, and collision systems will consume.
+
+## Scheduling Note
+
+This task remains queued after local generation exists; it is not part of the current grand-scale map work.

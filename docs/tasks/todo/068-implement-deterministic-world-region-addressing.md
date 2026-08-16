@@ -31,3 +31,7 @@ Region generation, streaming, and persistence all require an identity that is in
 ## Notes
 
 No branch is required unless the approved Task 067 contract reveals a broader cross-module migration.
+
+## Scheduling Note
+
+This is committed future work after Task 067, scheduled after the current grand-scale greater-realm generation phase.

@@ -31,3 +31,7 @@ Deterministic regions can usually be regenerated from their world identity, gene
 ## Branch
 
 Use a dedicated branch. Persistence introduces durable formats and compatibility commitments across procgen and world lifecycle modules.
+
+## Scheduling Note
+
+This task remains queued behind local generation and region lifecycle work.

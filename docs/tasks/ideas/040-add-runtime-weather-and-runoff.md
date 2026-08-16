@@ -17,7 +17,9 @@ Greater-realm generation owns stable terrain, catchment area, and potential rive
 - Task 039: terrain-only drainage and potential river channels.
 - Task 070: active world-region lifecycle.
 - Task 071: region persistence and regeneration deltas.
-- Task 066 and its resulting biome or environmental-tendency tasks.
+- Task 074: greater-realm temperature normals.
+- Task 075: greater-realm precipitation normals.
+- Task 076: application-driven greater-realm biome assignment.
 
 This task is intentionally deferred until those dependencies exist; static procgen must not grow placeholder weather fields in the meantime.
 

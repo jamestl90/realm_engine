@@ -30,3 +30,7 @@ The ECS currently owns one live world with no spatial residency boundary. A segm
 ## Branch
 
 Use a dedicated branch. This integrates world lifecycle, ECS ownership, collision data, and persistence behavior with broad regression risk.
+
+## Scheduling Note
+
+This task remains queued behind playable local regions, lifecycle, collision, and persistence work.

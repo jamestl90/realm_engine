@@ -63,3 +63,7 @@ This is a planning task. Do not implement world management here unless the break
 - Updated parked Task 040 to depend on the concrete lifecycle, persistence, and climate/biome records.
 - `git diff --check` passed; targeted trailing-whitespace checks found no issues.
 - No build or runtime tests were required because this task changes planning and documentation only.
+
+## Post-Completion Priority
+
+Tasks 067-073 remain queued future work, scheduled after the current grand-scale greater-realm generation phase. None of them block continued greater-realm generation.

@@ -31,6 +31,19 @@ This document tracks the procedural generation capabilities currently present in
 - Accumulates terrain-only contributing area downstream and exports renderer-independent potential river channels with catchment area and a derived display width. Channels may terminate near the coast, but coastal land cells are not exported as river segment endpoints, and near-coast exported segments must move toward the coastline rather than along it.
 - Does not generate rainfall, humidity, soil moisture, runoff, or current river discharge. Those values belong to future runtime weather and world simulation.
 
+## Climate And Biome Ownership
+
+- Stable greater-realm climate belongs to procgen as a derived layer, separate from canonical terrain and hydrology.
+- The minimum planned outputs are fixed-scale normalized `temperature_normal` and `precipitation_normal` values. They retain the same meaning across different maps and are not renormalized from each map's observed range.
+- Climate output belongs in a separate `GreaterRealmClimateMap` with one climate cell per greater-realm cell. Terrain regeneration invalidates climate, but climate settings never rebuild or mutate terrain, classification, drainage, or potential river channels.
+- Temperature normal consumes explicit latitude context, elevation, maritime moderation from water proximity, and optional broad deterministic variation.
+- Precipitation normal is a long-term climatological tendency. It may use ocean and inland-water sources, prevailing wind, elevation, orographic lift, and rain shadow without representing a specific rain event.
+- Humidity, soil moisture, current rainfall, runoff, and active river discharge remain runtime simulation state and are not climate-normal aliases.
+- Applications own biome definitions and IDs. The planned reusable classifier consumes application-supplied rules and produces a separate `GreaterRealmBiomeMap`; it does not add hard-coded biome labels to `GreaterRealmCell`.
+- Biome rules may inspect stable terrain and climate inputs. Applications separately own biome names, colours, art, resources, and gameplay behavior.
+- Generated climate and biome arrays are regenerated from versioned inputs by default. Terrain changes invalidate climate and biome output, climate changes invalidate climate and biome output, and biome-rule changes invalidate biome output only.
+- Tasks 074-076 track temperature normals, precipitation normals, and biome classification. None require local-region generation or runtime weather.
+
 ## Terrain Constraints
 
 - `TerrainConstraintField` is independent from greater-realm output resolution and supports smooth normalized-coordinate brush stamps.
@@ -114,9 +127,10 @@ Task 049 records the alignment audit. Differences not listed above require an ex
 ## Not Yet Supported
 
 - Lake retention, shared water-surface levels, river erosion, deltas, or watershed metadata. Enclosed water is classified as inland water without implying those hydrological behaviors.
-- Runtime weather, precipitation, runoff, soil moisture, or active river discharge; task 040 tracks this future simulation layer.
+- Runtime weather, precipitation events, runoff, soil moisture, or active river discharge; task 040 tracks this future simulation layer.
+- Greater-realm temperature normals, precipitation normals, or biome assignment; Tasks 074-076 track their implementation under the ownership contract above.
 - Resources, settlements, factions, or object placement.
-- Local tile generation or world-region streaming; Tasks 067-073 track the planned spatial contract, local generation, lifecycle, persistence, top-down presentation, and runtime activation slices.
+- Local tile generation or world-region streaming; queued Tasks 067-073 retain that future roadmap while current procgen work remains at greater-realm scale.
 - Beach, cliff, rocky-shore, marsh, delta, or other detailed shoreline classification.
 - A derived Delaunay/Voronoi render surface; task 032 rejected it as the canonical greater-realm representation.
 - Mapgen4's irregular folded mesh around coasts, ridges, valleys, and rivers. The supported 2.5D path is a continuous triangulated regular-grid heightfield instead.

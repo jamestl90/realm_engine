@@ -36,3 +36,7 @@ The game is top-down 2D. The derived 3D terrain view is for map and world inspec
 This is a documentation and architecture decision task. It must not implement region storage or local terrain generation.
 
 No branch is required because this task changes documentation and backlog contracts only.
+
+## Scheduling Note
+
+This is committed future work, scheduled after the current grand-scale greater-realm generation phase.

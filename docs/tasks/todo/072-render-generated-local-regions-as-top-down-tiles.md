@@ -32,3 +32,7 @@ Local procgen output is semantic engine data, not art selection. Rendering needs
 ## Branch
 
 Use a dedicated branch. This spans world lifecycle, tileset assets, renderer batching, camera behavior, and application presentation policy.
+
+## Scheduling Note
+
+This task remains queued behind local generation. The flat and 3D greater-realm views remain the current map-inspection paths.
