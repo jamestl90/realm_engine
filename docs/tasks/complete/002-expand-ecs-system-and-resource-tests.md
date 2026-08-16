@@ -1,6 +1,6 @@
 # Expand ECS System And Resource Tests
 
-Status: testing
+Status: complete
 Area: ECS
 
 ## Goal
@@ -21,6 +21,7 @@ Extend ECS regression coverage beyond entity and component lifecycle behavior.
 - All four current test suites pass together.
 - A fresh tests-disabled configuration builds `realm_engine` without creating or compiling test targets.
 - ECS test sources require the test-only `REALM_TEST_BUILD` definition.
+- 2026-08-16 backlog closure: all 14 CTest targets passed, including `ecs_system_resources`, and fresh Debug and Release runtime builds succeeded.
 
 ## Notes
 

@@ -1,6 +1,6 @@
 # Fix ECS Entity And Component Lifecycle
 
-Status: testing
+Status: complete
 Area: ECS
 
 ## Goal
@@ -28,3 +28,4 @@ Enforce entity and component lifecycle invariants so destroyed, stale, or invali
 - `ecs_world_lifecycle`, `procgen_greater_realm`, and `ui_text_measurement` pass.
 - Release runtime builds successfully.
 - Test source is isolated under `tests/ecs` and compiled with `REALM_TEST_BUILD=1` only for `realm_ecs_tests`.
+- 2026-08-16 backlog closure: all 14 CTest targets passed, including `ecs_world_lifecycle`, and fresh Debug and Release runtime builds succeeded.

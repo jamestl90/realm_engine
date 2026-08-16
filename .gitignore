@@ -11,10 +11,12 @@ obj/
 /out/
 ai/prompts/
 
+# Local build/debug artifacts. These may contain machine paths or build details.
 *.exe
 *.pdb
 *.log
 *.ilk
+vc140.pdb
 
 .vscode/
 .vs/

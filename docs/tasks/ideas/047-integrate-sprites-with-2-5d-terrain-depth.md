@@ -1,6 +1,7 @@
 # Integrate Sprites With 2.5D Terrain Depth
 
-Status: todo
+Status: idea
+Priority: deferred
 Area: Rendering / World Presentation
 
 ## Goal
@@ -24,3 +25,7 @@ Task 033 adds a render-only terrain heightfield, but the existing sprite pass re
 - Preserve the existing flat sprite and UI rendering paths.
 - Verify occlusion against terrain and other world sprites with representative tests or a focused sandbox scene.
 - Document performance and batching implications for hundreds to thousands of sprites.
+
+## Parking Decision
+
+The game is planned as top-down 2D, with the 3D heightfield retained only for map and world inspection. Production gameplay therefore does not currently need sprites to share the 3D terrain camera or depth buffer. Reassess this idea only if the presentation direction changes.

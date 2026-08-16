@@ -1,6 +1,7 @@
 # Add Runtime Weather And Runoff
 
-Status: todo
+Status: idea
+Priority: deferred
 Area: World Simulation / Weather
 
 ## Goal
@@ -32,3 +33,7 @@ This task is intentionally deferred until those dependencies exist; static procg
 ## Branch
 
 Use a dedicated branch when this task starts. It spans procgen data, world simulation, persistence, and streamed-region updates, so it is expected to require multi-day implementation and review.
+
+## Parking Decision
+
+Runtime weather, runoff, and discharge are not current procgen priorities. Reassess this idea only after world regions and biome tendencies exist and a concrete non-disaster gameplay requirement justifies the simulation cost.

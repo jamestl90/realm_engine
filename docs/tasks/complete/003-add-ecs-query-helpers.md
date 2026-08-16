@@ -1,6 +1,6 @@
 # Add ECS Query Helpers
 
-Status: testing
+Status: complete
 Area: ECS
 
 ## Goal
@@ -27,6 +27,7 @@ Systems previously accessed component arrays directly. That was efficient, but r
 - All five current test suites pass together.
 - Tests-disabled Debug and Release runtime builds compile the renderer through the query API.
 - Query tests remain isolated behind `REALM_BUILD_TESTS=ON` and `REALM_TEST_BUILD=1`.
+- 2026-08-16 backlog closure: all 14 CTest targets passed, including `ecs_component_queries`, and fresh Debug and Release runtime builds succeeded.
 
 ## Notes
 
