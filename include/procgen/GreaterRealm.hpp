@@ -96,6 +96,51 @@ struct GreaterRealmGeneratorSettings {
     float river_width_scale{0.25f};
 };
 
+enum class GreaterRealmDirtyStage : std::uint32_t {
+    None = 0,
+    TerrainFields = 1u << 0,
+    MountainPeaks = 1u << 1,
+    Relief = 1u << 2,
+    Classification = 1u << 3,
+    Drainage = 1u << 4,
+    RiverChannels = 1u << 5,
+    DebugImage = 1u << 6,
+    TextureUpload = 1u << 7
+};
+
+[[nodiscard]] constexpr GreaterRealmDirtyStage operator|(
+    GreaterRealmDirtyStage left,
+    GreaterRealmDirtyStage right
+) noexcept {
+    return static_cast<GreaterRealmDirtyStage>(
+        static_cast<std::uint32_t>(left) | static_cast<std::uint32_t>(right)
+    );
+}
+
+[[nodiscard]] constexpr GreaterRealmDirtyStage operator&(
+    GreaterRealmDirtyStage left,
+    GreaterRealmDirtyStage right
+) noexcept {
+    return static_cast<GreaterRealmDirtyStage>(
+        static_cast<std::uint32_t>(left) & static_cast<std::uint32_t>(right)
+    );
+}
+
+constexpr GreaterRealmDirtyStage& operator|=(
+    GreaterRealmDirtyStage& left,
+    GreaterRealmDirtyStage right
+) noexcept {
+    left = left | right;
+    return left;
+}
+
+[[nodiscard]] constexpr bool has_dirty_stage(
+    GreaterRealmDirtyStage stages,
+    GreaterRealmDirtyStage stage
+) noexcept {
+    return (stages & stage) != GreaterRealmDirtyStage::None;
+}
+
 struct GreaterRealmMap {
     Seed seed{1};
     std::uint32_t width{0};
@@ -114,6 +159,65 @@ struct GreaterRealmMap {
 
     [[nodiscard]] GreaterRealmCell* cell(std::int32_t x, std::int32_t y) noexcept;
     [[nodiscard]] const GreaterRealmCell* cell(std::int32_t x, std::int32_t y) const noexcept;
+};
+
+struct GreaterRealmRegenerationTimings {
+    double terrain_fields_ms{0.0};
+    double mountain_peaks_ms{0.0};
+    double relief_ms{0.0};
+    double classification_ms{0.0};
+    double drainage_ms{0.0};
+    double river_channels_ms{0.0};
+    double total_ms{0.0};
+};
+
+struct GreaterRealmRegenerationResult {
+    GreaterRealmDirtyStage rebuilt_stages{GreaterRealmDirtyStage::None};
+    GreaterRealmRegenerationTimings timings;
+
+    [[nodiscard]] bool rebuilt(GreaterRealmDirtyStage stage) const noexcept {
+        return has_dirty_stage(rebuilt_stages, stage);
+    }
+};
+
+class GreaterRealmGenerationCache {
+public:
+    struct TerrainLayers {
+        float base_elevation{0.0f};
+        float ridge{0.0f};
+        float valley{0.0f};
+        float terrain_noise{0.0f};
+        float ocean_noise{0.0f};
+    };
+
+    void invalidate(
+        GreaterRealmDirtyStage stage = GreaterRealmDirtyStage::TerrainFields
+    ) noexcept;
+    void reset() noexcept;
+
+    [[nodiscard]] bool initialized() const noexcept { return m_initialized; }
+    [[nodiscard]] GreaterRealmRegenerationResult regenerate(
+        GreaterRealmMap& map,
+        const GreaterRealmGeneratorSettings& settings
+    );
+    [[nodiscard]] GreaterRealmRegenerationResult regenerate(
+        GreaterRealmMap& map,
+        const GreaterRealmGeneratorSettings& settings,
+        const TerrainConstraintField& constraints
+    );
+
+private:
+    [[nodiscard]] GreaterRealmRegenerationResult regenerate_impl(
+        GreaterRealmMap& map,
+        const GreaterRealmGeneratorSettings& settings,
+        const TerrainConstraintField* constraints
+    );
+
+    GreaterRealmGeneratorSettings m_settings;
+    std::vector<TerrainLayers> m_layers;
+    GreaterRealmDirtyStage m_pending_stages{GreaterRealmDirtyStage::TerrainFields};
+    const TerrainConstraintField* m_constraints{nullptr};
+    bool m_initialized{false};
 };
 
 [[nodiscard]] GreaterRealmMap generate_greater_realm(const GreaterRealmGeneratorSettings& settings);

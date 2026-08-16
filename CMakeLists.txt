@@ -134,6 +134,25 @@ if(REALM_BUILD_TESTS)
 
     add_test(NAME procgen_greater_realm COMMAND realm_engine_tests)
 
+    add_executable(realm_procgen_regeneration_tests EXCLUDE_FROM_ALL
+        tests/procgen/GreaterRealmRegenerationTests.cpp
+        src/procgen/GreaterRealm.cpp
+        src/procgen/Hydrology.cpp
+        src/procgen/MountainPeaks.cpp
+        src/procgen/TerrainConstraints.cpp
+    )
+
+    target_include_directories(realm_procgen_regeneration_tests PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+    )
+
+    target_compile_definitions(realm_procgen_regeneration_tests PRIVATE
+        REALM_TEST_BUILD=1
+        REALM_ENABLE_PROCGEN_PROFILING=1
+    )
+
+    add_test(NAME procgen_staged_regeneration COMMAND realm_procgen_regeneration_tests)
+
     add_executable(realm_procgen_pipeline_tests EXCLUDE_FROM_ALL
         tests/procgen/HydrologyConstraintTests.cpp
         src/procgen/GreaterRealm.cpp

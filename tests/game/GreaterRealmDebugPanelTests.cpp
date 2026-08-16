@@ -114,7 +114,7 @@ bool test_panel_sliders_update_settings_and_callbacks() {
         presentation,
         brushSettings,
         map,
-        [&regenerations]() { ++regenerations; },
+        [&regenerations](bool) { ++regenerations; },
         [](procgen::TerrainConstraintTool) {},
         [&brushChanges](procgen::TerrainConstraintBrushSettings) { ++brushChanges; },
         []() {},

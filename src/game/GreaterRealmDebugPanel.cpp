@@ -512,7 +512,7 @@ std::unique_ptr<ui::UIElement> GreaterRealmDebugPanel::build(
 
     auto button_row = std::make_unique<ui::StackPanel>(ui::Orientation::Horizontal);
     button_row->setSpacing(6.0f);
-    button_row->addChild(make_debug_button("Regenerate", [this]() { regenerate(); }));
+    button_row->addChild(make_debug_button("Regenerate", [this]() { regenerate(true); }));
     button_row->addChild(make_debug_button("Random Seed", [this]() {
         if (m_settings) {
             m_settings->seed += 101;
@@ -605,12 +605,12 @@ void GreaterRealmDebugPanel::update(const procgen::GreaterRealmMap& map) {
     }
 }
 
-void GreaterRealmDebugPanel::regenerate() {
+void GreaterRealmDebugPanel::regenerate(bool force_full) {
     if (m_on_regenerate) {
 #if defined(REALM_ENABLE_PROCGEN_PROFILING)
         const auto started_at = std::chrono::steady_clock::now();
 #endif
-        m_on_regenerate();
+        m_on_regenerate(force_full);
 #if defined(REALM_ENABLE_PROCGEN_PROFILING)
         const auto elapsed = std::chrono::duration<double, std::milli>(
             std::chrono::steady_clock::now() - started_at

@@ -57,6 +57,22 @@ This document tracks the procedural generation capabilities currently present in
 
 This follows Mapgen4's layered elevation approach while deliberately retaining a regular-grid representation. The renderer can derive a triangulated regular-grid heightfield for 2.5D presentation without replacing or mutating canonical map data.
 
+## Dependency-Aware Regeneration
+
+`GreaterRealmGenerationCache` retains the sampled terrain layers and the last applied settings. Each change is mapped to its earliest dirty stage, then expanded through only the required downstream dependencies:
+
+| Change | Earliest rebuilt stage | Reused work |
+|---|---|---|
+| Seed, dimensions, cell size, broad landmass/coast controls, terrain frequencies, legacy sea-level setting, authored constraints, or forced regeneration | Terrain fields | None |
+| Peak spacing, radius, or jaggedness | Mountain peaks | Terrain fields |
+| Base, mountain, ridge, valley, terrain-noise, or ocean-depth strength | Relief | Terrain fields and mountain peaks |
+| Terrain-form thresholds | Classification | Terrain fields, peaks, relief, geography metadata, and drainage |
+| Explicit drainage invalidation | Drainage | Terrain, relief, and classification |
+| River catchment threshold or width scale | River channels | Terrain, classification, and conditioned drainage |
+| Debug view or overlay | Debug image | All generated map data |
+
+Any generated-map change also dirties the debug image and texture upload. Authored-constraint owners call `invalidate(TerrainFields)` after mutation; repeated paint samples coalesce into the existing once-per-frame regeneration path. The cache reports rebuilt-stage flags and, when `REALM_ENABLE_PROCGEN_PROFILING` is enabled, per-stage timings. Tests compare partial output byte-for-byte at the data-field level against clean generation and exercise representative full, relief-only, and channel-only paths at `256x192`.
+
 ## Mapgen4 Alignment Boundary
 
 Mapgen4 is the reference for the generator's layered terrain behavior, not a requirement for identical storage or rendering. The following differences are intentional:
@@ -81,15 +97,15 @@ Task 049 records the alignment audit. Differences not listed above require an ex
 - Coastlines, mountain peaks, rivers, and sampled drainage directions are independent overlays. Terrain with coastlines, peaks, and rivers enabled remains the default view.
 - Changing a base view or overlay rebuilds only the RGBA image and preview texture from the retained map; it does not regenerate procedural data.
 - The application can switch between the flat debug texture and a lit oblique `3D` heightfield. The heightfield reuses the active debug colours and overlays, and its elevation scale is presentation-only.
-- `TextureManager` uploads the RGBA output without requiring procgen code to depend on SDL or GPU APIs.
-- The application-level `GreaterRealmDebugPanel` owns the debug UI, active settings, selected constraint tool, brush settings, and regeneration callbacks; `RogueFarmGame` owns preview placement, the editable constraint field, and composition. Controls expose island bias, coastline detail, land relief controls, peak spacing/radius/jaggedness, ocean depth, potential-channel catchment threshold, a mutually exclusive Ocean/Shallow/Valley/Mountain paint-type row, brush size, and brush strength.
+- `TextureManager` uploads the RGBA output without requiring procgen code to depend on SDL or GPU APIs. Same-sized debug images update the existing texture and preserve its `TextureID` without a global GPU-idle wait; only dimension changes allocate and swap a texture.
+- The application-level `GreaterRealmDebugPanel` owns the debug UI, active settings, selected constraint tool, brush settings, and regeneration callbacks; `TestApp` owns preview placement, the editable constraint field, and composition. Controls expose island bias, coastline detail, land relief controls, peak spacing/radius/jaggedness, ocean depth, potential-channel catchment threshold, a mutually exclusive Ocean/Shallow/Valley/Mountain paint-type row, brush size, and brush strength.
 - Primary-button input over the visible preview maps directly to normalized constraint coordinates and paints continuously while dragged. Each paint sample carries the selected brush radius and strength into `TerrainConstraintField::paint`; these are stroke policy values and are not serialized into the constraint field. UI-consumed input and positions outside the preview cannot paint, and generated output is rebuilt at most once per frame while a stroke is active.
 - The compile-gated `TerrainConstraintPainting` module owns preview-coordinate conversion and drag state without depending on SDL, UI widgets, rendering, or application classes.
 - Island bias follows Mapgen4's `0..1` range and `0.5` default. It changes the signed landmass constraint, so it can affect both coastline topology and water elevation before the separate ocean-depth stage.
 - Terrain noise and ocean depth use larger tuning steps and contrast-enhanced debug shading so changes are visible.
 - Debug builds report per-stage generation timings plus end-to-end control-to-preview timing through the Debug-only `REALM_ENABLE_PROCGEN_PROFILING` definition; profiling code is compiled out of production builds.
 - `REALM_OPTIMIZE_PROCGEN_DEBUG` defaults to `ON`, compiling the interactive procgen runtime with optimization in Debug builds while dedicated test targets retain their normal Debug checks. Disable it when stepping through procgen at instruction level is more important than interactive tuning speed.
-- Automated tests cover output shape, deterministic seeds, map lookup, signed constraints, topology stability, ocean connectivity, sea-level invariance, Mapgen4 coastline attenuation, terrain statistics, hill/mountain relief-stage separation, land-relief control ranges, stable fixed peak selection/spacing/distribution/dormancy/distance fields, one-stage authored-constraint composition, constraint interpolation/serialization, preview-coordinate mapping, paint interaction state, brush setting clamping/effect, drainage invariants, catchment accumulation, channel connectivity, and debug-image output.
+- Automated tests cover output shape, deterministic seeds, map lookup, signed constraints, topology stability, ocean connectivity, sea-level invariance, Mapgen4 coastline attenuation, terrain statistics, hill/mountain relief-stage separation, land-relief control ranges, stable fixed peak selection/spacing/distribution/dormancy/distance fields, one-stage authored-constraint composition, constraint interpolation/serialization, preview-coordinate mapping, paint interaction state, brush setting clamping/effect, drainage invariants, catchment accumulation, channel connectivity, staged-regeneration equivalence and timing paths, and debug-image output.
 - Test code is compiled only when `REALM_BUILD_TESTS=ON` and does not enter release builds.
 
 ## Not Yet Supported
@@ -102,4 +118,3 @@ Task 049 records the alignment audit. Differences not listed above require an ex
 - A derived Delaunay/Voronoi render surface; task 032 rejected it as the canonical greater-realm representation.
 - Mapgen4's irregular folded mesh around coasts, ridges, valleys, and rivers. The supported 2.5D path is a continuous triangulated regular-grid heightfield instead.
 - Continuous elevation-informed terrain colouring.
-- Dependency-aware partial regeneration and in-place debug texture updates; task 036 tracks avoiding full-pipeline work for every control change.

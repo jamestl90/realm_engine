@@ -7,6 +7,72 @@
 
 namespace rendering {
 
+namespace {
+
+bool upload_rgba_pixels(
+    SDL_GPUDevice* device,
+    SDL_GPUTexture* texture,
+    std::uint32_t width,
+    std::uint32_t height,
+    std::span<const std::uint8_t> pixels
+) {
+    SDL_GPUTransferBufferCreateInfo transfer_info{};
+    transfer_info.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+    transfer_info.size = static_cast<Uint32>(pixels.size());
+
+    SDL_GPUTransferBuffer* transfer_buffer = SDL_CreateGPUTransferBuffer(device, &transfer_info);
+    if (!transfer_buffer) {
+        SDL_Log("Failed to create texture transfer buffer: %s", SDL_GetError());
+        return false;
+    }
+
+    void* mapped_data = SDL_MapGPUTransferBuffer(device, transfer_buffer, false);
+    if (!mapped_data) {
+        SDL_Log("Failed to map texture transfer buffer: %s", SDL_GetError());
+        SDL_ReleaseGPUTransferBuffer(device, transfer_buffer);
+        return false;
+    }
+    std::memcpy(mapped_data, pixels.data(), pixels.size());
+    SDL_UnmapGPUTransferBuffer(device, transfer_buffer);
+
+    SDL_GPUCommandBuffer* command_buffer = SDL_AcquireGPUCommandBuffer(device);
+    if (!command_buffer) {
+        SDL_Log("Failed to acquire texture upload command buffer: %s", SDL_GetError());
+        SDL_ReleaseGPUTransferBuffer(device, transfer_buffer);
+        return false;
+    }
+
+    SDL_GPUCopyPass* copy_pass = SDL_BeginGPUCopyPass(command_buffer);
+    if (!copy_pass) {
+        SDL_Log("Failed to begin texture upload copy pass: %s", SDL_GetError());
+        SDL_CancelGPUCommandBuffer(command_buffer);
+        SDL_ReleaseGPUTransferBuffer(device, transfer_buffer);
+        return false;
+    }
+
+    SDL_GPUTextureTransferInfo source{};
+    source.transfer_buffer = transfer_buffer;
+    source.pixels_per_row = width;
+    source.rows_per_layer = height;
+
+    SDL_GPUTextureRegion destination{};
+    destination.texture = texture;
+    destination.w = width;
+    destination.h = height;
+    destination.d = 1;
+
+    SDL_UploadToGPUTexture(copy_pass, &source, &destination, false);
+    SDL_EndGPUCopyPass(copy_pass);
+    const bool submitted = SDL_SubmitGPUCommandBuffer(command_buffer);
+    SDL_ReleaseGPUTransferBuffer(device, transfer_buffer);
+    if (!submitted) {
+        SDL_Log("Failed to submit texture upload: %s", SDL_GetError());
+    }
+    return submitted;
+}
+
+} // namespace
+
 TextureManager::TextureManager(GPUDevice* device)
     : device_(device) {
     assert(device_ && "Device cannot be null");
@@ -184,85 +250,10 @@ TextureID TextureManager::create_from_rgba_pixels(
     }
     //SDL_Log("DEBUG: Created GPU texture successfully");
 
-    // Create transfer buffer to upload pixel data
-    SDL_GPUTransferBufferCreateInfo transfer_info = {};
-    transfer_info.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
-    transfer_info.size = static_cast<Uint32>(data_size);
-
-    SDL_GPUTransferBuffer* transfer_buffer = SDL_CreateGPUTransferBuffer(device_->handle(), &transfer_info);
-    if (!transfer_buffer) {
-        SDL_Log("Failed to create transfer buffer: %s", SDL_GetError());
+    if (!upload_rgba_pixels(device_->handle(), gpu_texture, width, height, pixels)) {
         SDL_ReleaseGPUTexture(device_->handle(), gpu_texture);
         return INVALID_TEXTURE_ID;
     }
-    //SDL_Log("DEBUG: Created transfer buffer successfully");
-
-    // Map transfer buffer and copy pixel data
-    void* mapped_data = SDL_MapGPUTransferBuffer(device_->handle(), transfer_buffer, false);
-    if (!mapped_data) {
-        SDL_Log("Failed to map transfer buffer: %s", SDL_GetError());
-        SDL_ReleaseGPUTransferBuffer(device_->handle(), transfer_buffer);
-        SDL_ReleaseGPUTexture(device_->handle(), gpu_texture);
-        return INVALID_TEXTURE_ID;
-    }
-
-    std::memcpy(mapped_data, pixels.data(), data_size);
-
-    SDL_UnmapGPUTransferBuffer(device_->handle(), transfer_buffer);
-    //SDL_Log("DEBUG: Copied %u bytes of pixel data to transfer buffer", data_size);
-
-    // Acquire command buffer for upload
-    SDL_GPUCommandBuffer* cmd_buffer = SDL_AcquireGPUCommandBuffer(device_->handle());
-    if (!cmd_buffer) {
-        SDL_Log("Failed to acquire command buffer for texture upload: %s", SDL_GetError());
-        SDL_ReleaseGPUTransferBuffer(device_->handle(), transfer_buffer);
-        SDL_ReleaseGPUTexture(device_->handle(), gpu_texture);
-        return INVALID_TEXTURE_ID;
-    }
-
-    // Begin copy pass
-    SDL_GPUCopyPass* copy_pass = SDL_BeginGPUCopyPass(cmd_buffer);
-    if (!copy_pass) {
-        SDL_Log("Failed to begin copy pass: %s", SDL_GetError());
-        SDL_CancelGPUCommandBuffer(cmd_buffer);
-        SDL_ReleaseGPUTransferBuffer(device_->handle(), transfer_buffer);
-        SDL_ReleaseGPUTexture(device_->handle(), gpu_texture);
-        return INVALID_TEXTURE_ID;
-    }
-
-    // Set up transfer info
-    SDL_GPUTextureTransferInfo src_transfer = {};
-    src_transfer.transfer_buffer = transfer_buffer;
-    src_transfer.offset = 0;
-    src_transfer.pixels_per_row = width;
-    src_transfer.rows_per_layer = height;
-
-    // Set up destination region
-    SDL_GPUTextureRegion dst_region = {};
-    dst_region.texture = gpu_texture;
-    dst_region.mip_level = 0;
-    dst_region.layer = 0;
-    dst_region.x = 0;
-    dst_region.y = 0;
-    dst_region.z = 0;
-    dst_region.w = width;
-    dst_region.h = height;
-    dst_region.d = 1;
-
-    // Upload texture data
-    SDL_UploadToGPUTexture(copy_pass, &src_transfer, &dst_region, false);
-    //SDL_Log("DEBUG: Uploaded texture data via copy pass");
-
-    // End copy pass and submit
-    SDL_EndGPUCopyPass(copy_pass);
-    SDL_SubmitGPUCommandBuffer(cmd_buffer);
-    //SDL_Log("DEBUG: Submitted texture upload command buffer");
-
-    // Wait for upload to complete before releasing transfer buffer
-    SDL_WaitForGPUIdle(device_->handle());
-
-    // Release transfer buffer (no longer needed)
-    SDL_ReleaseGPUTransferBuffer(device_->handle(), transfer_buffer);
 
     // Create texture wrapper
     auto texture = std::make_unique<Texture>();
@@ -277,6 +268,50 @@ TextureID TextureManager::create_from_rgba_pixels(
     //SDL_Log("DEBUG: Texture created successfully with ID %u", new_id);
     return new_id;
 }
+
+bool TextureManager::update_rgba_pixels(
+    TextureID texture_id,
+    std::uint32_t width,
+    std::uint32_t height,
+    std::span<const std::uint8_t> pixels
+) {
+    const auto texture_iterator = textures_.find(texture_id);
+    if (!device_
+        || texture_iterator == textures_.end()
+        || !texture_iterator->second
+        || !texture_iterator->second->gpu_texture) {
+        return false;
+    }
+
+    const auto& texture = *texture_iterator->second;
+    if (texture.width != width || texture.height != height) {
+        return false;
+    }
+
+    constexpr std::size_t bytes_per_pixel = 4;
+    const std::size_t expected_size =
+        static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * bytes_per_pixel;
+    if (pixels.size() != expected_size
+        || expected_size > std::numeric_limits<Uint32>::max()) {
+        SDL_Log(
+            "Invalid RGBA pixel update for %ux%u texture: expected %zu bytes, received %zu",
+            width,
+            height,
+            expected_size,
+            pixels.size()
+        );
+        return false;
+    }
+
+    return upload_rgba_pixels(
+        device_->handle(),
+        texture.gpu_texture,
+        width,
+        height,
+        pixels
+    );
+}
+
 
 TextureID TextureManager::create_from_texture(SDL_Texture* texture) {
     if (!texture) {

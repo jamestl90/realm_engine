@@ -25,17 +25,31 @@
 namespace game {
 
 #if defined(REALM_ENABLE_PROCGEN_DEBUG_VIEW)
-bool TestApp::regenerate_procgen_debug_map(core::Engine& engine) {
+bool TestApp::regenerate_procgen_debug_map(core::Engine& engine, bool force_full) {
     m_procgen_paint_dirty = false;
+    if (force_full) {
+        m_procgen_generation_cache.invalidate(procgen::GreaterRealmDirtyStage::TerrainFields);
+    }
+
 #if defined(REALM_ENABLE_PROCGEN_PROFILING)
     using ProfileClock = std::chrono::steady_clock;
     const auto started_at = ProfileClock::now();
 #endif
 
-    m_procgen_map = procgen::generate_greater_realm(m_procgen_settings, m_procgen_constraints);
+    const auto regeneration = m_procgen_generation_cache.regenerate(
+        m_procgen_map,
+        m_procgen_settings,
+        m_procgen_constraints
+    );
 #if defined(REALM_ENABLE_PROCGEN_PROFILING)
     const auto generated_at = ProfileClock::now();
 #endif
+
+    if (regeneration.rebuilt_stages == procgen::GreaterRealmDirtyStage::None) {
+        m_procgen_debug_panel.update(m_procgen_map);
+        return true;
+    }
+
     const auto image = procgen::build_greater_realm_debug_image(
         m_procgen_map,
         procgen::NORMALIZED_WATERLINE,
@@ -49,7 +63,7 @@ bool TestApp::regenerate_procgen_debug_map(core::Engine& engine) {
         return false;
     }
 
-    if (!replace_procgen_debug_texture(engine, image)) {
+    if (!upload_procgen_debug_texture(engine, image)) {
         return false;
     }
     if (!refresh_procgen_terrain_mesh(engine, image)) {
@@ -66,7 +80,8 @@ bool TestApp::regenerate_procgen_debug_map(core::Engine& engine) {
         return std::chrono::duration<double, std::milli>(finish - start).count();
     };
     SDL_Log(
-        "Procgen end-to-end stages: generation=%.2fms image=%.2fms texture=%.2fms scene/UI=%.2fms total=%.2fms",
+        "Procgen end-to-end stages: dirty=0x%02x generation=%.2fms image=%.2fms texture=%.2fms scene/UI=%.2fms total=%.2fms",
+        static_cast<unsigned>(regeneration.rebuilt_stages),
         elapsed_ms(started_at, generated_at),
         elapsed_ms(generated_at, image_built_at),
         elapsed_ms(image_built_at, texture_uploaded_at),
@@ -105,11 +120,11 @@ bool TestApp::refresh_procgen_debug_view(core::Engine& engine) {
         procgen::NORMALIZED_WATERLINE,
         m_procgen_debug_options
     );
-    return replace_procgen_debug_texture(engine, image)
+    return upload_procgen_debug_texture(engine, image)
         && refresh_procgen_terrain_mesh(engine, image);
 }
 
-bool TestApp::replace_procgen_debug_texture(
+bool TestApp::upload_procgen_debug_texture(
     core::Engine& engine,
     const procgen::DebugImage& image
 ) {
@@ -123,13 +138,37 @@ bool TestApp::replace_procgen_debug_texture(
         return false;
     }
 
+    const auto* current_texture = texture_manager->get(m_test_texture);
+    if (current_texture
+        && current_texture->width == image.width
+        && current_texture->height == image.height) {
+        if (!texture_manager->update_rgba_pixels(
+                m_test_texture,
+                image.width,
+                image.height,
+                image.rgba
+            )) {
+            SDL_LogError(
+                SDL_LOG_CATEGORY_APPLICATION,
+                "Failed to update procgen debug texture: %s",
+                SDL_GetError()
+            );
+            return false;
+        }
+        return true;
+    }
+
     const rendering::TextureID new_texture = texture_manager->create_from_rgba_pixels(
         image.width,
         image.height,
         image.rgba
     );
     if (new_texture == rendering::INVALID_TEXTURE_ID) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create procgen debug texture: %s", SDL_GetError());
+        SDL_LogError(
+            SDL_LOG_CATEGORY_APPLICATION,
+            "Failed to create procgen debug texture: %s",
+            SDL_GetError()
+        );
         return false;
     }
 
@@ -234,6 +273,7 @@ void TestApp::apply_procgen_paint_sample(
         sample.normalized_radius,
         sample.strength
     );
+    m_procgen_generation_cache.invalidate(procgen::GreaterRealmDirtyStage::TerrainFields);
     m_procgen_paint_dirty = true;
 }
 #endif
@@ -261,7 +301,11 @@ void TestApp::on_startup(core::Engine& engine) {
     m_procgen_settings.seed = 8675309;
     m_procgen_settings.width = 256;
     m_procgen_settings.height = 192;
-    m_procgen_map = procgen::generate_greater_realm(m_procgen_settings, m_procgen_constraints);
+    (void)m_procgen_generation_cache.regenerate(
+        m_procgen_map,
+        m_procgen_settings,
+        m_procgen_constraints
+    );
     const auto initial_image = procgen::build_greater_realm_debug_image(
         m_procgen_map,
         procgen::NORMALIZED_WATERLINE,
@@ -342,7 +386,9 @@ void TestApp::on_startup(core::Engine& engine) {
         m_procgen_presentation,
         m_procgen_brush_settings,
         m_procgen_map,
-        [this, &engine]() { regenerate_procgen_debug_map(engine); },
+        [this, &engine](bool force_full) {
+            regenerate_procgen_debug_map(engine, force_full);
+        },
         [this](procgen::TerrainConstraintTool tool) {
             m_procgen_paint_session.select_tool(tool);
         },
@@ -354,6 +400,7 @@ void TestApp::on_startup(core::Engine& engine) {
             m_procgen_paint_session.cancel();
             m_procgen_paint_dirty = false;
             m_procgen_constraints.clear();
+            m_procgen_generation_cache.invalidate(procgen::GreaterRealmDirtyStage::TerrainFields);
             regenerate_procgen_debug_map(engine);
         },
         [this, &engine]() { refresh_procgen_debug_view(engine); },

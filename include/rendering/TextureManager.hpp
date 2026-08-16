@@ -54,6 +54,14 @@ public:
         SDL_GPUTextureUsageFlags usage = SDL_GPU_TEXTUREUSAGE_SAMPLER
     );
 
+    // Update an existing same-sized RGBA8 texture without replacing its ID.
+    [[nodiscard]] bool update_rgba_pixels(
+        TextureID texture_id,
+        std::uint32_t width,
+        std::uint32_t height,
+        std::span<const std::uint8_t> pixels
+    );
+
     // Define atlas region
     void define_region(TextureID texture_id, const std::string& name, const TextureRegion& region);
 

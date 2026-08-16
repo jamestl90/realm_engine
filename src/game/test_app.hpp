@@ -25,9 +25,9 @@ public:
 
 private:
 #if defined(REALM_ENABLE_PROCGEN_DEBUG_VIEW)
-    bool regenerate_procgen_debug_map(core::Engine& engine);
+    bool regenerate_procgen_debug_map(core::Engine& engine, bool force_full = false);
     bool refresh_procgen_debug_view(core::Engine& engine);
-    bool replace_procgen_debug_texture(core::Engine& engine, const procgen::DebugImage& image);
+    bool upload_procgen_debug_texture(core::Engine& engine, const procgen::DebugImage& image);
     bool refresh_procgen_terrain_mesh(core::Engine& engine, const procgen::DebugImage& image);
     void apply_procgen_presentation(core::Engine& engine) noexcept;
     [[nodiscard]] procgen::TerrainPreviewBounds procgen_preview_bounds(core::Engine& engine) const noexcept;
@@ -40,6 +40,7 @@ private:
 #if defined(REALM_ENABLE_PROCGEN_DEBUG_VIEW)
     procgen::GreaterRealmGeneratorSettings m_procgen_settings{};
     procgen::TerrainConstraintField m_procgen_constraints{64, 64};
+    procgen::GreaterRealmGenerationCache m_procgen_generation_cache;
     procgen::GreaterRealmMap m_procgen_map;
     procgen::GreaterRealmDebugOptions m_procgen_debug_options;
     GreaterRealmPresentationSettings m_procgen_presentation;

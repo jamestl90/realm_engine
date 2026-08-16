@@ -28,7 +28,7 @@ struct GreaterRealmPresentationSettings {
 
 class GreaterRealmDebugPanel {
 public:
-    using RegenerateCallback = std::function<void()>;
+    using RegenerateCallback = std::function<void(bool)>;
     using ToolChangedCallback = std::function<void(procgen::TerrainConstraintTool)>;
     using BrushSettingsChangedCallback = std::function<void(procgen::TerrainConstraintBrushSettings)>;
     using ClearConstraintsCallback = std::function<void()>;
@@ -52,7 +52,7 @@ public:
     void update(const procgen::GreaterRealmMap& map);
 
 private:
-    void regenerate();
+    void regenerate(bool force_full = false);
     void notify_view_changed();
     void notify_presentation_changed();
     void update_overlay_buttons();

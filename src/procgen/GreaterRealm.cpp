@@ -314,38 +314,115 @@ const GreaterRealmCell* GreaterRealmMap::cell(std::int32_t x, std::int32_t y) co
     return &cells[index(static_cast<std::uint32_t>(x), static_cast<std::uint32_t>(y))];
 }
 
-static GreaterRealmMap generate_greater_realm_impl(
+namespace {
+
+#if defined(REALM_ENABLE_PROCGEN_PROFILING)
+using RegenerationClock = std::chrono::steady_clock;
+#endif
+using TerrainLayers = GreaterRealmGenerationCache::TerrainLayers;
+
+[[nodiscard]] GreaterRealmDirtyStage expand_dirty_stages(
+    GreaterRealmDirtyStage stages
+) noexcept {
+    if (has_dirty_stage(stages, GreaterRealmDirtyStage::TerrainFields)) {
+        stages |= GreaterRealmDirtyStage::MountainPeaks
+            | GreaterRealmDirtyStage::Relief
+            | GreaterRealmDirtyStage::Classification
+            | GreaterRealmDirtyStage::Drainage
+            | GreaterRealmDirtyStage::RiverChannels;
+    }
+    if (has_dirty_stage(stages, GreaterRealmDirtyStage::MountainPeaks)) {
+        stages |= GreaterRealmDirtyStage::Relief
+            | GreaterRealmDirtyStage::Classification
+            | GreaterRealmDirtyStage::Drainage
+            | GreaterRealmDirtyStage::RiverChannels;
+    }
+    if (has_dirty_stage(stages, GreaterRealmDirtyStage::Relief)) {
+        stages |= GreaterRealmDirtyStage::Classification
+            | GreaterRealmDirtyStage::Drainage
+            | GreaterRealmDirtyStage::RiverChannels;
+    }
+    if (has_dirty_stage(stages, GreaterRealmDirtyStage::Drainage)) {
+        stages |= GreaterRealmDirtyStage::RiverChannels;
+    }
+    constexpr GreaterRealmDirtyStage generated_map_stages =
+        GreaterRealmDirtyStage::TerrainFields
+        | GreaterRealmDirtyStage::MountainPeaks
+        | GreaterRealmDirtyStage::Relief
+        | GreaterRealmDirtyStage::Classification
+        | GreaterRealmDirtyStage::Drainage
+        | GreaterRealmDirtyStage::RiverChannels;
+    if (has_dirty_stage(stages, generated_map_stages)) {
+        stages |= GreaterRealmDirtyStage::DebugImage;
+    }
+    if (has_dirty_stage(stages, GreaterRealmDirtyStage::DebugImage)) {
+        stages |= GreaterRealmDirtyStage::TextureUpload;
+    }
+    return stages;
+}
+
+[[nodiscard]] GreaterRealmDirtyStage settings_dirty_stage(
+    const GreaterRealmGeneratorSettings& previous,
+    const GreaterRealmGeneratorSettings& current
+) noexcept {
+    GreaterRealmDirtyStage stages = GreaterRealmDirtyStage::None;
+
+    if (previous.seed != current.seed
+        || previous.width != current.width
+        || previous.height != current.height
+        || previous.cell_size != current.cell_size
+        || previous.sea_level != current.sea_level
+        || previous.base_elevation_frequency != current.base_elevation_frequency
+        || previous.ridge_frequency != current.ridge_frequency
+        || previous.valley_frequency != current.valley_frequency
+        || previous.terrain_noise_frequency != current.terrain_noise_frequency
+        || previous.ocean_noise_frequency != current.ocean_noise_frequency
+        || previous.island_bias != current.island_bias
+        || previous.coastline_noise_weight != current.coastline_noise_weight) {
+        stages |= GreaterRealmDirtyStage::TerrainFields;
+    }
+
+    if (previous.mountain_peak_spacing != current.mountain_peak_spacing
+        || previous.mountain_peak_radius != current.mountain_peak_radius
+        || previous.mountain_peak_jaggedness != current.mountain_peak_jaggedness) {
+        stages |= GreaterRealmDirtyStage::MountainPeaks;
+    }
+
+    if (previous.base_elevation_weight != current.base_elevation_weight
+        || previous.mountain_weight != current.mountain_weight
+        || previous.ridge_weight != current.ridge_weight
+        || previous.valley_weight != current.valley_weight
+        || previous.terrain_noise_weight != current.terrain_noise_weight
+        || previous.ocean_depth_weight != current.ocean_depth_weight) {
+        stages |= GreaterRealmDirtyStage::Relief;
+    }
+
+    if (previous.mountain_threshold != current.mountain_threshold
+        || previous.highland_threshold != current.highland_threshold
+        || previous.hill_threshold != current.hill_threshold) {
+        stages |= GreaterRealmDirtyStage::Classification;
+    }
+
+    if (previous.river_min_drainage_area != current.river_min_drainage_area
+        || previous.river_width_scale != current.river_width_scale) {
+        stages |= GreaterRealmDirtyStage::RiverChannels;
+    }
+
+    return stages;
+}
+
+void build_terrain_fields(
+    GreaterRealmMap& map,
+    std::vector<TerrainLayers>& layers,
     const GreaterRealmGeneratorSettings& settings,
     const TerrainConstraintField* constraints
 ) {
-#if defined(REALM_ENABLE_PROCGEN_PROFILING)
-    using ProfileClock = std::chrono::steady_clock;
-    const auto profile_started_at = ProfileClock::now();
-    auto profile_last_mark = profile_started_at;
-    const auto profile_stage = [&profile_last_mark]() {
-        const auto now = ProfileClock::now();
-        const double elapsed_ms = std::chrono::duration<double, std::milli>(now - profile_last_mark).count();
-        profile_last_mark = now;
-        return elapsed_ms;
-    };
-#endif
-
-    GreaterRealmMap map;
     map.seed = settings.seed;
     map.width = std::max<std::uint32_t>(settings.width, 1);
     map.height = std::max<std::uint32_t>(settings.height, 1);
     map.cell_size = settings.cell_size > 0.0f ? settings.cell_size : 1.0f;
-    map.cells.resize(map.expected_cell_count());
-
-    struct TerrainLayers {
-        float base_elevation{0.0f};
-        float ridge{0.0f};
-        float valley{0.0f};
-        float terrain_noise{0.0f};
-        float ocean_noise{0.0f};
-    };
-
-    std::vector<TerrainLayers> layers(map.cells.size());
+    map.cells.assign(map.expected_cell_count(), GreaterRealmCell{});
+    layers.resize(map.cells.size());
 
     const float island_bias = std::clamp(settings.island_bias, 0.0f, 1.0f);
 
@@ -384,6 +461,7 @@ static GreaterRealmMap generate_greater_realm_impl(
                     );
                 }
             }
+
             const TerrainConstraintSample authored = constraints
                 ? constraints->sample(u, v)
                 : TerrainConstraintSample{};
@@ -428,10 +506,30 @@ static GreaterRealmMap generate_greater_realm_impl(
 
             const float base_elevation = fbm(settings.seed, u, v, settings.base_elevation_frequency, 101ull, 5);
             const float mountain_mask = smoothstep(0.05f, 0.85f, landmass_elevation);
-            const float ridge_influence = std::pow(ridged_noise(settings.seed, u, v, settings.ridge_frequency, 307ull, 3), 3.0f) * mountain_mask;
-            const float valley_influence = std::pow(ridged_noise(settings.seed, u, v, settings.valley_frequency, 401ull, 4), 2.0f) * smoothstep(0.02f, 0.75f, landmass_elevation);
-            const float terrain_noise = fbm(settings.seed, u, v, settings.terrain_noise_frequency, 503ull, 3) - 0.5f;
-            const float ocean_noise = fbm(settings.seed, u, v, settings.ocean_noise_frequency, 601ull, 3) * 2.0f - 1.0f;
+            const float ridge_influence = std::pow(
+                ridged_noise(settings.seed, u, v, settings.ridge_frequency, 307ull, 3),
+                3.0f
+            ) * mountain_mask;
+            const float valley_influence = std::pow(
+                ridged_noise(settings.seed, u, v, settings.valley_frequency, 401ull, 4),
+                2.0f
+            ) * smoothstep(0.02f, 0.75f, landmass_elevation);
+            const float terrain_noise = fbm(
+                settings.seed,
+                u,
+                v,
+                settings.terrain_noise_frequency,
+                503ull,
+                3
+            ) - 0.5f;
+            const float ocean_noise = fbm(
+                settings.seed,
+                u,
+                v,
+                settings.ocean_noise_frequency,
+                601ull,
+                3
+            ) * 2.0f - 1.0f;
 
             layers[index] = TerrainLayers{
                 base_elevation,
@@ -448,17 +546,13 @@ static GreaterRealmMap generate_greater_realm_impl(
             cell.is_water = landmass_elevation <= 0.0f;
         }
     }
+}
 
-#if defined(REALM_ENABLE_PROCGEN_PROFILING)
-    const double terrain_fields_ms = profile_stage();
-#endif
-
-    generate_mountain_peak_field(map, settings);
-
-#if defined(REALM_ENABLE_PROCGEN_PROFILING)
-    const double mountain_peaks_ms = profile_stage();
-#endif
-
+void compose_relief(
+    GreaterRealmMap& map,
+    const std::vector<TerrainLayers>& layers,
+    const GreaterRealmGeneratorSettings& settings
+) {
     const float base_weight = std::max(settings.base_elevation_weight, 0.0f);
     const float mountain_weight = std::max(settings.mountain_weight, 0.0f);
     const float ridge_weight = std::max(settings.ridge_weight, 0.0f);
@@ -476,21 +570,30 @@ static GreaterRealmMap generate_greater_realm_impl(
                 * std::max(settings.ocean_depth_weight, 0.0f)
                 * std::max(depth_variation, 0.0f)
             );
+            cell.hill_relief = 0.0f;
+            cell.mountain_relief = 0.0f;
             cell.elevation = NORMALIZED_WATERLINE * (1.0f - depth);
             continue;
         }
 
         const float positive_constraint = clamp01(cell.landmass_elevation);
         const float constraint_blend = positive_constraint * positive_constraint;
-        const float hill_relief = clamp01(MIN_LAND_RELIEF + layer.base_elevation * base_weight * HILL_RELIEF_SCALE);
+        const float hill_relief = clamp01(
+            MIN_LAND_RELIEF + layer.base_elevation * base_weight * HILL_RELIEF_SCALE
+        );
         const float mountain_profile = std::pow(clamp01(cell.mountain_influence), 0.75f);
-        const float mountain_relief = clamp01(hill_relief + mountain_profile * mountain_weight * MOUNTAIN_RELIEF_SCALE);
+        const float mountain_relief = clamp01(
+            hill_relief + mountain_profile * mountain_weight * MOUNTAIN_RELIEF_SCALE
+        );
 
         float relief = lerp(hill_relief, mountain_relief, constraint_blend);
         const float extension_mask = smoothstep(0.02f, 0.65f, positive_constraint);
-        const float ridge_extension = layer.ridge * ridge_weight * RIDGE_RELIEF_SCALE * extension_mask;
-        const float valley_extension = layer.valley * valley_weight * VALLEY_RELIEF_SCALE * extension_mask;
-        const float noise_extension = layer.terrain_noise * terrain_noise_weight * TERRAIN_NOISE_RELIEF_SCALE * extension_mask;
+        const float ridge_extension =
+            layer.ridge * ridge_weight * RIDGE_RELIEF_SCALE * extension_mask;
+        const float valley_extension =
+            layer.valley * valley_weight * VALLEY_RELIEF_SCALE * extension_mask;
+        const float noise_extension =
+            layer.terrain_noise * terrain_noise_weight * TERRAIN_NOISE_RELIEF_SCALE * extension_mask;
         relief = clamp01(relief + ridge_extension - valley_extension + noise_extension);
         relief = std::max(relief, MIN_LAND_RELIEF);
 
@@ -499,60 +602,182 @@ static GreaterRealmMap generate_greater_realm_impl(
         const float inland_influence = smoothstep(0.0f, 0.45f, cell.landmass_elevation);
         const float coastal_rise = 0.01f + 0.14f * clamp01(cell.landmass_elevation / 0.45f);
         const float land_height = clamp01(lerp(coastal_rise, relief, inland_influence));
-        cell.elevation = NORMALIZED_WATERLINE + (1.0f - NORMALIZED_WATERLINE) * land_height;
+        cell.elevation =
+            NORMALIZED_WATERLINE + (1.0f - NORMALIZED_WATERLINE) * land_height;
     }
+}
 
-#if defined(REALM_ENABLE_PROCGEN_PROFILING)
-    const double relief_ms = profile_stage();
-#endif
-
+void refresh_geography_and_classification(
+    GreaterRealmMap& map,
+    const GreaterRealmGeneratorSettings& settings
+) {
+    for (auto& cell : map.cells) {
+        cell.is_ocean = false;
+    }
     classify_oceans(map);
     compute_coast_distance(map);
     compute_slopes(map);
     classify_cells(map, settings);
+}
 
+template <typename Function>
+double measure_stage(Function&& function) {
 #if defined(REALM_ENABLE_PROCGEN_PROFILING)
-    const double classification_ms = profile_stage();
-#endif
-
-    build_greater_realm_drainage(map);
-
-#if defined(REALM_ENABLE_PROCGEN_PROFILING)
-    const double drainage_ms = profile_stage();
-#endif
-
-    build_greater_realm_river_channels(map, settings);
-
-#if defined(REALM_ENABLE_PROCGEN_PROFILING)
-    const double rivers_ms = profile_stage();
-    const double total_ms = std::chrono::duration<double, std::milli>(
-        ProfileClock::now() - profile_started_at
+    const auto started_at = RegenerationClock::now();
+    function();
+    return std::chrono::duration<double, std::milli>(
+        RegenerationClock::now() - started_at
     ).count();
+#else
+    function();
+    return 0.0;
+#endif
+}
+
+} // namespace
+
+void GreaterRealmGenerationCache::invalidate(GreaterRealmDirtyStage stage) noexcept {
+    m_pending_stages |= stage;
+}
+
+void GreaterRealmGenerationCache::reset() noexcept {
+    m_settings = GreaterRealmGeneratorSettings{};
+    m_layers.clear();
+    m_pending_stages = GreaterRealmDirtyStage::TerrainFields;
+    m_initialized = false;
+    m_constraints = nullptr;
+}
+
+GreaterRealmRegenerationResult GreaterRealmGenerationCache::regenerate(
+    GreaterRealmMap& map,
+    const GreaterRealmGeneratorSettings& settings
+) {
+    return regenerate_impl(map, settings, nullptr);
+}
+
+GreaterRealmRegenerationResult GreaterRealmGenerationCache::regenerate(
+    GreaterRealmMap& map,
+    const GreaterRealmGeneratorSettings& settings,
+    const TerrainConstraintField& constraints
+) {
+    return regenerate_impl(map, settings, &constraints);
+}
+
+GreaterRealmRegenerationResult GreaterRealmGenerationCache::regenerate_impl(
+    GreaterRealmMap& map,
+    const GreaterRealmGeneratorSettings& settings,
+    const TerrainConstraintField* constraints
+) {
+#if defined(REALM_ENABLE_PROCGEN_PROFILING)
+    const auto total_started_at = RegenerationClock::now();
+#endif
+    GreaterRealmDirtyStage dirty_stages = m_pending_stages;
+
+    if (!m_initialized
+        || !map.has_expected_cell_count()
+        || m_layers.size() != map.cells.size()) {
+        dirty_stages |= GreaterRealmDirtyStage::TerrainFields;
+    } else {
+        dirty_stages |= settings_dirty_stage(m_settings, settings);
+    }
+    if (constraints != m_constraints) {
+        dirty_stages |= GreaterRealmDirtyStage::TerrainFields;
+    }
+
+    dirty_stages = expand_dirty_stages(dirty_stages);
+
+    GreaterRealmRegenerationResult result;
+    result.rebuilt_stages = dirty_stages;
+    if (dirty_stages == GreaterRealmDirtyStage::None) {
+        return result;
+    }
+
+    if (has_dirty_stage(dirty_stages, GreaterRealmDirtyStage::TerrainFields)) {
+        result.timings.terrain_fields_ms = measure_stage([&]() {
+            build_terrain_fields(map, m_layers, settings, constraints);
+        });
+    }
+
+    if (has_dirty_stage(dirty_stages, GreaterRealmDirtyStage::MountainPeaks)) {
+        result.timings.mountain_peaks_ms = measure_stage([&]() {
+            generate_mountain_peak_field(map, settings);
+        });
+    }
+
+    if (has_dirty_stage(dirty_stages, GreaterRealmDirtyStage::Relief)) {
+        result.timings.relief_ms = measure_stage([&]() {
+            compose_relief(map, m_layers, settings);
+        });
+    }
+
+    if (has_dirty_stage(dirty_stages, GreaterRealmDirtyStage::Classification)) {
+        result.timings.classification_ms = measure_stage([&]() {
+            if (has_dirty_stage(dirty_stages, GreaterRealmDirtyStage::TerrainFields)) {
+                refresh_geography_and_classification(map, settings);
+            } else if (has_dirty_stage(dirty_stages, GreaterRealmDirtyStage::Relief)) {
+                compute_slopes(map);
+                classify_cells(map, settings);
+            } else {
+                classify_cells(map, settings);
+            }
+        });
+    }
+
+    if (has_dirty_stage(dirty_stages, GreaterRealmDirtyStage::Drainage)) {
+        result.timings.drainage_ms = measure_stage([&]() {
+            build_greater_realm_drainage(map);
+        });
+    }
+
+    if (has_dirty_stage(dirty_stages, GreaterRealmDirtyStage::RiverChannels)) {
+        result.timings.river_channels_ms = measure_stage([&]() {
+            build_greater_realm_river_channels(map, settings);
+        });
+    }
+
+    m_settings = settings;
+    m_constraints = constraints;
+    m_pending_stages = GreaterRealmDirtyStage::None;
+    m_initialized = true;
+#if defined(REALM_ENABLE_PROCGEN_PROFILING)
+    result.timings.total_ms = std::chrono::duration<double, std::milli>(
+        RegenerationClock::now() - total_started_at
+    ).count();
+#endif
+
+#if defined(REALM_ENABLE_PROCGEN_PROFILING) && !defined(REALM_TEST_BUILD)
     std::fprintf(
         stderr,
-        "DEBUG: Procgen stages: fields=%.2fms peaks=%.2fms relief=%.2fms classify=%.2fms drainage=%.2fms channels=%.2fms total=%.2fms\n",
-        terrain_fields_ms,
-        mountain_peaks_ms,
-        relief_ms,
-        classification_ms,
-        drainage_ms,
-        rivers_ms,
-        total_ms
+        "DEBUG: Procgen regeneration stages=0x%02x fields=%.2fms peaks=%.2fms relief=%.2fms classify=%.2fms drainage=%.2fms channels=%.2fms total=%.2fms\n",
+        static_cast<unsigned>(dirty_stages),
+        result.timings.terrain_fields_ms,
+        result.timings.mountain_peaks_ms,
+        result.timings.relief_ms,
+        result.timings.classification_ms,
+        result.timings.drainage_ms,
+        result.timings.river_channels_ms,
+        result.timings.total_ms
     );
 #endif
 
-    return map;
+    return result;
 }
 
 GreaterRealmMap generate_greater_realm(const GreaterRealmGeneratorSettings& settings) {
-    return generate_greater_realm_impl(settings, nullptr);
+    GreaterRealmMap map;
+    GreaterRealmGenerationCache cache;
+    (void)cache.regenerate(map, settings);
+    return map;
 }
 
 GreaterRealmMap generate_greater_realm(
     const GreaterRealmGeneratorSettings& settings,
     const TerrainConstraintField& constraints
 ) {
-    return generate_greater_realm_impl(settings, &constraints);
+    GreaterRealmMap map;
+    GreaterRealmGenerationCache cache;
+    (void)cache.regenerate(map, settings, constraints);
+    return map;
 }
 
 } // namespace procgen
