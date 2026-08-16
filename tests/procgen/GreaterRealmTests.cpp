@@ -319,7 +319,7 @@ bool test_generated_map_shape() {
 
 bool test_seed_driven_terrain_character() {
     procgen::GreaterRealmGeneratorSettings probe;
-    probe.seed_terrain_variation = 1.0f;
+    probe.seed_terrain_variation = procgen::DEFAULT_SEED_TERRAIN_VARIATION;
     procgen::Seed flat_seed = 1;
     procgen::Seed rugged_seed = 1;
     float lowest = 1.0f;
@@ -347,6 +347,11 @@ bool test_seed_driven_terrain_character() {
     const auto neutral_character = procgen::derive_greater_realm_terrain_character(probe);
 
     bool ok = true;
+    ok &= require(
+        procgen::GreaterRealmGeneratorSettings{}.seed_terrain_variation == procgen::DEFAULT_SEED_TERRAIN_VARIATION
+            && procgen::DEFAULT_SEED_TERRAIN_VARIATION == 1.0f,
+        "seed terrain variation defaults to full deterministic character"
+    );
     ok &= require(flat_character == repeated_flat_character, "seed terrain character is deterministic");
     ok &= require(lowest < 0.05f && highest > 0.95f, "representative seed range includes flat and rugged extremes");
     ok &= require(
@@ -362,15 +367,18 @@ bool test_seed_driven_terrain_character() {
 
     procgen::GreaterRealmGeneratorSettings settings;
     settings.seed = flat_seed;
+    const auto default_flat = procgen::generate_greater_realm(settings);
     settings.seed_terrain_variation = 0.0f;
     const auto neutral_flat = procgen::generate_greater_realm(settings);
-    settings.seed_terrain_variation = 1.0f;
+    settings.seed_terrain_variation = procgen::DEFAULT_SEED_TERRAIN_VARIATION;
     const auto flat = procgen::generate_greater_realm(settings);
 
     settings.seed = rugged_seed;
+    settings.seed_terrain_variation = procgen::DEFAULT_SEED_TERRAIN_VARIATION;
+    const auto default_rugged = procgen::generate_greater_realm(settings);
     settings.seed_terrain_variation = 0.0f;
     const auto neutral_rugged = procgen::generate_greater_realm(settings);
-    settings.seed_terrain_variation = 1.0f;
+    settings.seed_terrain_variation = procgen::DEFAULT_SEED_TERRAIN_VARIATION;
     const auto rugged = procgen::generate_greater_realm(settings);
 
     const auto flat_counts = procgen::count_terrain_forms(flat);
@@ -409,6 +417,8 @@ bool test_seed_driven_terrain_character() {
 
     ok &= require(topology_matches(neutral_flat, flat), "flat seed character preserves its landmass topology");
     ok &= require(topology_matches(neutral_rugged, rugged), "rugged seed character preserves its landmass topology");
+    ok &= require(maps_match(default_flat, flat), "default flat seed output matches explicit full variation");
+    ok &= require(maps_match(default_rugged, rugged), "default rugged seed output matches explicit full variation");
     ok &= require(flat_is_meaningfully_lower, "flat character meaningfully lowers average relief from neutral");
     ok &= require(rugged_is_meaningfully_higher, "rugged character meaningfully raises average relief from neutral");
     ok &= require(upper_relief_is_separated, "extreme seed characters strongly separate upper relief");

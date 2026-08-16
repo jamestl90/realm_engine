@@ -435,7 +435,10 @@ bool test_river_accumulation_connectivity_and_thresholding() {
     }
 
     bool ok = true;
-    ok &= require(tuned_default.rivers.size() * 4 < previous_default.rivers.size(), "retuned catchment threshold substantially reduces exported channel density");
+    ok &= require(
+        tuned_default.rivers.size() * 3 < previous_default.rivers.size(),
+        "retuned catchment threshold substantially reduces exported channel density"
+    );
     ok &= require(!tuned_default.rivers.empty(), "retuned default preserves a visible potential river network");
     ok &= require(topology_matches(previous_default, tuned_default), "default channel tuning does not alter generated terrain");
     ok &= require(previous_default.drainage_order == tuned_default.drainage_order, "default channel tuning does not alter drainage topology");

@@ -61,6 +61,7 @@ struct GreaterRealmMountainPeak {
 };
 
 inline constexpr float DEFAULT_MOUNTAIN_STRENGTH = 0.35f;
+inline constexpr float DEFAULT_SEED_TERRAIN_VARIATION = 1.0f;
 inline constexpr float NORMALIZED_WATERLINE = 0.5f;
 
 struct GreaterRealmGeneratorSettings {
@@ -82,7 +83,7 @@ struct GreaterRealmGeneratorSettings {
     float ocean_noise_frequency{8.0f};
 
     float island_bias{0.5f};
-    float seed_terrain_variation{1.0f};
+    float seed_terrain_variation{DEFAULT_SEED_TERRAIN_VARIATION};
     float base_elevation_weight{1.0f};
     float mountain_weight{DEFAULT_MOUNTAIN_STRENGTH};
     float mountain_peak_spacing{28.0f};
