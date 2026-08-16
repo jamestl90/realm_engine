@@ -1,5 +1,6 @@
 #include "../../include/procgen/GreaterRealmDebug.hpp"
 #include <algorithm>
+#include <array>
 #include <cmath>
 
 namespace procgen {
@@ -21,6 +22,21 @@ DebugColour mix_colour(DebugColour from, DebugColour to, float amount) noexcept 
         mix_channel(from.a, to.a, amount)
     };
 }
+
+struct TerrainColourAnchor {
+    float elevation;
+    DebugColour colour;
+};
+
+constexpr std::array TERRAIN_COLOUR_ANCHORS{
+    TerrainColourAnchor{0.50f, {52, 108, 70, 255}},
+    TerrainColourAnchor{0.54f, {65, 132, 73, 255}},
+    TerrainColourAnchor{0.59f, {96, 146, 72, 255}},
+    TerrainColourAnchor{0.65f, {148, 154, 84, 255}},
+    TerrainColourAnchor{0.75f, {160, 145, 112, 255}},
+    TerrainColourAnchor{0.86f, {178, 177, 169, 255}},
+    TerrainColourAnchor{1.00f, {230, 230, 220, 255}}
+};
 
 DebugColour three_colour_gradient(
     float value,
@@ -70,39 +86,27 @@ DebugColour terrain_form_colour(const GreaterRealmCell& cell) noexcept {
     return {255, 0, 255, 255};
 }
 
+DebugColour terrain_elevation_colour(float elevation) noexcept {
+    const float clamped = std::clamp(elevation, NORMALIZED_WATERLINE, 1.0f);
+    for (std::size_t index = 1; index < TERRAIN_COLOUR_ANCHORS.size(); ++index) {
+        const auto& lower = TERRAIN_COLOUR_ANCHORS[index - 1];
+        const auto& upper = TERRAIN_COLOUR_ANCHORS[index];
+        if (clamped <= upper.elevation) {
+            const float amount = (clamped - lower.elevation)
+                / (upper.elevation - lower.elevation);
+            return mix_colour(lower.colour, upper.colour, amount);
+        }
+    }
+    return TERRAIN_COLOUR_ANCHORS.back().colour;
+}
+
 DebugColour continuous_terrain_colour(const GreaterRealmCell& cell) noexcept {
     if (cell.terrain_form == TerrainForm::Ocean) {
         return ocean_depth_colour(cell);
     }
 
-    const float relative_height = std::clamp(
-        (cell.elevation - NORMALIZED_WATERLINE) / (1.0f - NORMALIZED_WATERLINE),
-        0.0f,
-        1.0f
-    );
-
-    DebugColour elevation_colour;
-    if (relative_height < 0.35f) {
-        elevation_colour = mix_colour(
-            {67, 132, 78, 255},
-            {119, 143, 78, 255},
-            relative_height / 0.35f
-        );
-    } else if (relative_height < 0.72f) {
-        elevation_colour = mix_colour(
-            {119, 143, 78, 255},
-            {151, 130, 106, 255},
-            (relative_height - 0.35f) / 0.37f
-        );
-    } else {
-        elevation_colour = mix_colour(
-            {151, 130, 106, 255},
-            {224, 224, 214, 255},
-            (relative_height - 0.72f) / 0.28f
-        );
-    }
-
-    constexpr float form_tint_strength = 0.12f;
+    const DebugColour elevation_colour = terrain_elevation_colour(cell.elevation);
+    constexpr float form_tint_strength = 0.08f;
     return mix_colour(elevation_colour, terrain_form_colour(cell), form_tint_strength);
 }
 

@@ -942,6 +942,46 @@ bool test_continuous_terrain_colour_mapping() {
     return ok;
 }
 
+bool test_nonlinear_terrain_colour_scale() {
+    constexpr std::array elevations{0.50f, 0.54f, 0.59f, 0.65f, 0.75f, 0.86f, 1.00f};
+    std::array<procgen::DebugColour, elevations.size()> colours;
+    for (std::size_t index = 0; index < elevations.size(); ++index) {
+        procgen::GreaterRealmCell cell;
+        cell.terrain_form = procgen::TerrainForm::Plains;
+        cell.elevation = elevations[index];
+        colours[index] = procgen::greater_realm_debug_colour(cell, 0.5f);
+    }
+
+    const auto luminance = [](procgen::DebugColour colour) {
+        return static_cast<int>(colour.r) * 3
+            + static_cast<int>(colour.g) * 6
+            + static_cast<int>(colour.b);
+    };
+    const auto colour_distance = [](procgen::DebugColour left, procgen::DebugColour right) {
+        return std::abs(static_cast<int>(left.r) - static_cast<int>(right.r))
+            + std::abs(static_cast<int>(left.g) - static_cast<int>(right.g))
+            + std::abs(static_cast<int>(left.b) - static_cast<int>(right.b));
+    };
+
+    bool ok = true;
+    for (std::size_t index = 1; index < colours.size(); ++index) {
+        ok &= require(colours[index] != colours[index - 1], "each nonlinear terrain anchor has a distinct colour");
+        ok &= require(
+            luminance(colours[index]) > luminance(colours[index - 1]),
+            "nonlinear terrain colours remain ordered by increasing elevation"
+        );
+    }
+    ok &= require(
+        colour_distance(colours[1], colours[3]) >= 100,
+        "common 0.54 to 0.65 terrain elevations receive strong colour separation"
+    );
+    ok &= require(
+        colour_distance(colours[5], colours[6]) >= 100,
+        "exceptional summits remain distinct from ordinary rock"
+    );
+    return ok;
+}
+
 bool test_continuous_terrain_image_data() {
     procgen::GreaterRealmGeneratorSettings settings;
     settings.seed = 314159;
@@ -1147,6 +1187,7 @@ int main() {
         test_debug_visualization_data,
         test_debug_ocean_depth_shading,
         test_continuous_terrain_colour_mapping,
+        test_nonlinear_terrain_colour_scale,
         test_continuous_terrain_image_data,
         test_debug_base_views,
         test_debug_overlay_options,

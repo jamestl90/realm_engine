@@ -92,7 +92,7 @@ Task 049 records the alignment audit. Differences not listed above require an ex
 ## Debugging And Tests
 
 - The compile-gated `GreaterRealmDebug` module counts terrain forms and coastal land independently, converts map data into an engine-neutral RGBA image, overlays exported rivers, and marks explicit peak cells.
-- The default terrain view maps normalized land elevation through a continuous lowland-to-summit colour ramp with a restrained terrain-form tint. This is geography visualization only and does not assign biomes or consume runtime weather fields.
+- The default terrain view maps normalized land elevation through a continuous nonlinear lowland-to-summit colour ramp with fixed anchors at `0.50, 0.54, 0.59, 0.65, 0.75, 0.86, 1.00`. Closely spaced lowland and hill anchors emphasize the range occupied by most generated terrain while fixed rock and summit anchors preserve cross-map height meaning. A restrained terrain-form tint remains secondary; this is geography visualization only and does not assign biomes or consume runtime weather fields.
 - The debug image preserves relative ocean-depth shading and a one-cell dark coastline accent. A separate `Terrain forms` base view retains the categorical plains, hills, highlands, and mountain palette.
 - Runtime base views expose terrain forms, elevation, signed landmass, hill relief, mountain relief, mountain influence, slope, coast distance, and catchment area.
 - Coastlines, mountain peaks, rivers, and sampled drainage directions are independent overlays. Terrain with coastlines, peaks, and rivers enabled remains the default view.
