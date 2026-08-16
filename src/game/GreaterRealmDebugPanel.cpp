@@ -53,9 +53,10 @@ std::string coverage_text(const procgen::GreaterRealmMap& map, const procgen::Te
     return stream.str();
 }
 
-std::string terrain_text(const procgen::TerrainFormCounts& counts) {
+std::string terrain_text(const procgen::GreaterRealmMap& map, const procgen::TerrainFormCounts& counts) {
     std::ostringstream stream;
-    stream << "Coastal " << counts.coastal_land << "  Mountains " << counts.mountains;
+    stream << "Ruggedness " << format_float(map.terrain_character.ruggedness * 100.0f)
+           << "%  Coastal " << counts.coastal_land << "  Mountains " << counts.mountains;
     return stream.str();
 }
 
@@ -225,8 +226,8 @@ std::unique_ptr<ui::UIElement> GreaterRealmDebugPanel::build(
     root->setBackgroundColour(ui::Colour{238, 242, 238, 240});
 
     ui::SizeConstraints root_constraints;
-    root_constraints.preferred_width = 620.0f;
-    root_constraints.min_width = 620.0f;
+    root_constraints.preferred_width = GREATER_REALM_DEBUG_PANEL_WIDTH;
+    root_constraints.min_width = GREATER_REALM_DEBUG_PANEL_WIDTH;
     root->setSizeConstraints(root_constraints);
 
     auto title = make_text("Greater Realm Debug");
@@ -417,6 +418,7 @@ std::unique_ptr<ui::UIElement> GreaterRealmDebugPanel::build(
     };
 
     add_setting_slider(*left_settings, "Island bias", settings.island_bias, &m_island_bias_text, &m_island_bias_slider, &procgen::GreaterRealmGeneratorSettings::island_bias, 0.05f, 0.0f, 1.0f);
+    add_setting_slider(*left_settings, "Seed variation", settings.seed_terrain_variation, &m_seed_variation_text, &m_seed_variation_slider, &procgen::GreaterRealmGeneratorSettings::seed_terrain_variation, 0.05f, 0.0f, 1.0f);
     add_setting_slider(*left_settings, "Coast detail", settings.coastline_noise_weight, &m_coastline_noise_text, &m_coastline_noise_slider, &procgen::GreaterRealmGeneratorSettings::coastline_noise_weight, 0.01f, 0.0f, 0.10f);
     add_setting_slider(*left_settings, "Base relief", settings.base_elevation_weight, &m_base_elevation_text, &m_base_elevation_slider, &procgen::GreaterRealmGeneratorSettings::base_elevation_weight, 0.05f, 0.0f, 2.0f);
     add_setting_slider(*left_settings, "Mountain strength", settings.mountain_weight, &m_mountain_text, &m_mountain_slider, &procgen::GreaterRealmGeneratorSettings::mountain_weight, 0.05f, 0.0f, 1.5f);
@@ -551,6 +553,7 @@ void GreaterRealmDebugPanel::update(const procgen::GreaterRealmMap& map) {
 
     if (m_seed_text) m_seed_text->setText(seed_text(m_settings->seed));
     if (m_island_bias_text) m_island_bias_text->setText(setting_text("Island bias", m_settings->island_bias));
+    if (m_seed_variation_text) m_seed_variation_text->setText(setting_text("Seed variation", m_settings->seed_terrain_variation));
     if (m_coastline_noise_text) m_coastline_noise_text->setText(setting_text("Coast detail", m_settings->coastline_noise_weight));
     if (m_base_elevation_text) m_base_elevation_text->setText(setting_text("Base relief", m_settings->base_elevation_weight));
     if (m_mountain_text) m_mountain_text->setText(setting_text("Mountain strength", m_settings->mountain_weight));
@@ -567,6 +570,7 @@ void GreaterRealmDebugPanel::update(const procgen::GreaterRealmMap& map) {
     }
 
     if (m_island_bias_slider) m_island_bias_slider->setValue(m_settings->island_bias);
+    if (m_seed_variation_slider) m_seed_variation_slider->setValue(m_settings->seed_terrain_variation);
     if (m_coastline_noise_slider) m_coastline_noise_slider->setValue(m_settings->coastline_noise_weight);
     if (m_base_elevation_slider) m_base_elevation_slider->setValue(m_settings->base_elevation_weight);
     if (m_mountain_slider) m_mountain_slider->setValue(m_settings->mountain_weight);
@@ -600,7 +604,7 @@ void GreaterRealmDebugPanel::update(const procgen::GreaterRealmMap& map) {
     if (m_coverage_text || m_terrain_text || m_hydrology_text) {
         const auto counts = procgen::count_terrain_forms(map);
         if (m_coverage_text) m_coverage_text->setText(coverage_text(map, counts));
-        if (m_terrain_text) m_terrain_text->setText(terrain_text(counts));
+        if (m_terrain_text) m_terrain_text->setText(terrain_text(map, counts));
         if (m_hydrology_text) m_hydrology_text->setText(hydrology_text(map));
     }
 }

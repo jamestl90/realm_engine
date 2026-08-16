@@ -22,6 +22,7 @@ bool maps_match(const procgen::GreaterRealmMap& left, const procgen::GreaterReal
         || left.width != right.width
         || left.height != right.height
         || left.cell_size != right.cell_size
+        || left.terrain_character != right.terrain_character
         || left.cells.size() != right.cells.size()
         || left.drainage_order != right.drainage_order
         || left.rivers.size() != right.rivers.size()
@@ -177,6 +178,17 @@ bool test_partial_regeneration_matches_clean_generation() {
     ok &= require(
         matches_clean_generation(map, settings, constraints),
         "peak-only regeneration matches a clean generation"
+    );
+
+    settings.seed_terrain_variation = 0.25f;
+    result = cache.regenerate(map, settings, constraints);
+    ok &= require(
+        result.rebuilt_stages == PEAK_REGENERATION,
+        "seed terrain variation rebuilds peaks and dependent relief without rebuilding topology"
+    );
+    ok &= require(
+        matches_clean_generation(map, settings, constraints),
+        "seed-character regeneration matches a clean generation"
     );
 
     settings.base_elevation_weight += 0.35f;

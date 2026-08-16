@@ -280,6 +280,38 @@ bool is_water(TerrainForm form) noexcept {
     return form == TerrainForm::Ocean;
 }
 
+GreaterRealmTerrainCharacter derive_greater_realm_terrain_character(
+    const GreaterRealmGeneratorSettings& settings
+) noexcept {
+    const float variation = clamp01(settings.seed_terrain_variation);
+    if (variation == 0.0f) {
+        return {};
+    }
+
+    const float sample = random01(
+        settings.seed,
+        0,
+        0,
+        0x5445525241494e43ull
+    );
+    const float centered = sample * 2.0f - 1.0f;
+    const float shaped = 0.5f + 0.5f * std::copysign(
+        std::pow(std::abs(centered), 0.70f),
+        centered
+    );
+    const float ruggedness = lerp(0.5f, shaped, variation);
+
+    GreaterRealmTerrainCharacter character;
+    character.ruggedness = ruggedness;
+    character.base_relief_scale = std::pow(2.0f, (ruggedness - 0.5f) * 2.0f);
+    character.mountain_relief_scale = std::pow(4.0f, (ruggedness - 0.5f) * 2.0f);
+    character.mountain_coverage_scale = std::pow(3.0f, (ruggedness - 0.5f) * 2.0f);
+    character.detail_scale = std::pow(1.75f, (ruggedness - 0.5f) * 2.0f);
+    character.peak_spacing_scale = 1.0f - (ruggedness - 0.5f) * 0.90f;
+    character.peak_radius_scale = 1.0f + (ruggedness - 0.5f) * 1.20f;
+    return character;
+}
+
 std::size_t GreaterRealmMap::expected_cell_count() const noexcept {
     return static_cast<std::size_t>(width) * static_cast<std::size_t>(height);
 }
@@ -383,7 +415,8 @@ using TerrainLayers = GreaterRealmGenerationCache::TerrainLayers;
         stages |= GreaterRealmDirtyStage::TerrainFields;
     }
 
-    if (previous.mountain_peak_spacing != current.mountain_peak_spacing
+    if (previous.seed_terrain_variation != current.seed_terrain_variation
+        || previous.mountain_peak_spacing != current.mountain_peak_spacing
         || previous.mountain_peak_radius != current.mountain_peak_radius
         || previous.mountain_peak_jaggedness != current.mountain_peak_jaggedness) {
         stages |= GreaterRealmDirtyStage::MountainPeaks;
@@ -559,11 +592,12 @@ void compose_relief(
     const std::vector<TerrainLayers>& layers,
     const GreaterRealmGeneratorSettings& settings
 ) {
-    const float base_weight = std::max(settings.base_elevation_weight, 0.0f);
-    const float mountain_weight = std::max(settings.mountain_weight, 0.0f);
-    const float ridge_weight = std::max(settings.ridge_weight, 0.0f);
-    const float valley_weight = std::max(settings.valley_weight, 0.0f);
-    const float terrain_noise_weight = std::max(settings.terrain_noise_weight, 0.0f);
+    const auto& character = map.terrain_character;
+    const float base_weight = std::max(settings.base_elevation_weight, 0.0f) * character.base_relief_scale;
+    const float mountain_weight = std::max(settings.mountain_weight, 0.0f) * character.mountain_relief_scale;
+    const float ridge_weight = std::max(settings.ridge_weight, 0.0f) * character.detail_scale;
+    const float valley_weight = std::max(settings.valley_weight, 0.0f) * character.detail_scale;
+    const float terrain_noise_weight = std::max(settings.terrain_noise_weight, 0.0f) * character.detail_scale;
 
     for (std::size_t i = 0; i < map.cells.size(); ++i) {
         auto& cell = map.cells[i];
@@ -583,7 +617,9 @@ void compose_relief(
         }
 
         const float positive_constraint = clamp01(cell.relief_constraint);
-        const float constraint_blend = positive_constraint * positive_constraint;
+        const float constraint_blend = clamp01(
+            positive_constraint * positive_constraint * character.mountain_coverage_scale
+        );
         const float hill_relief = clamp01(
             MIN_LAND_RELIEF + layer.base_elevation * base_weight * HILL_RELIEF_SCALE
         );
@@ -691,6 +727,7 @@ GreaterRealmRegenerationResult GreaterRealmGenerationCache::regenerate_impl(
     }
 
     dirty_stages = expand_dirty_stages(dirty_stages);
+    map.terrain_character = derive_greater_realm_terrain_character(settings);
 
     GreaterRealmRegenerationResult result;
     result.rebuilt_stages = dirty_stages;

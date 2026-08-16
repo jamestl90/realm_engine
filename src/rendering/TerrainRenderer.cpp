@@ -144,7 +144,7 @@ Matrix4 terrain_view_projection(
 
     const float centre_x = (minimum_view_x + maximum_view_x) * 0.5f;
     const float centre_y = (minimum_view_y + maximum_view_y) * 0.5f;
-    constexpr float framing_margin = 0.68f;
+    constexpr float framing_margin = 0.52f;
     float view_half_width = (maximum_view_x - minimum_view_x) * framing_margin;
     float view_half_height = (maximum_view_y - minimum_view_y) * framing_margin;
     const float safe_aspect = std::max(viewport_aspect, 0.01f);
@@ -194,6 +194,12 @@ void TerrainRenderer::set_elevation_scale(float scale) noexcept {
     }
 }
 
+void TerrainRenderer::set_viewport_left_ratio(float ratio) noexcept {
+    if (std::isfinite(ratio)) {
+        m_viewportLeftRatio = std::clamp(ratio, 0.0f, 0.95f);
+    }
+}
+
 void TerrainRenderer::render(Renderer& renderer) {
     if (!m_enabled || m_mesh.empty() || !m_device || !m_device->is_valid()) {
         return;
@@ -219,8 +225,7 @@ void TerrainRenderer::render(Renderer& renderer) {
         return;
     }
 
-    constexpr float viewport_left_ratio = 0.325f;
-    const float viewport_x = static_cast<float>(renderer.swapchain_width()) * viewport_left_ratio;
+    const float viewport_x = static_cast<float>(renderer.swapchain_width()) * m_viewportLeftRatio;
     const float viewport_width = static_cast<float>(renderer.swapchain_width()) - viewport_x;
     const float viewport_height = static_cast<float>(renderer.swapchain_height());
     SDL_GPUViewport terrain_viewport{

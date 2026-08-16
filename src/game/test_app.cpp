@@ -90,12 +90,14 @@ bool TestApp::regenerate_procgen_debug_map(core::Engine& engine, bool force_full
     );
 #endif
     SDL_Log(
-        "Generated procgen debug map: seed=%llu size=%ux%u waterline=%.2f island=%.2f coast=%.2f base=%.2f mountain=%.2f peaks=%zu ridge=%.2f valley=%.2f noise=%.2f ocean=%.2f channel_area=%.2f channels=%zu",
+        "Generated procgen debug map: seed=%llu size=%ux%u waterline=%.2f island=%.2f seed_variation=%.2f ruggedness=%.2f coast=%.2f base=%.2f mountain=%.2f peaks=%zu ridge=%.2f valley=%.2f noise=%.2f ocean=%.2f channel_area=%.2f channels=%zu",
         m_procgen_settings.seed,
         m_procgen_settings.width,
         m_procgen_settings.height,
         procgen::NORMALIZED_WATERLINE,
         m_procgen_settings.island_bias,
+        m_procgen_settings.seed_terrain_variation,
+        m_procgen_map.terrain_character.ruggedness,
         m_procgen_settings.coastline_noise_weight,
         m_procgen_settings.base_elevation_weight,
         m_procgen_settings.mountain_weight,
@@ -181,14 +183,8 @@ bool TestApp::upload_procgen_debug_texture(
         sprite->texture_id = m_procgen_presentation.mode == GreaterRealmPresentationMode::Flat
             ? m_test_texture
             : rendering::INVALID_TEXTURE_ID;
-        sprite->scale_x = 4.0f;
-        sprite->scale_y = 4.0f;
     }
-
-    if (auto* transform = engine.world().get_component<rendering::Transform>(m_test_entity)) {
-        transform->x = static_cast<float>(core::Engine::LOGICAL_W) * 0.65f;
-        transform->y = static_cast<float>(core::Engine::LOGICAL_H) * 0.50f;
-    }
+    layout_procgen_preview(engine);
     return true;
 }
 
@@ -228,6 +224,9 @@ void TestApp::apply_procgen_presentation(core::Engine& engine) noexcept {
     const bool show_tilted_3d = m_procgen_presentation.mode
         == GreaterRealmPresentationMode::Tilted3D;
     if (auto* terrain_renderer = engine.terrain_renderer()) {
+        terrain_renderer->set_viewport_left_ratio(
+            GREATER_REALM_DEBUG_PANEL_WIDTH / static_cast<float>(core::Engine::LOGICAL_W)
+        );
         terrain_renderer->set_elevation_scale(m_procgen_presentation.elevation_scale);
         terrain_renderer->set_enabled(show_tilted_3d);
     }
@@ -239,6 +238,39 @@ void TestApp::apply_procgen_presentation(core::Engine& engine) noexcept {
     if (show_tilted_3d) {
         m_procgen_paint_session.cancel();
     }
+}
+
+void TestApp::layout_procgen_preview(core::Engine& engine) noexcept {
+    auto* sprite = engine.world().get_component<rendering::Sprite>(m_test_entity);
+    auto* transform = engine.world().get_component<rendering::Transform>(m_test_entity);
+    if (!sprite || !transform || !m_procgen_map.has_expected_cell_count()) {
+        return;
+    }
+
+    const float remaining_width =
+        static_cast<float>(core::Engine::LOGICAL_W) - GREATER_REALM_DEBUG_PANEL_WIDTH;
+    const float available_width = remaining_width > 1.0f ? remaining_width : 1.0f;
+    const float available_height = static_cast<float>(core::Engine::LOGICAL_H);
+    const float width_scale = available_width / static_cast<float>(m_procgen_map.width);
+    const float height_scale = available_height / static_cast<float>(m_procgen_map.height);
+    const float scale = width_scale < height_scale ? width_scale : height_scale;
+    const float preview_width = static_cast<float>(m_procgen_map.width) * scale;
+    const float preview_height = static_cast<float>(m_procgen_map.height) * scale;
+
+    sprite->scale_x = scale;
+    sprite->scale_y = scale;
+    transform->x = GREATER_REALM_DEBUG_PANEL_WIDTH + preview_width * 0.5f;
+    transform->y = available_height * 0.5f;
+
+    SDL_Log(
+        "Procgen preview layout: panel=%.0f bounds=(%.0f, %.0f, %.0f, %.0f) scale=%.3f",
+        GREATER_REALM_DEBUG_PANEL_WIDTH,
+        transform->x - preview_width * 0.5f,
+        transform->y - preview_height * 0.5f,
+        preview_width,
+        preview_height,
+        scale
+    );
 }
 
 procgen::TerrainPreviewBounds TestApp::procgen_preview_bounds(
@@ -353,26 +385,18 @@ void TestApp::on_startup(core::Engine& engine) {
     const int logical_h = core::Engine::LOGICAL_H;
 
     rendering::Transform transform;
-#if defined(REALM_ENABLE_PROCGEN_DEBUG_VIEW)
-    transform.x = static_cast<float>(logical_w) * 0.65f;
-    transform.y = static_cast<float>(logical_h) * 0.50f;
-#else
     transform.x = static_cast<float>(logical_w) / 2.0f;
     transform.y = static_cast<float>(logical_h) / 2.0f;
-#endif
     transform.z = 0.0f;
     engine.world().add_component(m_test_entity, transform);
 
     rendering::Sprite sprite;
     sprite.texture_id = m_test_texture;
     sprite.layer = 0;
-#if defined(REALM_ENABLE_PROCGEN_DEBUG_VIEW)
-    sprite.scale_x = 4.0f;
-    sprite.scale_y = 4.0f;
-#endif
     engine.world().add_component(m_test_entity, sprite);
 
 #if defined(REALM_ENABLE_PROCGEN_DEBUG_VIEW)
+    layout_procgen_preview(engine);
     if (!refresh_procgen_terrain_mesh(engine, initial_image)) {
         return;
     }

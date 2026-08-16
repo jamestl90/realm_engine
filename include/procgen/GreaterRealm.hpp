@@ -82,6 +82,7 @@ struct GreaterRealmGeneratorSettings {
     float ocean_noise_frequency{8.0f};
 
     float island_bias{0.5f};
+    float seed_terrain_variation{1.0f};
     float base_elevation_weight{1.0f};
     float mountain_weight{DEFAULT_MOUNTAIN_STRENGTH};
     float mountain_peak_spacing{28.0f};
@@ -96,6 +97,22 @@ struct GreaterRealmGeneratorSettings {
     float river_min_drainage_area{500.0f};
     float river_width_scale{0.25f};
 };
+
+struct GreaterRealmTerrainCharacter {
+    float ruggedness{0.5f};
+    float base_relief_scale{1.0f};
+    float mountain_relief_scale{1.0f};
+    float mountain_coverage_scale{1.0f};
+    float detail_scale{1.0f};
+    float peak_spacing_scale{1.0f};
+    float peak_radius_scale{1.0f};
+
+    [[nodiscard]] bool operator==(const GreaterRealmTerrainCharacter&) const noexcept = default;
+};
+
+[[nodiscard]] GreaterRealmTerrainCharacter derive_greater_realm_terrain_character(
+    const GreaterRealmGeneratorSettings& settings
+) noexcept;
 
 enum class GreaterRealmDirtyStage : std::uint32_t {
     None = 0,
@@ -147,6 +164,7 @@ struct GreaterRealmMap {
     std::uint32_t width{0};
     std::uint32_t height{0};
     float cell_size{1.0f};
+    GreaterRealmTerrainCharacter terrain_character;
     std::vector<GreaterRealmCell> cells;
     std::vector<std::uint32_t> drainage_order;
     std::vector<GreaterRealmRiverSegment> rivers;

@@ -30,6 +30,7 @@ private:
     bool upload_procgen_debug_texture(core::Engine& engine, const procgen::DebugImage& image);
     bool refresh_procgen_terrain_mesh(core::Engine& engine, const procgen::DebugImage& image);
     void apply_procgen_presentation(core::Engine& engine) noexcept;
+    void layout_procgen_preview(core::Engine& engine) noexcept;
     [[nodiscard]] procgen::TerrainPreviewBounds procgen_preview_bounds(core::Engine& engine) const noexcept;
     void apply_procgen_paint_sample(const procgen::TerrainConstraintPaintSample& sample) noexcept;
 #endif

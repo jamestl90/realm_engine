@@ -231,7 +231,13 @@ bool test_peak_selection_is_deterministic_and_spaced() {
         }
 
         ok &= require(!first.mountain_peaks.empty(), "representative map selects explicit mountain peaks");
-        ok &= require(peak_metadata_and_spacing_valid(first, settings.mountain_peak_spacing), "peak metadata identifies spaced inland zero-distance cells");
+        ok &= require(
+            peak_metadata_and_spacing_valid(
+                first,
+                settings.mountain_peak_spacing * first.terrain_character.peak_spacing_scale
+            ),
+            "peak metadata identifies sites separated by the effective seed-character spacing"
+        );
         ok &= require(peak_fields_match(first, second), "peak identities and distance fields are deterministic");
     }
 

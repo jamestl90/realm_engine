@@ -10,7 +10,7 @@ int main(int argc, char* argv[]) {
 
     core::Engine engine;
 
-    if (!engine.initialize("test_app", 2460, 1440)) {
+    if (!engine.initialize("test_app", 1920, 1080)) {
         return 1;
     }
 

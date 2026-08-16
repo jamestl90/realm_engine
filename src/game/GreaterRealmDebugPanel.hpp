@@ -16,6 +16,8 @@ class UIElement;
 
 namespace game {
 
+inline constexpr float GREATER_REALM_DEBUG_PANEL_WIDTH = 620.0f;
+
 enum class GreaterRealmPresentationMode : std::uint8_t {
     Flat,
     Tilted3D
@@ -75,6 +77,7 @@ private:
     procgen::TerrainConstraintTool m_selected_tool{procgen::TerrainConstraintTool::Mountain};
     ui::TextBlock* m_seed_text{nullptr};
     ui::TextBlock* m_island_bias_text{nullptr};
+    ui::TextBlock* m_seed_variation_text{nullptr};
     ui::TextBlock* m_coastline_noise_text{nullptr};
     ui::TextBlock* m_base_elevation_text{nullptr};
     ui::TextBlock* m_mountain_text{nullptr};
@@ -93,6 +96,7 @@ private:
     ui::TextBlock* m_brush_size_text{nullptr};
     ui::TextBlock* m_brush_strength_text{nullptr};
     ui::Slider* m_island_bias_slider{nullptr};
+    ui::Slider* m_seed_variation_slider{nullptr};
     ui::Slider* m_coastline_noise_slider{nullptr};
     ui::Slider* m_base_elevation_slider{nullptr};
     ui::Slider* m_mountain_slider{nullptr};

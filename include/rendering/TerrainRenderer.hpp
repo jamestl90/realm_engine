@@ -27,6 +27,9 @@ public:
     [[nodiscard]] float elevation_scale() const noexcept { return m_elevationScale; }
     void set_elevation_scale(float scale) noexcept;
 
+    [[nodiscard]] float viewport_left_ratio() const noexcept { return m_viewportLeftRatio; }
+    void set_viewport_left_ratio(float ratio) noexcept;
+
     [[nodiscard]] const TerrainMesh& mesh() const noexcept { return m_mesh; }
     void render(Renderer& renderer);
 
@@ -41,6 +44,7 @@ private:
     bool m_meshDirty{false};
     bool m_enabled{false};
     float m_elevationScale{100.0f};
+    float m_viewportLeftRatio{0.0f};
 };
 
 } // namespace rendering

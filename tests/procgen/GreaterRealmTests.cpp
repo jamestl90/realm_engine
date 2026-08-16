@@ -18,7 +18,8 @@ bool require(bool condition, const char* message) {
 }
 
 bool maps_match(const procgen::GreaterRealmMap& a, const procgen::GreaterRealmMap& b) {
-    if (a.seed != b.seed || a.width != b.width || a.height != b.height || a.cells.size() != b.cells.size()) {
+    if (a.seed != b.seed || a.width != b.width || a.height != b.height || a.cells.size() != b.cells.size()
+        || a.terrain_character != b.terrain_character) {
         return false;
     }
 
@@ -107,6 +108,28 @@ std::size_t count_land(const procgen::GreaterRealmMap& map) {
         }
     }
     return count;
+}
+
+float average_land_elevation(const procgen::GreaterRealmMap& map) {
+    float total = 0.0f;
+    std::size_t count = 0;
+    for (const auto& cell : map.cells) {
+        if (!cell.is_water) {
+            total += cell.elevation;
+            ++count;
+        }
+    }
+    return count > 0 ? total / static_cast<float>(count) : 0.0f;
+}
+
+float maximum_land_elevation(const procgen::GreaterRealmMap& map) {
+    float maximum = 0.0f;
+    for (const auto& cell : map.cells) {
+        if (!cell.is_water) {
+            maximum = std::max(maximum, cell.elevation);
+        }
+    }
+    return maximum;
 }
 
 bool boundaries_are_water(const procgen::GreaterRealmMap& map) {
@@ -265,6 +288,10 @@ bool test_generated_map_shape() {
     ok &= require(land_count > 0, "map contains land");
     ok &= require(counts.coastal_land > 0, "map contains coastal land");
     ok &= require(counts.hills + counts.highlands + counts.mountains > 0, "map contains raised terrain forms");
+    ok &= require(
+        map.terrain_character.ruggedness >= 0.0f && map.terrain_character.ruggedness <= 1.0f,
+        "map exports normalized deterministic terrain ruggedness"
+    );
 
     for (const auto& cell : map.cells) {
         ok &= require(cell.landmass_elevation >= -1.0f && cell.landmass_elevation <= 1.0f, "landmass elevation is signed and normalized");
@@ -287,6 +314,105 @@ bool test_generated_map_shape() {
     ok &= require(ocean_flags_match_boundary_connectivity(map), "ocean flags match boundary-connected water");
     ok &= require(coastal_flags_match_land_water_boundary(map), "coastal flags match land touching water");
 
+    return ok;
+}
+
+bool test_seed_driven_terrain_character() {
+    procgen::GreaterRealmGeneratorSettings probe;
+    probe.seed_terrain_variation = 1.0f;
+    procgen::Seed flat_seed = 1;
+    procgen::Seed rugged_seed = 1;
+    float lowest = 1.0f;
+    float highest = 0.0f;
+    for (procgen::Seed seed = 1; seed <= 4096; ++seed) {
+        probe.seed = seed;
+        const float ruggedness = procgen::derive_greater_realm_terrain_character(probe).ruggedness;
+        if (ruggedness < lowest) {
+            lowest = ruggedness;
+            flat_seed = seed;
+        }
+        if (ruggedness > highest) {
+            highest = ruggedness;
+            rugged_seed = seed;
+        }
+    }
+
+    probe.seed = flat_seed;
+    const auto flat_character = procgen::derive_greater_realm_terrain_character(probe);
+    const auto repeated_flat_character = procgen::derive_greater_realm_terrain_character(probe);
+    probe.seed = rugged_seed;
+    const auto rugged_character = procgen::derive_greater_realm_terrain_character(probe);
+
+    probe.seed_terrain_variation = 0.0f;
+    const auto neutral_character = procgen::derive_greater_realm_terrain_character(probe);
+
+    bool ok = true;
+    ok &= require(flat_character == repeated_flat_character, "seed terrain character is deterministic");
+    ok &= require(lowest < 0.05f && highest > 0.95f, "representative seed range includes flat and rugged extremes");
+    ok &= require(
+        neutral_character.ruggedness == 0.5f
+            && neutral_character.base_relief_scale == 1.0f
+            && neutral_character.mountain_relief_scale == 1.0f
+            && neutral_character.mountain_coverage_scale == 1.0f
+            && neutral_character.detail_scale == 1.0f
+            && neutral_character.peak_spacing_scale == 1.0f
+            && neutral_character.peak_radius_scale == 1.0f,
+        "zero seed variation exactly preserves neutral legacy scales"
+    );
+
+    procgen::GreaterRealmGeneratorSettings settings;
+    settings.seed = flat_seed;
+    settings.seed_terrain_variation = 0.0f;
+    const auto neutral_flat = procgen::generate_greater_realm(settings);
+    settings.seed_terrain_variation = 1.0f;
+    const auto flat = procgen::generate_greater_realm(settings);
+
+    settings.seed = rugged_seed;
+    settings.seed_terrain_variation = 0.0f;
+    const auto neutral_rugged = procgen::generate_greater_realm(settings);
+    settings.seed_terrain_variation = 1.0f;
+    const auto rugged = procgen::generate_greater_realm(settings);
+
+    const auto flat_counts = procgen::count_terrain_forms(flat);
+    const auto rugged_counts = procgen::count_terrain_forms(rugged);
+    const float flat_average = average_land_elevation(flat);
+    const float rugged_average = average_land_elevation(rugged);
+
+    const auto neutral_flat_counts = procgen::count_terrain_forms(neutral_flat);
+    const auto neutral_rugged_counts = procgen::count_terrain_forms(neutral_rugged);
+    const float neutral_flat_average = average_land_elevation(neutral_flat);
+    const float neutral_rugged_average = average_land_elevation(neutral_rugged);
+    const bool flat_is_meaningfully_lower = flat_average + 0.015f < neutral_flat_average;
+    const bool rugged_is_meaningfully_higher = rugged_average > neutral_rugged_average + 0.015f;
+    const bool upper_relief_is_separated =
+        maximum_land_elevation(rugged) > maximum_land_elevation(flat) + 0.15f;
+    const bool rugged_has_more_high_terrain = rugged_counts.highlands + rugged_counts.mountains
+        > neutral_rugged_counts.highlands + neutral_rugged_counts.mountains;
+    if (!flat_is_meaningfully_lower || !rugged_is_meaningfully_higher
+        || !upper_relief_is_separated || !rugged_has_more_high_terrain) {
+        std::cerr << "Terrain character diagnostics: flat_seed=" << flat_seed
+                  << " flat_ruggedness=" << flat_character.ruggedness << " flat_average=" << flat_average
+                  << " neutral_flat_average=" << neutral_flat_average
+                  << " flat_high=" << flat_counts.highlands + flat_counts.mountains
+                  << " neutral_flat_high=" << neutral_flat_counts.highlands + neutral_flat_counts.mountains
+                  << " rugged_seed=" << rugged_seed << " rugged_ruggedness=" << rugged_character.ruggedness
+                  << " rugged_average=" << rugged_average
+                  << " neutral_rugged_average=" << neutral_rugged_average
+                  << " rugged_high=" << rugged_counts.highlands + rugged_counts.mountains
+                  << " neutral_rugged_high=" << neutral_rugged_counts.highlands + neutral_rugged_counts.mountains
+                  << " flat_max=" << maximum_land_elevation(flat)
+                  << " neutral_flat_max=" << maximum_land_elevation(neutral_flat)
+                  << " rugged_max=" << maximum_land_elevation(rugged)
+                  << " neutral_rugged_max=" << maximum_land_elevation(neutral_rugged)
+                  << " flat_peaks=" << flat.mountain_peaks.size() << " rugged_peaks=" << rugged.mountain_peaks.size() << '\n';
+    }
+
+    ok &= require(topology_matches(neutral_flat, flat), "flat seed character preserves its landmass topology");
+    ok &= require(topology_matches(neutral_rugged, rugged), "rugged seed character preserves its landmass topology");
+    ok &= require(flat_is_meaningfully_lower, "flat character meaningfully lowers average relief from neutral");
+    ok &= require(rugged_is_meaningfully_higher, "rugged character meaningfully raises average relief from neutral");
+    ok &= require(upper_relief_is_separated, "extreme seed characters strongly separate upper relief");
+    ok &= require(rugged_has_more_high_terrain, "rugged seed character produces more highland and mountain terrain");
     return ok;
 }
 
@@ -316,6 +442,7 @@ bool test_mountain_strength_changes_only_local_mountain_relief() {
     settings.seed = 515151;
     settings.width = 128;
     settings.height = 96;
+    settings.seed_terrain_variation = 0.0f;
     settings.mountain_peak_radius = 14.0f;
     settings.mountain_weight = 0.0f;
     const auto without_mountains = procgen::generate_greater_realm(settings);
@@ -362,6 +489,7 @@ bool test_land_relief_stages_are_inspectable_and_separated() {
     settings.seed = 314159;
     settings.width = 128;
     settings.height = 96;
+    settings.seed_terrain_variation = 0.0f;
     const auto map = procgen::generate_greater_realm(settings);
 
     std::size_t land_count = 0;
@@ -1172,6 +1300,7 @@ int main() {
         test_seed_determinism,
         test_map_cell_lookup,
         test_coastal_land_preserves_elevation_form,
+        test_seed_driven_terrain_character,
         test_inland_relief_preserves_landmass_topology,
         test_mountain_strength_changes_only_local_mountain_relief,
         test_land_relief_stages_are_inspectable_and_separated,

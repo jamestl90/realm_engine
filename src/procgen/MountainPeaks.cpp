@@ -96,9 +96,10 @@ void generate_mountain_peak_field(
         return;
     }
 
-    const float spacing = std::max(settings.mountain_peak_spacing, 2.0f);
+    const auto& character = map.terrain_character;
+    const float spacing = std::max(settings.mountain_peak_spacing * character.peak_spacing_scale, 2.0f);
     const float spacing_squared = spacing * spacing;
-    const float radius = std::max(settings.mountain_peak_radius, 0.001f);
+    const float radius = std::max(settings.mountain_peak_radius * character.peak_radius_scale, 0.001f);
     const float jaggedness = std::clamp(settings.mountain_peak_jaggedness, 0.0f, 1.0f);
 
     for (auto& cell : map.cells) {
