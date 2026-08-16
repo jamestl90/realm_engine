@@ -1,6 +1,6 @@
 # Separate Coastline from Terrain Form
 
-Status: testing
+Status: complete
 Area: Procgen / Debug Rendering
 
 ## Goal
@@ -42,6 +42,9 @@ Mapgen4 treats the coast as the zero crossing between negative water elevation a
 - Release continues to exclude the compile-gated procgen debug sources.
 - A native runtime smoke test initializes the updated procgen texture and UI rendering paths without errors.
 - `git diff --check` passes.
+- 2026-08-16 closure check: `ctest --test-dir out/build/debug-with-tests --output-on-failure` passed, 14/14.
+- 2026-08-16 closure check: `cmake --build --preset debug-with-tests` and `cmake --build --preset release-no-tests` were already up to date.
+- 2026-08-16 closure check: `cmake --build --preset debug-no-tests` passed when run from the Visual Studio developer command environment.
 
 ## Notes
 

@@ -1,6 +1,6 @@
 # Evaluate Irregular Dual-Mesh Terrain
 
-Status: testing
+Status: complete
 Area: Procgen / Architecture
 
 ## Goal
@@ -76,3 +76,6 @@ No new implementation task is justified. Task 033 already owns the only promisin
 - All eight CTest targets pass.
 - Tests-disabled Debug and Release preset builds succeed and contain no representation-evaluation target.
 - `git diff --check` passes.
+- 2026-08-16 closure check: `ctest --test-dir out/build/debug-with-tests --output-on-failure` passed, 14/14.
+- 2026-08-16 closure check: `cmake --build --preset debug-with-tests` and `cmake --build --preset release-no-tests` were already up to date.
+- 2026-08-16 closure check: `cmake --build --preset debug-no-tests` passed when run from the Visual Studio developer command environment.

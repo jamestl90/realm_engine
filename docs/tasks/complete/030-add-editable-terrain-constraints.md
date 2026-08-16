@@ -1,6 +1,6 @@
 # Add Editable Terrain Constraints
 
-Status: testing
+Status: complete
 Area: Procgen / Tooling
 
 ## Goal
@@ -35,6 +35,9 @@ Mapgen4 separates a low-resolution signed constraint field from generated terrai
 - All six CTest targets pass.
 - Tests-disabled Debug and Release builds succeed.
 - The Debug executable passes a native startup smoke test.
+- 2026-08-16 closure check: `ctest --test-dir out/build/debug-with-tests --output-on-failure` passed, 14/14.
+- 2026-08-16 closure check: `cmake --build --preset debug-with-tests` and `cmake --build --preset release-no-tests` were already up to date.
+- 2026-08-16 closure check: `cmake --build --preset debug-no-tests` passed when run from the Visual Studio developer command environment.
 
 ## Notes
 

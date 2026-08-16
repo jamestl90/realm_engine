@@ -1,6 +1,6 @@
 # Render Greater Realm Debug Map
 
-Status: testing
+Status: complete
 Area: Procgen / Rendering
 Branch: `proc-gen`
 Branch reason: This is part of the broader procedural generation feature stream and depends on the greater realm generator foundation.
@@ -27,3 +27,9 @@ The debug rendering path should be temporary/development-facing and should not b
 ## Notes
 
 This is visual validation, not the final terrain renderer.
+
+## Closure Verification
+
+- 2026-08-16: `ctest --test-dir out/build/debug-with-tests --output-on-failure` passed, 14/14.
+- 2026-08-16: `cmake --build --preset debug-with-tests` and `cmake --build --preset release-no-tests` were already up to date.
+- 2026-08-16: `cmake --build --preset debug-no-tests` passed when run from the Visual Studio developer command environment.

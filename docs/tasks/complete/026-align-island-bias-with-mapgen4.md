@@ -1,6 +1,6 @@
 # Align Island Bias With Mapgen4
 
-Status: testing
+Status: complete
 Area: Procgen / Debug UI
 
 ## Goal
@@ -40,9 +40,11 @@ The engine previously exposed values up to `2.0` and separately scaled the fBm t
 - Tests-disabled Debug builds with the procgen debug view enabled.
 - Tests-disabled Release builds with procgen debug sources excluded.
 - `git diff --check` passes.
+- 2026-08-16 closure check: `ctest --test-dir out/build/debug-with-tests --output-on-failure` passed, 14/14.
+- 2026-08-16 closure check: `cmake --build --preset debug-with-tests` and `cmake --build --preset release-no-tests` were already up to date.
+- 2026-08-16 closure check: `cmake --build --preset debug-no-tests` passed when run from the Visual Studio developer command environment.
 
 ## Reference
 
 - Mapgen4 `painting.ts`: automatic signed constraint generation.
 - Mapgen4 `mapgen4.ts`: Island default and control range.
-

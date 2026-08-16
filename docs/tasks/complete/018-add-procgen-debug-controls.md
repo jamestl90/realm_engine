@@ -1,6 +1,6 @@
 # Add Procgen Debug Controls
 
-Status: testing
+Status: complete
 Area: Procgen / UI
 Branch: `proc-gen`
 Branch reason: This continues the procedural generation feature stream and builds on the debug map renderer.
@@ -28,6 +28,9 @@ The generated map can now be rendered, but tuning requires code edits and rebuil
 - The expanded panel builds in a Debug configuration with `REALM_BUILD_TESTS=OFF`.
 - `REALM_ENABLE_PROCGEN_DEBUG_VIEW=ON` is present on the game target.
 - The panel uses eleven compact control rows within the logical viewport.
+- 2026-08-16 closure check: `ctest --test-dir out/build/debug-with-tests --output-on-failure` passed, 14/14.
+- 2026-08-16 closure check: `cmake --build --preset debug-with-tests` and `cmake --build --preset release-no-tests` were already up to date.
+- 2026-08-16 closure check: `cmake --build --preset debug-no-tests` passed when run from the Visual Studio developer command environment.
 
 ## Notes
 

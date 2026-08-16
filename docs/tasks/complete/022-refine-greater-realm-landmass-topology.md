@@ -1,6 +1,6 @@
 # Refine Greater Realm Landmass Topology
 
-Status: testing
+Status: complete
 Area: Procgen
 Branch: `proc-gen`
 Branch reason: This is part of the existing multi-step greater realm procedural generation feature stream.
@@ -35,6 +35,9 @@ Mapgen4 starts from signed elevation constraints, perturbs the coastline near th
 - The procgen debug game target builds with tests enabled.
 - Tests-disabled Debug and Release game targets build successfully.
 - Test code remains isolated behind `REALM_BUILD_TESTS=ON` and does not enter release builds.
+- 2026-08-16 closure check: `ctest --test-dir out/build/debug-with-tests --output-on-failure` passed, 14/14.
+- 2026-08-16 closure check: `cmake --build --preset debug-with-tests` and `cmake --build --preset release-no-tests` were already up to date.
+- 2026-08-16 closure check: `cmake --build --preset debug-no-tests` passed when run from the Visual Studio developer command environment.
 
 ## Notes
 

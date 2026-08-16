@@ -1,6 +1,6 @@
 # Add Priority Drainage Topology
 
-Status: testing
+Status: complete
 Area: Procgen / Hydrology
 
 ## Goal
@@ -37,3 +37,6 @@ Mapgen4 seeds a priority traversal from deep ocean and assigns each terrain elem
 - All six CTest targets pass.
 - Tests-disabled Debug and Release builds succeed.
 - The Debug executable passes a native startup smoke test.
+- 2026-08-16 closure check: `ctest --test-dir out/build/debug-with-tests --output-on-failure` passed, 14/14.
+- 2026-08-16 closure check: `cmake --build --preset debug-with-tests` and `cmake --build --preset release-no-tests` were already up to date.
+- 2026-08-16 closure check: `cmake --build --preset debug-no-tests` passed when run from the Visual Studio developer command environment.

@@ -1,6 +1,6 @@
 # Adopt Mapgen4 Island Constraint
 
-Status: testing
+Status: complete
 Area: Procgen
 Branch: `proc-gen`
 Branch reason: This continues the existing greater realm procedural generation feature stream.
@@ -33,6 +33,9 @@ Mapgen4 combines five-octave fBm with an island term based on `max(abs(x), abs(y
 - All five isolated test suites pass together.
 - The game builds with `CMAKE_BUILD_TYPE=Debug`, `REALM_BUILD_TESTS=OFF`, and `REALM_ENABLE_PROCGEN_DEBUG_VIEW=ON`.
 - The compact debug panel exposes Island bias alongside the other layered controls.
+- 2026-08-16 closure check: `ctest --test-dir out/build/debug-with-tests --output-on-failure` passed, 14/14.
+- 2026-08-16 closure check: `cmake --build --preset debug-with-tests` and `cmake --build --preset release-no-tests` were already up to date.
+- 2026-08-16 closure check: `cmake --build --preset debug-no-tests` passed when run from the Visual Studio developer command environment.
 
 ## Notes
 
