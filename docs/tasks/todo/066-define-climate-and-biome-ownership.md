@@ -18,14 +18,14 @@ The project therefore needs an explicit contract for any stable climate normals 
 
 - Task 039: separation of generated drainage from runtime weather.
 - Task 064: complete stable water classification.
-- Task 065: watershed metadata available as a possible environmental input.
+- Task 067: world spatial hierarchy and generation ownership contract.
 
 ## Acceptance Criteria
 
 - Decide whether stable climate normals or environmental tendency fields belong in procgen, world simulation, or application data.
 - Decide whether biome labels are engine-owned, application-owned, or produced by an engine classifier from application-supplied rules.
 - Define the minimum reusable inputs and outputs without reintroducing generated precipitation events, transient humidity, soil moisture, runoff, or discharge.
-- Define how elevation, latitude, coast distance, terrain form, inland water, and watersheds may influence stable tendencies.
+- Define how elevation, latitude, coast distance, terrain form, and inland water may influence stable tendencies, with parked watershed metadata treated only as a possible future input.
 - Define determinism, serialization, regeneration, and streamed-region ownership expectations.
 - Record the dependency direction between greater-realm generation, biome data, world regions, and Task 040 runtime weather.
 - Update `docs/ARCHITECTURE.md`, `docs/PROCGEN.md`, and Task 040 where the decision changes their contracts.
@@ -36,3 +36,5 @@ The project therefore needs an explicit contract for any stable climate normals 
 This is a decision and task-breakdown record. It exists to prevent a repeat of the Task 028/039 ownership reversal.
 
 No branch is required because this task changes documentation and backlog scope only.
+
+Task 065 is not a prerequisite. Climate and biome ownership must remain useful without watershed metadata.

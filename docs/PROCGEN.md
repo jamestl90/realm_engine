@@ -116,7 +116,7 @@ Task 049 records the alignment audit. Differences not listed above require an ex
 - Lake retention, shared water-surface levels, river erosion, deltas, or watershed metadata. Enclosed water is classified as inland water without implying those hydrological behaviors.
 - Runtime weather, precipitation, runoff, soil moisture, or active river discharge; task 040 tracks this future simulation layer.
 - Resources, settlements, factions, or object placement.
-- Local tile generation or world-region streaming.
+- Local tile generation or world-region streaming; Tasks 067-073 track the planned spatial contract, local generation, lifecycle, persistence, top-down presentation, and runtime activation slices.
 - Beach, cliff, rocky-shore, marsh, delta, or other detailed shoreline classification.
 - A derived Delaunay/Voronoi render surface; task 032 rejected it as the canonical greater-realm representation.
 - Mapgen4's irregular folded mesh around coasts, ridges, valleys, and rivers. The supported 2.5D path is a continuous triangulated regular-grid heightfield instead.
