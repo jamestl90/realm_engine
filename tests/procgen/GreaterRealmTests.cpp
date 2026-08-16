@@ -28,6 +28,7 @@ bool maps_match(const procgen::GreaterRealmMap& a, const procgen::GreaterRealmMa
         if (left.x != right.x
             || left.y != right.y
             || left.landmass_elevation != right.landmass_elevation
+            || left.relief_constraint != right.relief_constraint
             || left.hill_relief != right.hill_relief
             || left.mountain_relief != right.mountain_relief
             || left.elevation != right.elevation
@@ -577,12 +578,14 @@ bool test_terrain_noise_changes_land_relief_only() {
     return ok;
 }
 
-bool test_coastline_noise_matches_mapgen4_shape_and_scale() {
+bool test_coastline_noise_is_local_to_signed_boundary() {
     constexpr std::array seeds{314159ull, 515151ull, 616161ull};
+    constexpr float coastline_support = 0.20f;
     bool ok = require(
         procgen::GreaterRealmGeneratorSettings{}.coastline_noise_weight == 0.01f,
         "coastline detail defaults to Mapgen4's 0.01 strength"
     );
+    std::size_t topology_changes = 0;
 
     for (const auto seed : seeds) {
         procgen::GreaterRealmGeneratorSettings settings;
@@ -599,42 +602,53 @@ bool test_coastline_noise_matches_mapgen4_shape_and_scale() {
         const auto strong_detail = procgen::generate_greater_realm(settings);
         const auto repeated_strong = procgen::generate_greater_realm(settings);
 
-        std::size_t mid_signed_count = 0;
-        std::size_t saturated_count = 0;
+        std::size_t supported_count = 0;
+        std::size_t outside_count = 0;
         float default_delta_sum = 0.0f;
         float strong_delta_sum = 0.0f;
-        float mid_signed_delta_sum = 0.0f;
-        float saturated_max_delta = 0.0f;
+        float strong_max_delta = 0.0f;
+        bool relief_constraints_unchanged = true;
+        bool outside_signed_unchanged = true;
+        bool outside_relief_unchanged = true;
         for (std::size_t i = 0; i < unperturbed.cells.size(); ++i) {
-            const float base_signed = std::abs(unperturbed.cells[i].landmass_elevation);
+            const auto& base = unperturbed.cells[i];
+            const auto& detailed = strong_detail.cells[i];
+            const float base_signed = std::abs(base.landmass_elevation);
             const float default_delta = std::abs(
                 default_detail.cells[i].landmass_elevation - unperturbed.cells[i].landmass_elevation
             );
             const float strong_delta = std::abs(
                 strong_detail.cells[i].landmass_elevation - unperturbed.cells[i].landmass_elevation
             );
-            default_delta_sum += default_delta;
-            strong_delta_sum += strong_delta;
+            relief_constraints_unchanged &= base.relief_constraint == detailed.relief_constraint;
 
-            if (base_signed >= 0.45f && base_signed <= 0.75f) {
-                ++mid_signed_count;
-                mid_signed_delta_sum += strong_delta;
-            }
-            if (base_signed >= 0.55f) {
-                ++saturated_count;
-                saturated_max_delta = std::max(saturated_max_delta, strong_delta);
+            if (base_signed < coastline_support) {
+                ++supported_count;
+                default_delta_sum += default_delta;
+                strong_delta_sum += strong_delta;
+                strong_max_delta = std::max(strong_max_delta, strong_delta);
+                topology_changes += base.is_water != detailed.is_water;
+            } else {
+                ++outside_count;
+                outside_signed_unchanged &= base.landmass_elevation == detailed.landmass_elevation;
+                outside_relief_unchanged &= base.elevation == detailed.elevation
+                    && base.hill_relief == detailed.hill_relief
+                    && base.mountain_relief == detailed.mountain_relief;
             }
         }
 
         ok &= require(maps_match(strong_detail, repeated_strong), "coastline noise response is deterministic");
+        ok &= require(supported_count > 0, "test map contains cells inside coastline-detail support");
+        ok &= require(outside_count > 0, "test map contains terrain outside coastline-detail support");
         ok &= require(default_delta_sum > 0.1f, "default coastline detail perturbs the signed coastline field");
-        ok &= require(strong_delta_sum > default_delta_sum * 5.0f, "Mapgen4's 0..0.1 coastline range has a substantial continuous response");
-        ok &= require(mid_signed_count > 0, "test map contains mid-range signed constraints beyond the old narrow mask");
-        ok &= require(mid_signed_delta_sum > 0.01f, "Mapgen4 attenuation continues beyond the old abs(e) < 0.30 coastline mask");
-        ok &= require(saturated_count > 0, "test map contains upper-half signed constraints");
-        ok &= require(saturated_max_delta <= 0.1751f, "Mapgen4's weighted coastline spectrum bounds maximum perturbation");
+        ok &= require(strong_delta_sum > default_delta_sum * 5.0f, "coastline detail retains a substantial control response");
+        ok &= require(strong_max_delta <= 0.1751f, "Mapgen4's weighted coastline spectrum still bounds maximum perturbation");
+        ok &= require(relief_constraints_unchanged, "coastline detail never changes the clean relief constraint");
+        ok &= require(outside_signed_unchanged, "coastline detail leaves the signed field unchanged outside its support");
+        ok &= require(outside_relief_unchanged, "coastline detail leaves inland relief unchanged outside its support");
     }
 
+    ok &= require(topology_changes > 0, "strong coastline detail changes coastline topology");
     return ok;
 }
 
@@ -893,6 +907,73 @@ bool test_debug_ocean_depth_shading() {
     return ok;
 }
 
+bool test_continuous_terrain_colour_mapping() {
+    procgen::GreaterRealmCell low;
+    low.terrain_form = procgen::TerrainForm::Plains;
+    low.elevation = 0.52f;
+
+    auto high = low;
+    high.elevation = 0.92f;
+
+    auto highland = low;
+    highland.terrain_form = procgen::TerrainForm::Highlands;
+
+    const auto low_colour = procgen::greater_realm_debug_colour(low, 0.5f);
+    const auto high_colour = procgen::greater_realm_debug_colour(high, 0.5f);
+    const auto highland_colour = procgen::greater_realm_debug_colour(highland, 0.5f);
+    const auto categorical_plain = procgen::greater_realm_debug_colour(
+        low,
+        0.5f,
+        procgen::GreaterRealmDebugView::TerrainForms
+    );
+    const auto categorical_highland = procgen::greater_realm_debug_colour(
+        highland,
+        0.5f,
+        procgen::GreaterRealmDebugView::TerrainForms
+    );
+
+    bool ok = true;
+    ok &= require(low_colour != high_colour, "continuous terrain colour responds to elevation within one form");
+    ok &= require(low_colour != highland_colour, "continuous terrain colour retains a restrained terrain-form tint");
+    ok &= require(
+        categorical_plain != categorical_highland,
+        "categorical terrain-form colours remain available as a separate debug view"
+    );
+    return ok;
+}
+
+bool test_continuous_terrain_image_data() {
+    procgen::GreaterRealmGeneratorSettings settings;
+    settings.seed = 314159;
+    settings.width = 64;
+    settings.height = 48;
+
+    const auto base_map = procgen::generate_greater_realm(settings);
+    const auto first = procgen::build_greater_realm_debug_image(base_map, settings.sea_level);
+    const auto repeated = procgen::build_greater_realm_debug_image(base_map, settings.sea_level);
+
+    auto stronger_settings = settings;
+    stronger_settings.mountain_weight = 1.5f;
+    const auto stronger_map = procgen::generate_greater_realm(stronger_settings);
+    const auto stronger = procgen::build_greater_realm_debug_image(
+        stronger_map,
+        stronger_settings.sea_level
+    );
+
+    bool ok = true;
+    ok &= require(
+        first.width == settings.width && first.height == settings.height && first.has_expected_byte_count(),
+        "continuous terrain image preserves generated map dimensions"
+    );
+    ok &= require(first.rgba == repeated.rgba, "continuous terrain image output is deterministic");
+    ok &= require(
+        stronger.width == first.width && stronger.height == first.height,
+        "terrain parameter changes preserve debug image dimensions"
+    );
+    ok &= require(stronger.rgba != first.rgba, "continuous terrain image responds to relief parameters");
+    return ok;
+}
+
 bool test_debug_base_views() {
     procgen::GreaterRealmMap map;
     map.width = 2;
@@ -1058,13 +1139,15 @@ int main() {
         test_mountain_blend_uses_local_positive_constraint,
         test_terrain_noise_changes_land_relief_only,
         test_terrain_noise_range_is_masked_to_land_relief,
-        test_coastline_noise_matches_mapgen4_shape_and_scale,
+        test_coastline_noise_is_local_to_signed_boundary,
         test_coastline_noise_is_independent_from_relief_and_depth_controls,
         test_sea_level_is_not_a_generation_input,
         test_ocean_depth_preserves_topology,
         test_island_bias_matches_mapgen4_contract,
         test_debug_visualization_data,
         test_debug_ocean_depth_shading,
+        test_continuous_terrain_colour_mapping,
+        test_continuous_terrain_image_data,
         test_debug_base_views,
         test_debug_overlay_options,
         test_debug_default_options_preserve_existing_image,

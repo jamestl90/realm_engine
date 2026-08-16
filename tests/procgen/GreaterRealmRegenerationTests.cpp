@@ -35,6 +35,7 @@ bool maps_match(const procgen::GreaterRealmMap& left, const procgen::GreaterReal
         if (a.x != b.x
             || a.y != b.y
             || a.landmass_elevation != b.landmass_elevation
+            || a.relief_constraint != b.relief_constraint
             || a.hill_relief != b.hill_relief
             || a.mountain_relief != b.mountain_relief
             || a.elevation != b.elevation

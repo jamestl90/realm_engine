@@ -108,6 +108,7 @@ void generate_mountain_peak_field(
     }
 
     std::vector<PeakCandidate> selected_sites;
+    std::vector<PeakCandidate> relief_sources;
     const auto candidates = build_candidates(map);
     for (const auto& candidate : candidates) {
         const auto& candidate_cell = map.cells[candidate.index];
@@ -124,7 +125,10 @@ void generate_mountain_peak_field(
         }
 
         selected_sites.push_back(candidate);
-        if (!candidate_cell.is_water) {
+        if (candidate_cell.relief_constraint > 0.0f) {
+            relief_sources.push_back(candidate);
+        }
+        if (candidate_cell.relief_constraint > 0.0f && !candidate_cell.is_water) {
             map.mountain_peaks.push_back({
                 candidate.index,
                 candidate_cell.x,
@@ -135,11 +139,11 @@ void generate_mountain_peak_field(
     }
 
     std::priority_queue<DistanceNode, std::vector<DistanceNode>, DistanceNodeGreater> open;
-    for (const auto& peak : map.mountain_peaks) {
-        auto& cell = map.cells[peak.cell_index];
-        cell.is_mountain_peak = true;
+    for (const auto& source : relief_sources) {
+        auto& cell = map.cells[source.index];
         cell.mountain_distance = 0.0f;
-        open.push({peak.cell_index, 0.0f});
+        open.push({source.index, 0.0f});
+        cell.is_mountain_peak = !cell.is_water;
     }
 
     while (!open.empty()) {

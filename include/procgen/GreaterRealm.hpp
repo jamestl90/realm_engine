@@ -27,6 +27,7 @@ struct GreaterRealmCell {
     std::int32_t x{0};
     std::int32_t y{0};
     float landmass_elevation{0.0f};
+    float relief_constraint{0.0f};
     float hill_relief{0.0f};
     float mountain_relief{0.0f};
     float elevation{0.0f};

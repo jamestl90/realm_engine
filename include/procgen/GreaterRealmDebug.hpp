@@ -9,6 +9,7 @@ namespace procgen {
 
 enum class GreaterRealmDebugView : std::uint8_t {
     Terrain,
+    TerrainForms,
     Elevation,
     Landmass,
     HillRelief,

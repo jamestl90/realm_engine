@@ -32,6 +32,7 @@ TerrainFormCounts count_terrain_forms(const GreaterRealmMap& map) noexcept {
 const char* to_string(GreaterRealmDebugView view) noexcept {
     switch (view) {
         case GreaterRealmDebugView::Terrain: return "Terrain";
+        case GreaterRealmDebugView::TerrainForms: return "Terrain forms";
         case GreaterRealmDebugView::Elevation: return "Elevation";
         case GreaterRealmDebugView::Landmass: return "Landmass";
         case GreaterRealmDebugView::HillRelief: return "Hill relief";

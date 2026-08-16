@@ -8,15 +8,15 @@ This document tracks the procedural generation capabilities currently present in
 - Uses a regular grid with configurable width, height, and cell size.
 - The regular grid is the deliberate canonical representation following task 032's measured dual-mesh evaluation; direct indexing, compact implicit adjacency, and local-tile handoff outweigh an authoritative irregular mesh for current engine goals.
 - Produces a signed landmass elevation field following Mapgen4: negative values are water, positive values are land, and zero is the fixed coastline.
-- Combines unscaled five-octave land-shape noise at frequencies `1, 2, 4, 8, 16` with Mapgen4's square-distance island constraint and coastline noise sampled at fixed frequencies `16, 32, 64`, weighted `1, 1/2, 1/4`, and attenuated by `1 - e^4`.
+- Combines unscaled five-octave land-shape noise at frequencies `1, 2, 4, 8, 16` with Mapgen4's square-distance island constraint and coastline noise sampled at fixed frequencies `16, 32, 64`, weighted `1, 1/2, 1/4`, with compact smooth support at `abs(e) < 0.20`.
 - Applies Mapgen4's automatic positive-land mountain hint to the signed landmass field before authored constraints and coastline noise, so stronger inland signed constraints can locally select mountain relief without changing land/water sign.
 - Keeps broad land/water topology independent from inland terrain weights.
 - Builds normalized final elevation with separate land-relief and water-depth paths around a fixed `0.5` output waterline; adjustable sea level is not a generation input.
 - Shapes land by computing separate low-amplitude hill relief and peak-distance mountain relief, then blending from hills toward mountains with the squared positive signed landmass constraint.
-- Keeps base relief as the hill stage. Mountain strength raises only the explicit peak-distance mountain target, so changing it does not shift terrain with no peak influence.
+- Keeps base relief as the hill stage. Mountain strength raises only the explicit peak-distance mountain target, so changing it does not shift terrain with no peak influence. Coastline perturbation is excluded from the signed constraint used by this relief blend.
 - Applies ridges, valleys, and terrain noise after the hill-to-mountain blend as secondary engine extensions, masked to positive inland constraint strength. Ridges raise relief, valleys lower relief, and terrain noise can move relief both directions without changing land/water topology.
 - Selects deterministic mountain peak sites from the canonical grid before considering mutable land/water output, using configurable Poisson-style spacing with a center-biased priority to avoid bucket-aligned artifacts.
-- Exports only fixed peak sites that currently sit on land as active mountain peaks; fixed sites under water remain dormant and can become active if authored painting later creates land there.
+- Uses fixed sites with a positive unperturbed/authored relief constraint as stable mountain-distance sources. It exports visible peak records only for source sites that remain land after coastline perturbation; authored negative constraints can make sources dormant, while coastline detail cannot reshape the global mountain field.
 - Exports peak records plus per-cell peak distance, influence, and peak flags for hydrology and tooling.
 - Exports per-cell hill and mountain relief stages for debugging and tests.
 - Marks boundary-connected water as ocean.
@@ -81,7 +81,7 @@ Mapgen4 is the reference for the generator's layered terrain behavior, not a req
 - The engine keeps Mapgen4's fixed signed coastline threshold while exporting final elevation normalized to `0..1`, with water below and land above a fixed `0.5` output waterline.
 - The automatic positive-land mountain hint is adopted in the signed constraint stage. Explicit peak fields still own the mountain target shape; the hint only controls where the signed terrain is strong enough to prefer that target.
 - Mountain peak sites are sampled independently from authored constraints and land/water classification. Spacing changes resample the fixed site field; jaggedness, radius, mountain strength, and other relief-only controls preserve peak identities.
-- Coastline noise uses Mapgen4's signed attenuation `1 - e^4`, fixed `16, 32, 64` spectrum with `1, 1/2, 1/4` weights, `0.01` default strength, and `0..0.1` control range.
+- Coastline noise retains Mapgen4's fixed `16, 32, 64` spectrum, `1, 1/2, 1/4` weights, `0.01` default, and `0..0.1` range. It intentionally replaces Mapgen4's acknowledged over-broad `1 - e^4` attenuation with compact smooth support at `abs(e) < 0.20`, and the unperturbed broad constraint owns inland relief selection (task 058).
 - Ridge, valley, and terrain-noise layers remain engine extensions after the signed-constraint, low-hill, and peak-distance terrain composition and preserve control locality.
 - Terrain forms, explicit coastline metadata, coast distance, and slope are engine data contracts beyond Mapgen4's elevation output (tasks 016 and 025).
 - Drainage uses conditioned terrain and terrain-only catchment area. Generated rainfall, humidity, moisture, and current river discharge are deliberately excluded in favor of future runtime weather (tasks 027 and 039).
@@ -92,7 +92,8 @@ Task 049 records the alignment audit. Differences not listed above require an ex
 ## Debugging And Tests
 
 - The compile-gated `GreaterRealmDebug` module counts terrain forms and coastal land independently, converts map data into an engine-neutral RGBA image, overlays exported rivers, and marks explicit peak cells.
-- The debug image uses relative ocean-depth shading and a one-cell dark coastline accent while preserving the underlying plains, hills, highlands, or mountain colour.
+- The default terrain view maps normalized land elevation through a continuous lowland-to-summit colour ramp with a restrained terrain-form tint. This is geography visualization only and does not assign biomes or consume runtime weather fields.
+- The debug image preserves relative ocean-depth shading and a one-cell dark coastline accent. A separate `Terrain forms` base view retains the categorical plains, hills, highlands, and mountain palette.
 - Runtime base views expose terrain forms, elevation, signed landmass, hill relief, mountain relief, mountain influence, slope, coast distance, and catchment area.
 - Coastlines, mountain peaks, rivers, and sampled drainage directions are independent overlays. Terrain with coastlines, peaks, and rivers enabled remains the default view.
 - Changing a base view or overlay rebuilds only the RGBA image and preview texture from the retained map; it does not regenerate procedural data.
@@ -117,4 +118,3 @@ Task 049 records the alignment audit. Differences not listed above require an ex
 - Beach, cliff, rocky-shore, marsh, delta, or other detailed shoreline classification.
 - A derived Delaunay/Voronoi render surface; task 032 rejected it as the canonical greater-realm representation.
 - Mapgen4's irregular folded mesh around coasts, ridges, valleys, and rivers. The supported 2.5D path is a continuous triangulated regular-grid heightfield instead.
-- Continuous elevation-informed terrain colouring.

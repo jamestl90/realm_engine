@@ -35,6 +35,77 @@ DebugColour three_colour_gradient(
     return mix_colour(middle, high, (normalized - 0.5f) * 2.0f);
 }
 
+DebugColour ocean_depth_colour(const GreaterRealmCell& cell) noexcept {
+    const float relative_depth = 1.0f - std::clamp(
+        cell.elevation / NORMALIZED_WATERLINE,
+        0.0f,
+        1.0f
+    );
+    const float shallow = 1.0f - std::sqrt(relative_depth);
+    return mix_colour({3, 18, 52, 255}, {66, 145, 196, 255}, shallow);
+}
+
+DebugColour terrain_form_colour(const GreaterRealmCell& cell) noexcept {
+    const float land_range = 1.0f - NORMALIZED_WATERLINE;
+    const float relative_height = std::clamp(
+        (cell.elevation - NORMALIZED_WATERLINE) / land_range,
+        0.0f,
+        1.0f
+    );
+    const float shade = 0.62f + relative_height * 0.38f;
+    const auto shaded = [shade](DebugColour colour) noexcept {
+        colour.r = static_cast<std::uint8_t>(static_cast<float>(colour.r) * shade);
+        colour.g = static_cast<std::uint8_t>(static_cast<float>(colour.g) * shade);
+        colour.b = static_cast<std::uint8_t>(static_cast<float>(colour.b) * shade);
+        return colour;
+    };
+
+    switch (cell.terrain_form) {
+        case TerrainForm::Ocean: return ocean_depth_colour(cell);
+        case TerrainForm::Plains: return shaded({78, 150, 82, 255});
+        case TerrainForm::Hills: return shaded({112, 136, 74, 255});
+        case TerrainForm::Highlands: return shaded({126, 112, 94, 255});
+        case TerrainForm::Mountains: return shaded({192, 194, 188, 255});
+    }
+    return {255, 0, 255, 255};
+}
+
+DebugColour continuous_terrain_colour(const GreaterRealmCell& cell) noexcept {
+    if (cell.terrain_form == TerrainForm::Ocean) {
+        return ocean_depth_colour(cell);
+    }
+
+    const float relative_height = std::clamp(
+        (cell.elevation - NORMALIZED_WATERLINE) / (1.0f - NORMALIZED_WATERLINE),
+        0.0f,
+        1.0f
+    );
+
+    DebugColour elevation_colour;
+    if (relative_height < 0.35f) {
+        elevation_colour = mix_colour(
+            {67, 132, 78, 255},
+            {119, 143, 78, 255},
+            relative_height / 0.35f
+        );
+    } else if (relative_height < 0.72f) {
+        elevation_colour = mix_colour(
+            {119, 143, 78, 255},
+            {151, 130, 106, 255},
+            (relative_height - 0.35f) / 0.37f
+        );
+    } else {
+        elevation_colour = mix_colour(
+            {151, 130, 106, 255},
+            {224, 224, 214, 255},
+            (relative_height - 0.72f) / 0.28f
+        );
+    }
+
+    constexpr float form_tint_strength = 0.12f;
+    return mix_colour(elevation_colour, terrain_form_colour(cell), form_tint_strength);
+}
+
 float scalar_maximum_for_view(const GreaterRealmMap& map, GreaterRealmDebugView view) noexcept {
     float maximum = 0.0f;
     for (const auto& cell : map.cells) {
@@ -111,6 +182,7 @@ TerrainFormCounts count_terrain_forms(const GreaterRealmMap& map) noexcept {
 const char* to_string(GreaterRealmDebugView view) noexcept {
     switch (view) {
         case GreaterRealmDebugView::Terrain: return "Terrain";
+        case GreaterRealmDebugView::TerrainForms: return "Terrain forms";
         case GreaterRealmDebugView::Elevation: return "Elevation";
         case GreaterRealmDebugView::Landmass: return "Landmass";
         case GreaterRealmDebugView::HillRelief: return "Hill relief";
@@ -190,43 +262,13 @@ DebugColour greater_realm_debug_colour(
                 {204, 242, 240, 255}
             );
         }
+        case GreaterRealmDebugView::TerrainForms:
+            return terrain_form_colour(cell);
         case GreaterRealmDebugView::Terrain:
+            return continuous_terrain_colour(cell);
         case GreaterRealmDebugView::Count:
             break;
     }
-
-    if (cell.terrain_form == TerrainForm::Ocean) {
-        const float relative_depth = 1.0f - std::clamp(cell.elevation / NORMALIZED_WATERLINE, 0.0f, 1.0f);
-        const float shallow = 1.0f - std::sqrt(relative_depth);
-        const auto mix = [shallow](std::uint8_t deep, std::uint8_t coast) -> std::uint8_t {
-            return static_cast<std::uint8_t>(
-                static_cast<float>(deep)
-                + (static_cast<float>(coast) - static_cast<float>(deep)) * shallow
-            );
-        };
-        return {mix(3, 66), mix(18, 145), mix(52, 196), 255};
-    }
-
-    const float land_range = 1.0f - NORMALIZED_WATERLINE;
-    const float relative_land_height = std::clamp((cell.elevation - NORMALIZED_WATERLINE) / land_range, 0.0f, 1.0f);
-    const float shade = 0.62f + relative_land_height * 0.38f;
-    const auto scale = [shade](std::uint8_t value) -> std::uint8_t {
-        return static_cast<std::uint8_t>(static_cast<float>(value) * shade);
-    };
-
-    switch (cell.terrain_form) {
-        case TerrainForm::Ocean:
-            break;
-        case TerrainForm::Plains:
-            return {scale(78), scale(150), scale(82), 255};
-        case TerrainForm::Hills:
-            return {scale(112), scale(136), scale(74), 255};
-        case TerrainForm::Highlands:
-            return {scale(126), scale(112), scale(94), 255};
-        case TerrainForm::Mountains:
-            return {scale(192), scale(194), scale(188), 255};
-    }
-
     return {255, 0, 255, 255};
 }
 

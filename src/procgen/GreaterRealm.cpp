@@ -22,6 +22,7 @@ constexpr float MOUNTAIN_RELIEF_SCALE = 0.74f;
 constexpr float RIDGE_RELIEF_SCALE = 0.14f;
 constexpr float VALLEY_RELIEF_SCALE = 0.12f;
 constexpr float TERRAIN_NOISE_RELIEF_SCALE = 0.10f;
+constexpr float COASTLINE_DETAIL_SUPPORT = 0.20f;
 
 [[nodiscard]] float clamp01(float value) noexcept {
     return std::clamp(value, 0.0f, 1.0f);
@@ -496,7 +497,11 @@ void build_terrain_fields(
             const float coastline_noise = coastline_noise4
                 + coastline_noise5 * 0.5f
                 + coastline_noise6 * 0.25f;
-            const float coastline_attenuation = 1.0f - std::pow(broad_constraint, 4.0f);
+            const float coastline_attenuation = 1.0f - smoothstep(
+                0.0f,
+                COASTLINE_DETAIL_SUPPORT,
+                std::abs(broad_constraint)
+            );
             const float landmass_elevation = std::clamp(
                 broad_constraint
                     + coastline_noise * std::max(settings.coastline_noise_weight, 0.0f) * coastline_attenuation,
@@ -505,7 +510,7 @@ void build_terrain_fields(
             );
 
             const float base_elevation = fbm(settings.seed, u, v, settings.base_elevation_frequency, 101ull, 5);
-            const float mountain_mask = smoothstep(0.05f, 0.85f, landmass_elevation);
+            const float mountain_mask = smoothstep(0.05f, 0.85f, broad_constraint);
             const float ridge_influence = std::pow(
                 ridged_noise(settings.seed, u, v, settings.ridge_frequency, 307ull, 3),
                 3.0f
@@ -513,7 +518,7 @@ void build_terrain_fields(
             const float valley_influence = std::pow(
                 ridged_noise(settings.seed, u, v, settings.valley_frequency, 401ull, 4),
                 2.0f
-            ) * smoothstep(0.02f, 0.75f, landmass_elevation);
+            ) * smoothstep(0.02f, 0.75f, broad_constraint);
             const float terrain_noise = fbm(
                 settings.seed,
                 u,
@@ -543,6 +548,7 @@ void build_terrain_fields(
             cell.x = static_cast<std::int32_t>(x);
             cell.y = static_cast<std::int32_t>(y);
             cell.landmass_elevation = landmass_elevation;
+            cell.relief_constraint = broad_constraint;
             cell.is_water = landmass_elevation <= 0.0f;
         }
     }
@@ -576,7 +582,7 @@ void compose_relief(
             continue;
         }
 
-        const float positive_constraint = clamp01(cell.landmass_elevation);
+        const float positive_constraint = clamp01(cell.relief_constraint);
         const float constraint_blend = positive_constraint * positive_constraint;
         const float hill_relief = clamp01(
             MIN_LAND_RELIEF + layer.base_elevation * base_weight * HILL_RELIEF_SCALE
@@ -599,8 +605,8 @@ void compose_relief(
 
         cell.hill_relief = hill_relief;
         cell.mountain_relief = mountain_relief;
-        const float inland_influence = smoothstep(0.0f, 0.45f, cell.landmass_elevation);
-        const float coastal_rise = 0.01f + 0.14f * clamp01(cell.landmass_elevation / 0.45f);
+        const float inland_influence = smoothstep(0.0f, 0.45f, positive_constraint);
+        const float coastal_rise = 0.01f + 0.14f * clamp01(positive_constraint / 0.45f);
         const float land_height = clamp01(lerp(coastal_rise, relief, inland_influence));
         cell.elevation =
             NORMALIZED_WATERLINE + (1.0f - NORMALIZED_WATERLINE) * land_height;
