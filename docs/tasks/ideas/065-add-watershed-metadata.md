@@ -1,7 +1,7 @@
 # Add Watershed Metadata
 
-Status: todo
-Priority: high
+Status: idea
+Priority: deferred
 Area: Procgen / Hydrology
 
 ## Goal
@@ -37,3 +37,5 @@ Watersheds are stable generated geography. They can support later region plannin
 Watershed identity is natural-geography metadata, not a streaming chunk or persistence-region identifier.
 
 No branch is required unless implementation reveals a broader drainage data redesign.
+
+This idea is deliberately parked. Basin-aware simulation is interesting, but it is not a near-term requirement, and natural-disaster-style gameplay is not a current project priority. Reassess it if regions, biome rules, settlement suitability, or another non-disaster feature develops a concrete need for watershed identity.

@@ -1,13 +1,16 @@
 # Task Workflow
 
-This folder tracks engine work across its full lifecycle, including queued, active, testing, and completed work. Each task should live as a single Markdown file and move through the status folders as work progresses:
+This folder tracks engine work across its full lifecycle, including parked ideas, queued work, active work, testing, and completed work. Each record should live as a single Markdown file in the folder matching its current state:
 
+- `ideas`: worthwhile proposals that are deliberately parked and are not part of the active backlog.
 - `todo`: queued work that has not started.
 - `inprogress`: active work.
 - `testing`: implemented work that needs verification.
 - `complete`: finished work.
 
 Task files are planning records, not a branch policy. Small tasks can be completed directly with focused commits, and related small tasks can be grouped when they naturally belong together.
+
+Ideas do not enter the required task process until they are promoted to `todo`. When an idea becomes a real priority, review and update its scope, dependencies, and acceptance criteria before moving it into the active backlog.
 
 ## Required Process
 

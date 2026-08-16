@@ -40,7 +40,7 @@ This task changes debug tooling only. The serialized constraint format and gener
 - Added selectable Ocean, Shallow, Valley, and Mountain brush buttons with visible selected state.
 - Added the compile-gated, engine-neutral `TerrainConstraintPainting` module for preview-coordinate conversion, tool selection, duplicate suppression, and drag lifecycle.
 - Added UI-aware game event delivery so preview painting ignores consumed UI input while mouse release still reliably ends a stroke.
-- Composed paint samples with the existing `TerrainConstraintField` in `RogueFarmGame` without changing constraint serialization or generator integration.
+- Composed paint samples with the existing `TerrainConstraintField` without changing constraint serialization or generator integration.
 - Batched paint-triggered generation so multiple pointer samples regenerate at most once per frame.
 - Cancelled active strokes on pointer release, window focus loss, and window mouse leave.
 
