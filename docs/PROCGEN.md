@@ -20,9 +20,9 @@ This document tracks the procedural generation capabilities currently present in
 - Uses fixed sites with a positive unperturbed/authored relief constraint as stable mountain-distance sources. It exports visible peak records only for source sites that remain land after coastline perturbation; authored negative constraints can make sources dormant, while coastline detail cannot reshape the global mountain field.
 - Exports peak records plus per-cell peak distance, influence, and peak flags for hydrology and tooling.
 - Exports per-cell hill and mountain relief stages for debugging and tests.
-- Marks boundary-connected water as ocean.
+- Marks boundary-connected water as ocean and classifies enclosed water separately as inland water.
 - Computes distance to coast, explicit coastal-land boundary metadata, and local slope.
-- Classifies water as ocean and land as plains, hills, highlands, or mountains, including land directly beside water.
+- Classifies water as ocean or inland water and land as plains, hills, highlands, or mountains, including land directly beside water.
 - Treats coastline proximity independently from terrain form so coastal relief is not replaced by a generic beach classification.
 - Accepts an optional, lower-resolution authored constraint field with ocean, shallow-water, valley, and mountain tools.
 - Bilinearly samples authored constraints and blends them once into the automatic signed terrain field. The resulting signed field controls water/land topology, coastline perturbation, and positive-land relief selection; painted values are not reapplied later as direct final-relief targets.
@@ -95,7 +95,7 @@ Task 049 records the alignment audit. Differences not listed above require an ex
 
 - The compile-gated `GreaterRealmDebug` module counts terrain forms and coastal land independently, converts map data into an engine-neutral RGBA image, overlays exported rivers, and marks explicit peak cells.
 - The default terrain view maps normalized land elevation through a continuous nonlinear lowland-to-summit colour ramp with fixed anchors at `0.50, 0.54, 0.59, 0.65, 0.75, 0.86, 1.00`. Closely spaced lowland and hill anchors emphasize the range occupied by most generated terrain while fixed rock and summit anchors preserve cross-map height meaning. A restrained terrain-form tint remains secondary; this is geography visualization only and does not assign biomes or consume runtime weather fields.
-- The debug image preserves relative ocean-depth shading and a one-cell dark coastline accent. A separate `Terrain forms` base view retains the categorical plains, hills, highlands, and mountain palette.
+- The debug image preserves relative water-depth shading, distinguishes ocean from inland water, and retains a one-cell dark coastline accent. A separate `Terrain forms` base view retains the categorical water and land-form palette.
 - Runtime base views expose terrain forms, elevation, signed landmass, hill relief, mountain relief, mountain influence, slope, coast distance, and catchment area.
 - Coastlines, mountain peaks, rivers, and sampled drainage directions are independent overlays. Terrain with coastlines, peaks, and rivers enabled remains the default view.
 - Changing a base view or overlay rebuilds only the RGBA image and preview texture from the retained map; it does not regenerate procedural data.
@@ -108,12 +108,12 @@ Task 049 records the alignment audit. Differences not listed above require an ex
 - Terrain noise and ocean depth use larger tuning steps and contrast-enhanced debug shading so changes are visible.
 - Debug builds report per-stage generation timings plus end-to-end control-to-preview timing through the Debug-only `REALM_ENABLE_PROCGEN_PROFILING` definition; profiling code is compiled out of production builds.
 - `REALM_OPTIMIZE_PROCGEN_DEBUG` defaults to `ON`, compiling the interactive procgen runtime with optimization in Debug builds while dedicated test targets retain their normal Debug checks. Disable it when stepping through procgen at instruction level is more important than interactive tuning speed.
-- Automated tests cover output shape, deterministic seeds, map lookup, signed constraints, topology stability, ocean connectivity, sea-level invariance, Mapgen4 coastline attenuation, terrain statistics, hill/mountain relief-stage separation, land-relief control ranges, stable fixed peak selection/spacing/distribution/dormancy/distance fields, one-stage authored-constraint composition, constraint interpolation/serialization, preview-coordinate mapping, paint interaction state, brush setting clamping/effect, drainage invariants, catchment accumulation, channel connectivity, staged-regeneration equivalence and timing paths, and debug-image output.
+- Automated tests cover output shape, deterministic seeds, map lookup, signed constraints, topology stability, ocean connectivity, inland-water classification, sea-level invariance, Mapgen4 coastline attenuation, terrain statistics, hill/mountain relief-stage separation, land-relief control ranges, stable fixed peak selection/spacing/distribution/dormancy/distance fields, one-stage authored-constraint composition, constraint interpolation/serialization, preview-coordinate mapping, paint interaction state, brush setting clamping/effect, drainage invariants, catchment accumulation, channel connectivity, staged-regeneration equivalence and timing paths, and debug-image output.
 - Test code is compiled only when `REALM_BUILD_TESTS=ON` and does not enter release builds.
 
 ## Not Yet Supported
 
-- Lakes as a classified terrain form, river erosion, deltas, or watershed metadata.
+- Lake retention, shared water-surface levels, river erosion, deltas, or watershed metadata. Enclosed water is classified as inland water without implying those hydrological behaviors.
 - Runtime weather, precipitation, runoff, soil moisture, or active river discharge; task 040 tracks this future simulation layer.
 - Resources, settlements, factions, or object placement.
 - Local tile generation or world-region streaming.

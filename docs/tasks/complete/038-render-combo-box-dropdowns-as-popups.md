@@ -20,4 +20,4 @@ Ensure open combo-box dropdowns render above all normal UI elements regardless o
 
 - Added a regression test confirming an open dropdown does not change combo-box layout height.
 - UI and full engine test suites pass.
-- Debug and Release game targets build successfully.
+- Debug and Release runtime targets build successfully.

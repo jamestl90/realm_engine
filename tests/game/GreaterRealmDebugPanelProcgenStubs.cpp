@@ -12,6 +12,9 @@ TerrainFormCounts count_terrain_forms(const GreaterRealmMap& map) noexcept {
             case TerrainForm::Ocean:
                 ++counts.ocean;
                 break;
+            case TerrainForm::InlandWater:
+                ++counts.inland_water;
+                break;
             case TerrainForm::Plains:
                 ++counts.plains;
                 break;

@@ -24,14 +24,14 @@ Out of scope for this task: biomes, weather, clans, settlements, object placemen
 - Produce elevation, water/ocean flags, coast distance, slope, and terrain-form classification.
 - Keep the first generator focused on broad terrain form only.
 - Add automated sanity tests for deterministic output and valid generated data.
-- Keep test-only code outside the release game executable.
+- Keep test-only code outside the release runtime executable.
 
 ## Verification
 
 - Greater realm data and deterministic generation are implemented under `include/procgen` and `src/procgen`.
 - Procgen tests cover deterministic output, valid map storage, topology, elevation, water/ocean classification, coast response, and terrain forms.
 - The procgen test target passes.
-- Debug and Release game builds pass, with test-only code excluded from the game executable.
+- Debug and Release runtime builds pass, with test-only code excluded from the runtime executable.
 - Subsequent visualization and tuning tasks have exercised the generated output through the runtime rendering path.
 
 ## Notes

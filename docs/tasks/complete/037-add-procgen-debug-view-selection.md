@@ -21,7 +21,7 @@ Inspect different greater-realm data layers at runtime without regenerating the 
 ## Verification
 
 - All eight Debug test suites pass.
-- Debug and Release game targets build successfully.
+- Debug and Release runtime targets build successfully.
 - Live interaction produced texture refreshes without procgen-stage or generated-map logs.
 - Captured 1982x1190 window verification confirms all controls and summaries fit without overlap.
 

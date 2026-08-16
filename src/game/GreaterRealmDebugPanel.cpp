@@ -45,11 +45,17 @@ std::string percent_text(const char* label, float value) {
 
 std::string coverage_text(const procgen::GreaterRealmMap& map, const procgen::TerrainFormCounts& counts) {
     const auto total = static_cast<float>(map.cells.size());
-    const float land_percent = total > 0.0f ? (total - static_cast<float>(counts.ocean)) * 100.0f / total : 0.0f;
+    const auto water_count = counts.ocean + counts.inland_water;
+    const float land_percent = total > 0.0f ? (total - static_cast<float>(water_count)) * 100.0f / total : 0.0f;
     const float ocean_percent = total > 0.0f ? static_cast<float>(counts.ocean) * 100.0f / total : 0.0f;
+    const float inland_water_percent = total > 0.0f
+        ? static_cast<float>(counts.inland_water) * 100.0f / total
+        : 0.0f;
 
     std::ostringstream stream;
-    stream << "Land " << format_float(land_percent) << "%  Ocean " << format_float(ocean_percent) << "%";
+    stream << "Land " << format_float(land_percent)
+           << "%  Ocean " << format_float(ocean_percent)
+           << "%  Inland " << format_float(inland_water_percent) << "%";
     return stream.str();
 }
 

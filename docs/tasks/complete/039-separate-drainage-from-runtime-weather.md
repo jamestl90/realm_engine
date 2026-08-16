@@ -39,5 +39,5 @@ The greater-realm generator currently creates humidity, rainfall, and moisture d
 
 - All eight freshly rebuilt Debug test suites pass.
 - Focused hydrology tests cover physical cell-area contribution, downstream accumulation, connectivity, threshold independence, deterministic output, and channel visualization.
-- Tests-disabled Debug and Release game builds succeed.
+- Tests-disabled Debug and Release runtime builds succeed.
 - Compiled engine and test sources contain no generated climate API, weather setting, or moisture-derived flow references.

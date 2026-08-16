@@ -6,7 +6,7 @@ namespace core {
 
 class Engine;
 
-// Base class for game-specific logic
+// Base class for host application logic
 // Inherit from this and implement the virtual methods
 class Game {
 public:

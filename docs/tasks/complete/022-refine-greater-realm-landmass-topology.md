@@ -32,8 +32,8 @@ Mapgen4 starts from signed elevation constraints, perturbs the coastline near th
 
 - `procgen_greater_realm` passes with signed constraint, topology stability, sea-level response, and ocean-connectivity coverage.
 - All five isolated test suites pass together.
-- The procgen debug game target builds with tests enabled.
-- Tests-disabled Debug and Release game targets build successfully.
+- The procgen debug runtime target builds with tests enabled.
+- Tests-disabled Debug and Release runtime targets build successfully.
 - Test code remains isolated behind `REALM_BUILD_TESTS=ON` and does not enter release builds.
 - 2026-08-16 closure check: `ctest --test-dir out/build/debug-with-tests --output-on-failure` passed, 14/14.
 - 2026-08-16 closure check: `cmake --build --preset debug-with-tests` and `cmake --build --preset release-no-tests` were already up to date.

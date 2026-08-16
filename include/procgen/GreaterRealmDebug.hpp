@@ -31,6 +31,7 @@ struct GreaterRealmDebugOptions {
 
 struct TerrainFormCounts {
     std::size_t ocean{0};
+    std::size_t inland_water{0};
     std::size_t coastal_land{0};
     std::size_t plains{0};
     std::size_t hills{0};

@@ -33,5 +33,5 @@ The 3D viewport uses the correct debug-panel boundary, but its orthographic proj
 
 - `realm_terrain_mesh_tests` passed.
 - Full `ctest --test-dir out/build/debug-with-tests --output-on-failure` passed, 14/14.
-- Debug application and Release game builds passed.
+- Debug and Release runtime builds passed.
 - Launched the native application, switched to 3D mode, and visually confirmed the terrain fills the shared viewport closely with a narrow border and no clipped coastline.

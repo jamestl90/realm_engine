@@ -75,13 +75,13 @@ void Engine::shutdown() noexcept {
         return;
     }
 
-    // Notify game of shutdown
+    // Notify host application of shutdown
     if (game_) {
         game_->on_shutdown(*this);
         ui_manager_.setRoot(nullptr);
         game_.reset();
     }
-    SDL_Log("Game Shutdown");
+    SDL_Log("Host application shutdown");
 
     // Remove texture manager from world resources
     world_.remove_resource<rendering::TextureManager>();
@@ -145,7 +145,7 @@ void Engine::run() {
         return;
     }
 
-    // Call game startup hook
+    // Call host application startup hook
     if (game_) {
         game_->on_startup(*this);
     }
@@ -280,7 +280,7 @@ void Engine::update(double dt) {
     // Update UI manager
     ui_manager_.update(static_cast<float>(dt));
 
-    // Call game update hook
+    // Call host application update hook
     if (game_) {
         game_->on_update(*this, dt);
     }
@@ -316,7 +316,7 @@ void Engine::render(double alpha) {
     // Render ECS world sprites over the terrain pass.
     renderer_->render(world_, alpha);
 
-    // Call game render hook for custom rendering between world sprites and retained UI.
+    // Call host application render hook for custom rendering between world sprites and retained UI.
     if (game_) {
         game_->on_render(*this, alpha);
     }

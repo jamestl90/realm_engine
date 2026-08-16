@@ -1,6 +1,12 @@
-# High-Performance 2D Game Engine Architecture
+# High-Performance 2D Engine Architecture
 
-This document owns the engine's technical design. Project scope and product intent belong in [PROJECT_BRIEF.md](PROJECT_BRIEF.md).
+This document owns the engine's intent, scope, and technical design.
+
+## Intent And Scope
+
+Build a reusable 2D engine with clear ownership boundaries, deterministic runtime systems, and shared tooling. This repository is engine-only: reusable runtime code, generation systems, rendering, ECS, asset handling, tests, and documentation belong here.
+
+Product-specific content, bespoke mechanics, release packaging, and application policy are outside this repository's scope. In-repository demos and debug views exist only to validate engine systems.
 
 ## Overview
 This engine is built on a pure Entity Component System (ECS) architecture with Data-Oriented Design (DoD) principles, leveraging SDL3 and the SDL3 GPU API for high-performance 2D rendering.
@@ -20,7 +26,7 @@ This engine is built on a pure Entity Component System (ECS) architecture with D
 ### 3. Fixed Timestep Loop
 - **Deterministic updates**: Fixed timestep (e.g., 60 Hz) for physics/logic
 - **Interpolated rendering**: Smooth visuals independent of update rate
-- **Time control**: Pause, slow-motion, fast-forward support
+- **Time control**: Pause, slow-motion, and fast-forward support for simulation
 
 ### 4. GPU-Driven Rendering
 - **Batch rendering**: Minimize draw calls via texture atlases and instancing
@@ -30,7 +36,7 @@ This engine is built on a pure Entity Component System (ECS) architecture with D
 ### 5. Modular Ownership
 - **Build modularly from the start**: New behavior should be placed in the module that owns it instead of accumulating in convenient application or engine entry-point files
 - **No monolith files**: Classes and source files should have cohesive responsibilities; split them when they begin coordinating unrelated systems or embedding reusable subsystem logic
-- **Application/engine boundary**: Games compose engine APIs and own game-specific policy, while reusable generation, rendering, ECS, asset, and tooling behavior belongs in engine modules
+- **Application/engine boundary**: Host applications compose engine APIs and own product-specific policy, while reusable generation, rendering, ECS, asset, and tooling behavior belongs in engine modules
 - **Refactor continuously**: Refactor ownership and dependencies as responsibilities become clear rather than postponing all structural work until files become difficult to change
 - **Prefer meaningful modules**: Modular design does not require a separate file for every small helper; extract code when it establishes a clear boundary, reusable capability, or independently testable unit
 
@@ -59,7 +65,7 @@ graph TB
         System[System Registry]
     end
     
-    subgraph "Game Systems"
+    subgraph "Runtime Systems"
         Input[Input System]
         Physics[Physics & Collision]
         Pathfinding[A* Pathfinding]
@@ -112,7 +118,7 @@ sequenceDiagram
     participant GPU
     
     Main->>Engine: Run()
-    loop Game Loop
+    loop Runtime Loop
         Engine->>Engine: Accumulate dt
         
         loop While lag >= fixed_dt
@@ -150,8 +156,8 @@ sequenceDiagram
 
 ### Core Engine (`include/core/`)
 - **Engine**: Main loop with fixed timestep and interpolation
-- **Time**: Manages game time, pause, time scale
-- **Frame composition**: Renders ECS sprites, invokes optional game-specific rendering, then renders the retained UI tree
+- **Time**: Manages simulation time, pause, and time scale
+- **Frame composition**: Renders ECS sprites, invokes optional host rendering callbacks, then renders the retained UI tree
 
 ### Rendering (`include/rendering/`)
 - **Renderer**: SDL3 GPU batch renderer with instancing
@@ -166,7 +172,7 @@ sequenceDiagram
 - **MountainPeaks**: Deterministic spaced peak selection and jagged multi-source mountain distance fields
 - **GreaterRealmDebug**: Compile-gated, engine-neutral terrain statistics and RGBA debug visualization
 - **Ownership boundary**: Applications own generator settings, controls, and preview composition; procgen modules own reusable generation and visualization behavior
-- **Canonical terrain representation**: Greater-realm generation and gameplay data remain on the regular grid. Irregular or triangulated geometry may be derived for rendering, but must not become authoritative world data without a new measured architecture decision. The task 032 record owns the grid-versus-dual-mesh evaluation.
+- **Canonical terrain representation**: Greater-realm generation and simulation data remain on the regular grid. Irregular or triangulated geometry may be derived for rendering, but must not become authoritative world data without a new measured architecture decision. The task 032 record owns the grid-versus-dual-mesh evaluation.
 
 ### Physics (`include/physics/`)
 - **SpatialPartition**: Grid-based spatial hash for broad-phase collision
@@ -246,7 +252,7 @@ project/
 
 ### Overview
 
-The Asset Management system provides a centralised, efficient pipeline for loading, caching, and managing all game resources. It follows industry-standard practices including reference counting, asynchronous loading, hot-reloading for development, and a virtual file system abstraction.
+The Asset Management system provides a centralised, efficient pipeline for loading, caching, and managing runtime resources. It follows industry-standard practices including reference counting, asynchronous loading, hot-reloading for development, and a virtual file system abstraction.
 
 ### Implementation Decisions
 
@@ -271,7 +277,7 @@ The following decisions have been made for the initial implementation:
 
 ### Core Asset Types
 
-The engine requires the following asset types for a complete 2D game:
+The engine supports the following asset types for a complete 2D runtime:
 
 #### 1. Texture Assets
 - **Single Textures**: Individual image files (PNG, BMP, TGA)
@@ -339,7 +345,7 @@ The engine requires the following asset types for a complete 2D game:
 #### 6. Data Assets
 - **Level Data**: Tile layouts, entity placements, triggers
 - **Entity Prefabs**: Pre-configured entity templates
-- **Configuration Files**: Game settings, balance data
+- **Configuration Files**: Runtime settings and tuning data
 - **Dialogue/Localisation**: Text strings with language variants
 
 **Formats:**
@@ -414,21 +420,21 @@ AssetHandle<T>
 
 ```mermaid
 sequenceDiagram
-    participant Game
+    participant Host
     participant AM as AssetManager
     participant VFS as Virtual FS
     participant Loader as AsyncLoader
     participant Cache
     
-    Game->>AM: request<Texture>("sprites/player.png")
+    Host->>AM: request<Texture>("sprites/player.png")
     AM->>Cache: check_cache(path)
     
     alt Cache Hit
         Cache-->>AM: return handle
-        AM-->>Game: AssetHandle<Texture>
+        AM-->>Host: AssetHandle<Texture>
     else Cache Miss
         AM->>Loader: queue_load(path, priority)
-        AM-->>Game: AssetHandle<Texture> (pending)
+        AM-->>Host: AssetHandle<Texture> (pending)
         
         Loader->>VFS: read_file(path)
         VFS-->>Loader: file_data
@@ -443,7 +449,7 @@ sequenceDiagram
 The VFS provides platform-independent asset access:
 
 **Mount Points:**
-- `assets/` - Main game assets
+- `assets/` - Main runtime assets
 - `mods/` - User modifications (optional)
 - `cache/` - Processed/compiled assets
 

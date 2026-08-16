@@ -21,7 +21,7 @@ The debug rendering path should be temporary/development-facing and should not b
 - Convert terrain forms into a simple coloured debug texture.
 - Render the debug texture through the existing sprite/ECS rendering path.
 - Keep the debug visualization compile-gated so it does not compile into release builds by default.
-- Verify the normal game target still builds.
+- Verify the normal runtime target still builds.
 - Verify a release configuration can compile without the debug visualization enabled.
 
 ## Notes

@@ -61,6 +61,16 @@ DebugColour ocean_depth_colour(const GreaterRealmCell& cell) noexcept {
     return mix_colour({3, 18, 52, 255}, {66, 145, 196, 255}, shallow);
 }
 
+DebugColour inland_water_colour(const GreaterRealmCell& cell) noexcept {
+    const float relative_depth = 1.0f - std::clamp(
+        cell.elevation / NORMALIZED_WATERLINE,
+        0.0f,
+        1.0f
+    );
+    const float shallow = 1.0f - std::sqrt(relative_depth);
+    return mix_colour({8, 48, 58, 255}, {82, 177, 160, 255}, shallow);
+}
+
 DebugColour terrain_form_colour(const GreaterRealmCell& cell) noexcept {
     const float land_range = 1.0f - NORMALIZED_WATERLINE;
     const float relative_height = std::clamp(
@@ -78,6 +88,7 @@ DebugColour terrain_form_colour(const GreaterRealmCell& cell) noexcept {
 
     switch (cell.terrain_form) {
         case TerrainForm::Ocean: return ocean_depth_colour(cell);
+        case TerrainForm::InlandWater: return inland_water_colour(cell);
         case TerrainForm::Plains: return shaded({78, 150, 82, 255});
         case TerrainForm::Hills: return shaded({112, 136, 74, 255});
         case TerrainForm::Highlands: return shaded({126, 112, 94, 255});
@@ -103,6 +114,9 @@ DebugColour terrain_elevation_colour(float elevation) noexcept {
 DebugColour continuous_terrain_colour(const GreaterRealmCell& cell) noexcept {
     if (cell.terrain_form == TerrainForm::Ocean) {
         return ocean_depth_colour(cell);
+    }
+    if (cell.terrain_form == TerrainForm::InlandWater) {
+        return inland_water_colour(cell);
     }
 
     const DebugColour elevation_colour = terrain_elevation_colour(cell.elevation);
@@ -164,6 +178,9 @@ TerrainFormCounts count_terrain_forms(const GreaterRealmMap& map) noexcept {
         switch (cell.terrain_form) {
             case TerrainForm::Ocean:
                 ++counts.ocean;
+                break;
+            case TerrainForm::InlandWater:
+                ++counts.inland_water;
                 break;
             case TerrainForm::Plains:
                 ++counts.plains;

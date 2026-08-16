@@ -3,7 +3,7 @@
   "configurePresets": [
     {
       "name": "debug-no-tests",
-      "displayName": "Debug game (tests excluded)",
+      "displayName": "Debug runtime (tests excluded)",
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/out/build/debug-no-tests",
       "cacheVariables": {
@@ -14,7 +14,7 @@
     },
     {
       "name": "release-no-tests",
-      "displayName": "Release game (tests excluded)",
+      "displayName": "Release runtime (tests excluded)",
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/out/build/release-no-tests",
       "cacheVariables": {

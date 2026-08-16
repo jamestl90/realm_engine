@@ -1,7 +1,9 @@
 #include "game/GreaterRealmDebugPanel.hpp"
 #include "ui/Button.hpp"
 #include "ui/InputSurface.hpp"
+#include "ui/Primitives.hpp"
 #include "ui/Slider.hpp"
+#include <algorithm>
 #include <cmath>
 #include <iostream>
 #include <vector>
@@ -38,6 +40,11 @@ procgen::GreaterRealmMap make_smoke_map() {
             cell.terrain_form = procgen::TerrainForm::Plains;
         }
     }
+    map.cells[0].terrain_form = procgen::TerrainForm::Ocean;
+    map.cells[0].is_water = true;
+    map.cells[0].is_ocean = true;
+    map.cells[1].terrain_form = procgen::TerrainForm::InlandWater;
+    map.cells[1].is_water = true;
     return map;
 }
 
@@ -62,6 +69,18 @@ void collect_buttons(ui::UIElement* element, std::vector<ui::Button*>& buttons) 
     }
     for (const auto& child : element->children()) {
         collect_buttons(child.get(), buttons);
+    }
+}
+
+void collect_text_blocks(ui::UIElement* element, std::vector<ui::TextBlock*>& text_blocks) {
+    if (!element) {
+        return;
+    }
+    if (auto* text = dynamic_cast<ui::TextBlock*>(element)) {
+        text_blocks.push_back(text);
+    }
+    for (const auto& child : element->children()) {
+        collect_text_blocks(child.get(), text_blocks);
     }
 }
 
@@ -134,6 +153,17 @@ bool test_panel_sliders_update_settings_and_callbacks() {
     std::vector<ui::Button*> buttons;
     collect_buttons(root.get(), buttons);
     ok &= require(buttons.size() >= 2, "debug panel builds Flat and 3D presentation buttons");
+
+    std::vector<ui::TextBlock*> text_blocks;
+    collect_text_blocks(root.get(), text_blocks);
+    const bool has_water_coverage = std::any_of(
+        text_blocks.begin(),
+        text_blocks.end(),
+        [](const ui::TextBlock* text) {
+            return text->text() == "Land 50.00%  Ocean 25.00%  Inland 25.00%";
+        }
+    );
+    ok &= require(has_water_coverage, "coverage summary separates ocean and inland water from land");
 
     click_button(*buttons[1]);
     ok &= require(

@@ -14,6 +14,7 @@ class TerrainConstraintField;
 
 enum class TerrainForm : std::uint8_t {
     Ocean,
+    InlandWater,
     Plains,
     Hills,
     Highlands,

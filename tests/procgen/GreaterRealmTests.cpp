@@ -1,9 +1,11 @@
 #include "procgen/GreaterRealm.hpp"
 #include "procgen/GreaterRealmDebug.hpp"
+#include "procgen/TerrainConstraints.hpp"
 #include <array>
 #include <cmath>
 #include <cstddef>
 #include <iostream>
+#include <string_view>
 #include <vector>
 
 namespace {
@@ -277,7 +279,7 @@ bool test_generated_map_shape() {
 
     const auto map = procgen::generate_greater_realm(settings);
     const auto counts = procgen::count_terrain_forms(map);
-    const std::size_t land_count = map.cells.size() - counts.ocean;
+    const std::size_t land_count = map.cells.size() - counts.ocean - counts.inland_water;
 
     bool ok = true;
     ok &= require(map.seed == settings.seed, "map stores the requested seed");
@@ -973,34 +975,86 @@ bool test_coastal_land_preserves_elevation_form() {
     return ok;
 }
 
+bool test_inland_water_classification() {
+    procgen::GreaterRealmGeneratorSettings settings;
+    settings.seed = 424242;
+    settings.width = 65;
+    settings.height = 65;
+    settings.coastline_noise_weight = 0.0f;
+
+    procgen::TerrainConstraintField constraints(65, 65);
+    constraints.paint(procgen::TerrainConstraintTool::Mountain, 0.5f, 0.5f, 0.40f);
+    constraints.paint(procgen::TerrainConstraintTool::Ocean, 0.5f, 0.5f, 0.08f);
+
+    const auto map = procgen::generate_greater_realm(settings, constraints);
+    const auto repeated = procgen::generate_greater_realm(settings, constraints);
+    const auto center_index = map.index(settings.width / 2, settings.height / 2);
+    const auto& center = map.cells[center_index];
+    const auto counts = procgen::count_terrain_forms(map);
+
+    bool classifications_match_flags = true;
+    for (const auto& cell : map.cells) {
+        const auto expected = cell.is_ocean
+            ? procgen::TerrainForm::Ocean
+            : (cell.is_water ? procgen::TerrainForm::InlandWater : cell.terrain_form);
+        if ((cell.is_water && cell.terrain_form != expected)
+            || (!cell.is_water && procgen::is_water(cell.terrain_form))) {
+            classifications_match_flags = false;
+            break;
+        }
+    }
+
+    procgen::GreaterRealmCell ocean = center;
+    ocean.terrain_form = procgen::TerrainForm::Ocean;
+    const auto inland_colour = procgen::greater_realm_debug_colour(center, procgen::NORMALIZED_WATERLINE);
+    const auto ocean_colour = procgen::greater_realm_debug_colour(ocean, procgen::NORMALIZED_WATERLINE);
+
+    bool ok = true;
+    ok &= require(center.is_water, "authored enclosed-water center is water");
+    ok &= require(!center.is_ocean, "authored enclosed-water center is not boundary-connected ocean");
+    ok &= require(center.terrain_form == procgen::TerrainForm::InlandWater, "enclosed water uses the inland-water terrain form");
+    ok &= require(counts.inland_water > 0, "terrain statistics count inland water separately");
+    ok &= require(counts.ocean > 0, "terrain statistics retain boundary-connected ocean");
+    ok &= require(classifications_match_flags, "water terrain forms match ocean connectivity flags");
+    ok &= require(procgen::is_water(procgen::TerrainForm::Ocean), "ocean remains a water terrain form");
+    ok &= require(procgen::is_water(procgen::TerrainForm::InlandWater), "inland water satisfies the water-form predicate");
+    ok &= require(!procgen::is_water(procgen::TerrainForm::Plains), "land does not satisfy the water-form predicate");
+    ok &= require(std::string_view(procgen::to_string(procgen::TerrainForm::InlandWater)) == "inland water", "inland-water terrain form has a stable string");
+    ok &= require(inland_colour != ocean_colour, "default debug terrain distinguishes inland water from ocean");
+    ok &= require(maps_match(map, repeated), "inland-water classification is deterministic");
+    return ok;
+}
+
 bool test_debug_visualization_data() {
     procgen::GreaterRealmMap map;
-    map.width = 3;
-    map.height = 2;
-    map.cells.resize(6);
+    map.width = 7;
+    map.height = 1;
+    map.cells.resize(7);
 
     constexpr std::array forms{
         procgen::TerrainForm::Ocean,
+        procgen::TerrainForm::InlandWater,
         procgen::TerrainForm::Plains,
         procgen::TerrainForm::Plains,
         procgen::TerrainForm::Hills,
         procgen::TerrainForm::Highlands,
         procgen::TerrainForm::Mountains
     };
-    constexpr std::array elevations{0.1f, 0.58f, 0.58f, 0.65f, 0.75f, 0.95f};
+    constexpr std::array elevations{0.1f, 0.35f, 0.58f, 0.58f, 0.65f, 0.75f, 0.95f};
 
     for (std::size_t index = 0; index < map.cells.size(); ++index) {
         map.cells[index].terrain_form = forms[index];
         map.cells[index].elevation = elevations[index];
     }
-    map.cells[1].is_coastal = true;
-    map.cells[5].is_coastal = true;
+    map.cells[2].is_coastal = true;
+    map.cells[6].is_coastal = true;
 
     const auto counts = procgen::count_terrain_forms(map);
     const auto image = procgen::build_greater_realm_debug_image(map, 0.5f);
 
     bool ok = true;
     ok &= require(counts.ocean == 1, "debug terrain counts include ocean cells");
+    ok &= require(counts.inland_water == 1, "debug terrain counts include inland-water cells");
     ok &= require(counts.coastal_land == 2, "debug terrain counts include coastal land independently");
     ok &= require(counts.plains == 2, "debug terrain counts preserve coastal plains");
     ok &= require(counts.hills == 1, "debug terrain counts include hills cells");
@@ -1008,18 +1062,18 @@ bool test_debug_visualization_data() {
     ok &= require(counts.mountains == 1, "debug terrain counts include mountain cells");
     ok &= require(image.width == map.width && image.height == map.height, "debug image preserves map dimensions");
     ok &= require(image.has_expected_byte_count(), "debug image contains one RGBA pixel per map cell");
-    const auto coastal_plain = procgen::greater_realm_debug_colour(map.cells[1], 0.5f);
-    const auto coastal_mountain = procgen::greater_realm_debug_colour(map.cells[5], 0.5f);
+    const auto coastal_plain = procgen::greater_realm_debug_colour(map.cells[2], 0.5f);
+    const auto coastal_mountain = procgen::greater_realm_debug_colour(map.cells[6], 0.5f);
     ok &= require(
-        image.rgba[4] < coastal_plain.r && image.rgba[5] < coastal_plain.g && image.rgba[6] < coastal_plain.b,
+        image.rgba[8] < coastal_plain.r && image.rgba[9] < coastal_plain.g && image.rgba[10] < coastal_plain.b,
         "debug image darkens coastal land to form a narrow outline"
     );
     ok &= require(
-        image.rgba[4] != image.rgba[20] || image.rgba[5] != image.rgba[21] || image.rgba[6] != image.rgba[22],
+        image.rgba[8] != image.rgba[24] || image.rgba[9] != image.rgba[25] || image.rgba[10] != image.rgba[26],
         "coastal plains and mountains retain distinct debug colours"
     );
     ok &= require(
-        image.rgba[20] < coastal_mountain.r && image.rgba[21] < coastal_mountain.g && image.rgba[22] < coastal_mountain.b,
+        image.rgba[24] < coastal_mountain.r && image.rgba[25] < coastal_mountain.g && image.rgba[26] < coastal_mountain.b,
         "coastline outline preserves the mountain palette beneath it"
     );
     for (std::size_t alpha = 3; alpha < image.rgba.size(); alpha += 4) {
@@ -1310,6 +1364,7 @@ int main() {
         test_seed_determinism,
         test_map_cell_lookup,
         test_coastal_land_preserves_elevation_form,
+        test_inland_water_classification,
         test_seed_driven_terrain_character,
         test_inland_relief_preserves_landmass_topology,
         test_mountain_strength_changes_only_local_mountain_relief,

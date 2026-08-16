@@ -33,10 +33,10 @@ public:
     // Shutdown engine
     void shutdown() noexcept;
 
-    // Set the game instance (must be called before run())
+    // Set the host application instance (must be called before run())
     void set_game(std::unique_ptr<Game> game) noexcept;
 
-    // Main game loop
+    // Main runtime loop
     void run();
 
     // Request exit
@@ -97,7 +97,7 @@ private:
     // UI
     ui::UIManager ui_manager_;
     
-    // Game instance
+    // Host application instance
     std::unique_ptr<Game> game_;
 
     bool shutdown_ = false;

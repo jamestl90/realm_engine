@@ -241,7 +241,9 @@ void compute_slopes(GreaterRealmMap& map) {
 void classify_cells(GreaterRealmMap& map, const GreaterRealmGeneratorSettings& settings) {
     for (auto& cell : map.cells) {
         if (cell.is_water) {
-            cell.terrain_form = TerrainForm::Ocean;
+            cell.terrain_form = cell.is_ocean
+                ? TerrainForm::Ocean
+                : TerrainForm::InlandWater;
             continue;
         }
 
@@ -263,6 +265,8 @@ const char* to_string(TerrainForm form) noexcept {
     switch (form) {
         case TerrainForm::Ocean:
             return "ocean";
+        case TerrainForm::InlandWater:
+            return "inland water";
         case TerrainForm::Plains:
             return "plains";
         case TerrainForm::Hills:
@@ -277,7 +281,7 @@ const char* to_string(TerrainForm form) noexcept {
 }
 
 bool is_water(TerrainForm form) noexcept {
-    return form == TerrainForm::Ocean;
+    return form == TerrainForm::Ocean || form == TerrainForm::InlandWater;
 }
 
 GreaterRealmTerrainCharacter derive_greater_realm_terrain_character(

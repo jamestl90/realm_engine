@@ -11,7 +11,7 @@ set(REALM_ENABLE_PROCGEN_DEBUG_VIEW_DEFAULT ON)
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
     set(REALM_ENABLE_PROCGEN_DEBUG_VIEW_DEFAULT OFF)
 endif()
-option(REALM_ENABLE_PROCGEN_DEBUG_VIEW "Build the procgen debug map view into the game executable" ${REALM_ENABLE_PROCGEN_DEBUG_VIEW_DEFAULT})
+option(REALM_ENABLE_PROCGEN_DEBUG_VIEW "Build the procgen debug map view into the runtime executable" ${REALM_ENABLE_PROCGEN_DEBUG_VIEW_DEFAULT})
 option(REALM_OPTIMIZE_PROCGEN_DEBUG "Optimize procgen sources in Debug builds for interactive tooling" ON)
 
 # MSVC: Force synchronous PDB writes to avoid C1041 errors during parallel builds

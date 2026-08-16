@@ -21,12 +21,12 @@ The generated map can now be rendered, but tuning requires code edits and rebuil
 - Regenerate the debug map texture from the UI.
 - Show the active settings and basic terrain counts.
 - Keep the debug controls out of release builds by default.
-- Verify debug game, procgen tests, and release game builds.
+- Verify debug runtime, procgen tests, and release runtime builds.
 
 ## Verification
 
 - The expanded panel builds in a Debug configuration with `REALM_BUILD_TESTS=OFF`.
-- `REALM_ENABLE_PROCGEN_DEBUG_VIEW=ON` is present on the game target.
+- `REALM_ENABLE_PROCGEN_DEBUG_VIEW=ON` is present on the runtime target.
 - The panel uses eleven compact control rows within the logical viewport.
 - 2026-08-16 closure check: `ctest --test-dir out/build/debug-with-tests --output-on-failure` passed, 14/14.
 - 2026-08-16 closure check: `cmake --build --preset debug-with-tests` and `cmake --build --preset release-no-tests` were already up to date.
