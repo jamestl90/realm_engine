@@ -7,7 +7,7 @@
 
 namespace procgen {
 
-inline constexpr std::uint32_t GREATER_REALM_CLIMATE_VERSION = 1;
+inline constexpr std::uint32_t GREATER_REALM_CLIMATE_VERSION = 2;
 
 struct GreaterRealmClimateSettings {
     float north_edge_latitude_degrees{60.0f};
@@ -18,11 +18,23 @@ struct GreaterRealmClimateSettings {
     float temperature_variation{0.08f};
     float temperature_variation_frequency{2.5f};
 
+    float prevailing_wind_degrees{0.0f};
+    float ambient_moisture{0.18f};
+    float ocean_moisture_source{1.0f};
+    float inland_water_moisture_source{0.65f};
+    float moisture_retention{0.985f};
+    float precipitation_efficiency{0.35f};
+    float orographic_lift{1.50f};
+    float rain_shadow_strength{0.70f};
+    float rain_shadow_decay{0.92f};
+    float precipitation_scale{1.0f};
+
     [[nodiscard]] bool operator==(const GreaterRealmClimateSettings&) const noexcept = default;
 };
 
 struct GreaterRealmClimateCell {
     float temperature_normal{0.5f};
+    float precipitation_normal{0.0f};
 };
 
 struct GreaterRealmClimateMap {
@@ -46,9 +58,17 @@ struct TemperatureNormalSummary {
     std::size_t sample_count{0};
 };
 
+struct PrecipitationNormalSummary {
+    float minimum{0.0f};
+    float maximum{0.0f};
+    float mean{0.0f};
+    std::size_t sample_count{0};
+};
+
 enum class GreaterRealmClimateDirtyStage : std::uint8_t {
     None = 0,
-    Temperature = 1u << 0
+    Temperature = 1u << 0,
+    Precipitation = 1u << 1
 };
 
 [[nodiscard]] constexpr GreaterRealmClimateDirtyStage operator|(
@@ -69,6 +89,14 @@ enum class GreaterRealmClimateDirtyStage : std::uint8_t {
     );
 }
 
+constexpr GreaterRealmClimateDirtyStage& operator|=(
+    GreaterRealmClimateDirtyStage& left,
+    GreaterRealmClimateDirtyStage right
+) noexcept {
+    left = left | right;
+    return left;
+}
+
 [[nodiscard]] constexpr bool has_climate_dirty_stage(
     GreaterRealmClimateDirtyStage stages,
     GreaterRealmClimateDirtyStage stage
@@ -86,7 +114,10 @@ struct GreaterRealmClimateRegenerationResult {
 
 class GreaterRealmClimateGenerationCache {
 public:
-    void invalidate() noexcept;
+    void invalidate(
+        GreaterRealmClimateDirtyStage stage = GreaterRealmClimateDirtyStage::Temperature
+            | GreaterRealmClimateDirtyStage::Precipitation
+    ) noexcept;
     void reset() noexcept;
 
     [[nodiscard]] bool initialized() const noexcept { return m_initialized; }
@@ -98,7 +129,10 @@ public:
 
 private:
     GreaterRealmClimateSettings m_settings;
-    bool m_pending_temperature{true};
+    GreaterRealmClimateDirtyStage m_pending_stages{
+        GreaterRealmClimateDirtyStage::Temperature
+        | GreaterRealmClimateDirtyStage::Precipitation
+    };
     bool m_initialized{false};
 };
 
@@ -118,6 +152,9 @@ private:
     const GreaterRealmClimateSettings& settings = {}
 );
 [[nodiscard]] TemperatureNormalSummary summarize_temperature_normals(
+    const GreaterRealmClimateMap& climate
+) noexcept;
+[[nodiscard]] PrecipitationNormalSummary summarize_precipitation_normals(
     const GreaterRealmClimateMap& climate
 ) noexcept;
 

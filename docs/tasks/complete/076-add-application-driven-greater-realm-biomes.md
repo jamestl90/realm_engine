@@ -1,6 +1,6 @@
 # Add Application-Driven Greater-Realm Biomes
 
-Status: todo
+Status: complete
 Priority: high
 Area: Procgen / Greater Realm Biomes
 
@@ -35,3 +35,23 @@ The reusable engine can evaluate generic environmental rules, but it cannot defi
 Asset-file formats and application content packs are out of scope. The first implementation should prove the reusable in-memory contract before connecting it to Task 009 or other asset loaders.
 
 No branch is required unless implementation expands into application asset integration.
+
+## Implementation Decisions
+
+- Added validated ordered `GreaterRealmBiomeRuleSet` data with unique opaque `BiomeId` values, explicit priorities, optional constraints, and an optional fallback ID.
+- Rules can independently constrain terrain form, land/ocean/inland-water class, elevation, slope, coast distance, temperature normal, and precipitation normal. All configured range boundaries are inclusive.
+- Higher priority wins; equal-priority ties select the first declared rule. Unmatched cells receive the fallback or `INVALID_BIOME_ID`, independent from associative-container ordering.
+- Added separate versioned `GreaterRealmBiomeMap` output containing only opaque IDs and fingerprints for terrain, climate, and complete ordered rule-set identity.
+- Added `GreaterRealmBiomeGenerationCache`; changed terrain, climate values, rule content, rule order, version, or application identity rebuilds assignment without regenerating terrain or climate.
+- Added a `Biome` debug view that consumes an application colour table and uses a deterministic neutral fallback palette for unlisted IDs.
+- Added an in-memory `TestApp` inspection rule set and colour table. Its ocean, inland-water, alpine, polar, rainforest, desert, forest, tundra, and grassland meanings remain sandbox application data, not engine definitions.
+- Kept names, art, resources, spawning, gameplay behavior, persistence formats, and asset loading out of the reusable biome module.
+
+## Verification
+
+- Added `realm_biome_tests` for rule validation, all optional input contracts, deterministic assignment, priority, inclusive boundaries, declaration-order ties, fallback/unmatched behavior, water rules, source identity, climate/rule invalidation, and custom/fallback debug colours.
+- Focused greater-realm, climate, biome, and debug-panel tests passed, 4/4.
+- Full `ctest --test-dir out/build/debug-with-tests --output-on-failure` passed, 16/16.
+- Explicit Debug builds passed for all runtime and test targets.
+- `scripts/build.ps1 -Preset debug-no-tests` and `scripts/build.ps1 -Preset release-no-tests` passed.
+- `git diff --check` passed; Git reported only the repository's existing LF-to-CRLF conversion warnings.

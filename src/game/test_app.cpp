@@ -25,6 +25,99 @@
 namespace game {
 
 #if defined(REALM_ENABLE_PROCGEN_DEBUG_VIEW)
+namespace {
+
+enum SandboxBiomeId : procgen::BiomeId {
+    OceanBiome = 1,
+    InlandWaterBiome = 2,
+    AlpineBiome = 3,
+    PolarBiome = 4,
+    RainforestBiome = 5,
+    DesertBiome = 6,
+    ForestBiome = 7,
+    TundraBiome = 8,
+    GrasslandBiome = 9
+};
+
+procgen::GreaterRealmBiomeRuleSet make_sandbox_biome_rules() {
+    procgen::GreaterRealmBiomeRuleSet rules;
+    rules.identity = 1;
+    rules.fallback_biome_id = GrasslandBiome;
+
+    procgen::GreaterRealmBiomeRule ocean;
+    ocean.biome_id = OceanBiome;
+    ocean.priority = 100;
+    ocean.water_class = procgen::BiomeWaterClass::Ocean;
+    rules.rules.push_back(ocean);
+
+    procgen::GreaterRealmBiomeRule inland_water;
+    inland_water.biome_id = InlandWaterBiome;
+    inland_water.priority = 100;
+    inland_water.water_class = procgen::BiomeWaterClass::InlandWater;
+    rules.rules.push_back(inland_water);
+
+    procgen::GreaterRealmBiomeRule alpine;
+    alpine.biome_id = AlpineBiome;
+    alpine.priority = 90;
+    alpine.water_class = procgen::BiomeWaterClass::Land;
+    alpine.elevation = procgen::BiomeValueRange{0.82f, 1.0f};
+    rules.rules.push_back(alpine);
+
+    procgen::GreaterRealmBiomeRule polar;
+    polar.biome_id = PolarBiome;
+    polar.priority = 80;
+    polar.water_class = procgen::BiomeWaterClass::Land;
+    polar.temperature_normal = procgen::BiomeValueRange{0.0f, 0.20f};
+    rules.rules.push_back(polar);
+
+    procgen::GreaterRealmBiomeRule rainforest;
+    rainforest.biome_id = RainforestBiome;
+    rainforest.priority = 70;
+    rainforest.water_class = procgen::BiomeWaterClass::Land;
+    rainforest.temperature_normal = procgen::BiomeValueRange{0.65f, 1.0f};
+    rainforest.precipitation_normal = procgen::BiomeValueRange{0.60f, 1.0f};
+    rules.rules.push_back(rainforest);
+
+    procgen::GreaterRealmBiomeRule desert;
+    desert.biome_id = DesertBiome;
+    desert.priority = 60;
+    desert.water_class = procgen::BiomeWaterClass::Land;
+    desert.temperature_normal = procgen::BiomeValueRange{0.45f, 1.0f};
+    desert.precipitation_normal = procgen::BiomeValueRange{0.0f, 0.20f};
+    rules.rules.push_back(desert);
+
+    procgen::GreaterRealmBiomeRule forest;
+    forest.biome_id = ForestBiome;
+    forest.priority = 50;
+    forest.water_class = procgen::BiomeWaterClass::Land;
+    forest.precipitation_normal = procgen::BiomeValueRange{0.42f, 1.0f};
+    rules.rules.push_back(forest);
+
+    procgen::GreaterRealmBiomeRule tundra;
+    tundra.biome_id = TundraBiome;
+    tundra.priority = 40;
+    tundra.water_class = procgen::BiomeWaterClass::Land;
+    tundra.temperature_normal = procgen::BiomeValueRange{0.20f, 0.40f};
+    rules.rules.push_back(tundra);
+    return rules;
+}
+
+std::vector<procgen::BiomeDebugColour> make_sandbox_biome_colours() {
+    return {
+        {OceanBiome, {28, 82, 154, 255}},
+        {InlandWaterBiome, {38, 142, 154, 255}},
+        {AlpineBiome, {196, 202, 204, 255}},
+        {PolarBiome, {224, 236, 238, 255}},
+        {RainforestBiome, {34, 112, 70, 255}},
+        {DesertBiome, {208, 176, 92, 255}},
+        {ForestBiome, {64, 132, 74, 255}},
+        {TundraBiome, {132, 146, 118, 255}},
+        {GrasslandBiome, {132, 168, 82, 255}}
+    };
+}
+
+} // namespace
+
 bool TestApp::regenerate_procgen_debug_map(core::Engine& engine, bool force_full) {
     m_procgen_paint_dirty = false;
     if (force_full) {
@@ -41,12 +134,12 @@ bool TestApp::regenerate_procgen_debug_map(core::Engine& engine, bool force_full
         m_procgen_settings,
         m_procgen_constraints
     );
-    constexpr procgen::GreaterRealmDirtyStage temperature_source_stages =
+    constexpr procgen::GreaterRealmDirtyStage climate_source_stages =
         procgen::GreaterRealmDirtyStage::TerrainFields
         | procgen::GreaterRealmDirtyStage::MountainPeaks
         | procgen::GreaterRealmDirtyStage::Relief
         | procgen::GreaterRealmDirtyStage::Classification;
-    if (procgen::has_dirty_stage(regeneration.rebuilt_stages, temperature_source_stages)) {
+    if (procgen::has_dirty_stage(regeneration.rebuilt_stages, climate_source_stages)) {
         m_procgen_climate_generation_cache.invalidate();
     }
     const auto climate_regeneration = m_procgen_climate_generation_cache.regenerate(
@@ -54,16 +147,25 @@ bool TestApp::regenerate_procgen_debug_map(core::Engine& engine, bool force_full
         m_procgen_map,
         m_procgen_climate_settings
     );
+    const auto biome_regeneration = m_procgen_biome_generation_cache.regenerate(
+        m_procgen_biome_map,
+        m_procgen_map,
+        m_procgen_climate_map,
+        m_procgen_biome_rules
+    );
 #if defined(REALM_ENABLE_PROCGEN_PROFILING)
     const auto generated_at = ProfileClock::now();
 #endif
 
     if (regeneration.rebuilt_stages == procgen::GreaterRealmDirtyStage::None
         && climate_regeneration.rebuilt_stages
-            == procgen::GreaterRealmClimateDirtyStage::None) {
+            == procgen::GreaterRealmClimateDirtyStage::None
+        && biome_regeneration.rebuilt_stages
+            == procgen::GreaterRealmBiomeDirtyStage::None) {
         m_procgen_debug_panel.update(
             m_procgen_map,
-            procgen::summarize_temperature_normals(m_procgen_climate_map)
+            procgen::summarize_temperature_normals(m_procgen_climate_map),
+            procgen::summarize_precipitation_normals(m_procgen_climate_map)
         );
         return true;
     }
@@ -71,6 +173,8 @@ bool TestApp::regenerate_procgen_debug_map(core::Engine& engine, bool force_full
     const auto image = procgen::build_greater_realm_debug_image(
         m_procgen_map,
         m_procgen_climate_map,
+        m_procgen_biome_map,
+        m_procgen_biome_colours,
         procgen::NORMALIZED_WATERLINE,
         m_procgen_debug_options
     );
@@ -94,7 +198,8 @@ bool TestApp::regenerate_procgen_debug_map(core::Engine& engine, bool force_full
 
     m_procgen_debug_panel.update(
         m_procgen_map,
-        procgen::summarize_temperature_normals(m_procgen_climate_map)
+        procgen::summarize_temperature_normals(m_procgen_climate_map),
+        procgen::summarize_precipitation_normals(m_procgen_climate_map)
     );
 #if defined(REALM_ENABLE_PROCGEN_PROFILING)
     const auto finished_at = ProfileClock::now();
@@ -142,6 +247,8 @@ bool TestApp::refresh_procgen_debug_view(core::Engine& engine) {
     const auto image = procgen::build_greater_realm_debug_image(
         m_procgen_map,
         m_procgen_climate_map,
+        m_procgen_biome_map,
+        m_procgen_biome_colours,
         procgen::NORMALIZED_WATERLINE,
         m_procgen_debug_options
     );
@@ -356,6 +463,8 @@ void TestApp::on_startup(core::Engine& engine) {
     m_procgen_settings.seed = 8675309;
     m_procgen_settings.width = 256;
     m_procgen_settings.height = 192;
+    m_procgen_biome_rules = make_sandbox_biome_rules();
+    m_procgen_biome_colours = make_sandbox_biome_colours();
     (void)m_procgen_generation_cache.regenerate(
         m_procgen_map,
         m_procgen_settings,
@@ -366,9 +475,17 @@ void TestApp::on_startup(core::Engine& engine) {
         m_procgen_map,
         m_procgen_climate_settings
     );
+    (void)m_procgen_biome_generation_cache.regenerate(
+        m_procgen_biome_map,
+        m_procgen_map,
+        m_procgen_climate_map,
+        m_procgen_biome_rules
+    );
     const auto initial_image = procgen::build_greater_realm_debug_image(
         m_procgen_map,
         m_procgen_climate_map,
+        m_procgen_biome_map,
+        m_procgen_biome_colours,
         procgen::NORMALIZED_WATERLINE,
         m_procgen_debug_options
     );
@@ -440,6 +557,7 @@ void TestApp::on_startup(core::Engine& engine) {
         m_procgen_brush_settings,
         m_procgen_map,
         procgen::summarize_temperature_normals(m_procgen_climate_map),
+        procgen::summarize_precipitation_normals(m_procgen_climate_map),
         [this, &engine](bool force_full) {
             regenerate_procgen_debug_map(engine, force_full);
         },

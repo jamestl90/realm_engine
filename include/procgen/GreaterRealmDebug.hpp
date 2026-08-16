@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Biome.hpp"
 #include "Climate.hpp"
 #include "GreaterRealm.hpp"
 #include <cstddef>
@@ -20,6 +21,8 @@ enum class GreaterRealmDebugView : std::uint8_t {
     CoastDistance,
     CatchmentArea,
     TemperatureNormal,
+    PrecipitationNormal,
+    Biome,
     Count
 };
 
@@ -48,6 +51,11 @@ struct DebugColour {
     std::uint8_t a{255};
 
     [[nodiscard]] bool operator==(const DebugColour&) const noexcept = default;
+};
+
+struct BiomeDebugColour {
+    BiomeId biome_id{INVALID_BIOME_ID};
+    DebugColour colour;
 };
 
 struct DebugImage {
@@ -79,6 +87,14 @@ struct DebugImage {
 [[nodiscard]] DebugImage build_greater_realm_debug_image(
     const GreaterRealmMap& map,
     const GreaterRealmClimateMap& climate,
+    float sea_level,
+    const GreaterRealmDebugOptions& options
+);
+[[nodiscard]] DebugImage build_greater_realm_debug_image(
+    const GreaterRealmMap& map,
+    const GreaterRealmClimateMap& climate,
+    const GreaterRealmBiomeMap& biomes,
+    const std::vector<BiomeDebugColour>& biome_colours,
     float sea_level,
     const GreaterRealmDebugOptions& options
 );

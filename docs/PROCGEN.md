@@ -35,14 +35,14 @@ This document tracks the procedural generation capabilities currently present in
 
 - Stable greater-realm climate belongs to procgen as a derived layer, separate from canonical terrain and hydrology.
 - Climate output belongs in a versioned `GreaterRealmClimateMap` with one `GreaterRealmClimateCell` per greater-realm cell. Source seed, dimensions, cell size, and a fingerprint of consumed terrain elevation/water data reject stale pairings.
-- The implemented `temperature_normal` and planned `precipitation_normal` use a fixed `0..1` scale whose meaning is retained across maps; observed per-map ranges are never renormalized.
+- The implemented `temperature_normal` and `precipitation_normal` use a fixed `0..1` scale whose meaning is retained across maps; observed per-map ranges are never renormalized.
 - Temperature normal consumes explicit latitude context, elevation, maritime moderation from ocean or inland-water proximity, and optional broad deterministic variation.
-- Precipitation normal is a long-term climatological tendency. It may use ocean and inland-water sources, prevailing wind, elevation, orographic lift, and rain shadow without representing a specific rain event.
+- Precipitation normal is a long-term climatological tendency derived from ocean and inland-water sources, prevailing wind, elevation, orographic lift, and carried rain shadow without representing a specific rain event.
 - Humidity, soil moisture, current rainfall, runoff, and active river discharge remain runtime simulation state and are not climate-normal aliases.
-- Applications own biome definitions and IDs. The planned reusable classifier consumes application-supplied rules and produces a separate `GreaterRealmBiomeMap`; it does not add hard-coded biome labels to `GreaterRealmCell`.
+- Applications own biome definitions and IDs. The reusable classifier consumes application-supplied rules and produces a separate `GreaterRealmBiomeMap`; it does not add hard-coded biome labels to `GreaterRealmCell`.
 - Biome rules may inspect stable terrain and climate inputs. Applications separately own biome names, colours, art, resources, and gameplay behavior.
 - Generated climate and biome arrays are regenerated from versioned inputs by default. Terrain changes invalidate climate and biome output, climate changes invalidate climate and biome output, and biome-rule changes invalidate biome output only.
-- Task 074 implements temperature normals. Tasks 075 and 076 track precipitation normals and biome classification. None require local-region generation or runtime weather.
+- Tasks 074-076 implement temperature normals, precipitation normals, and application-driven biome classification without requiring local-region generation or runtime weather.
 
 ### Temperature Normals
 
@@ -52,7 +52,26 @@ This document tracks the procedural generation capabilities currently present in
 - Eight-neighbor distance to any ocean or inland-water cell moderates temperature toward the fixed midpoint `0.5`. The default moderation weight is `0.20` with a smooth `16` map-unit influence distance.
 - A three-octave, climate-domain noise field adds optional broad seed variation. Its default amplitude is `0.08` and base frequency is `2.5`; setting amplitude to `0` removes all seed influence from otherwise identical terrain.
 - The composed result is clamped to `0..1` only. No minimum/maximum scan feeds back into generation.
-- `GreaterRealmClimateGenerationCache` rebuilds temperature when its settings change, when explicitly invalidated by a terrain owner, or when the source identity/fingerprint no longer matches. Climate generation accepts terrain as const and cannot rebuild terrain, hydrology, or river channels.
+- `GreaterRealmClimateGenerationCache` rebuilds each normal independently for its own setting changes and rebuilds both when explicitly invalidated by a terrain owner or when the source identity/fingerprint no longer matches. Climate generation accepts terrain as const and cannot rebuild terrain, hydrology, or river channels.
+
+### Precipitation Normals
+
+- Prevailing wind defaults to `0` degrees, transporting moisture from west to east. Directions wrap to `0..360`; all transport controls reject non-finite values and clamp to documented ranges.
+- Upwind traversal is deterministic. Each cell blends already-processed eight-neighbor air state according to alignment with the wind direction, then applies map-unit transport retention.
+- Ambient moisture defaults to `0.18`. Ocean cells replenish air moisture to at least `1.0`; inland water replenishes it to at least `0.65`, preserving their distinct stable source influence.
+- Moisture retention defaults to `0.985` per map unit and background precipitation efficiency to `0.35`.
+- Rising normalized land elevation condenses additional precipitation with lift strength `1.50`. Lift consumes transported moisture and creates a downwind shadow with strength `0.70` and per-map-unit retention `0.92`.
+- A global precipitation scale defaults to `1.0` and supports deterministic drier or wetter realms. The final value is clamped to `0..1` without observed-range normalization.
+- The transport pass reads only cell elevation and stable water classification. Drainage area, channel thresholds, rivers, current rainfall, humidity, soil moisture, runoff, and discharge cannot affect it.
+
+### Application-Driven Biomes
+
+- `GreaterRealmBiomeRuleSet` contains ordered rules with unique opaque `BiomeId` values, explicit integer priority, optional terrain form, water class, elevation, slope, coast-distance, temperature, and precipitation constraints, plus an optional fallback ID.
+- All range boundaries are inclusive. Higher priority wins; equal-priority ties select the first declared rule. A valid unmatched cell receives the fallback ID or `INVALID_BIOME_ID` when no fallback exists. Assignment never depends on associative-container iteration order.
+- Validation rejects reserved or duplicate rule IDs, unknown enum values, non-finite bounds, inverted ranges, normalized bounds outside `0..1`, and negative slope or coast-distance bounds.
+- `GreaterRealmBiomeMap` stores only opaque IDs plus fingerprints for its terrain, climate, and complete ordered rule-set sources. Any source change rebuilds assignment without regenerating terrain or climate.
+- Debug rendering accepts an application-owned ID-to-colour table. IDs absent from the table use a deterministic neutral fallback palette; biome names, art, resources, spawning, and gameplay behavior never enter procgen data.
+- `TestApp` supplies a small in-memory inspection set covering ocean, inland water, alpine, polar, rainforest, desert, forest, tundra, and grassland IDs. Those definitions and colours are sandbox application data, not engine-standard biomes or an asset format.
 
 ## Terrain Constraints
 
@@ -78,7 +97,8 @@ This document tracks the procedural generation capabilities currently present in
 12. Compute coast distance, slope, and terrain forms.
 13. Build priority drainage and condition depressions for downhill routing.
 14. Accumulate contributing terrain area and export potential river channels.
-15. Derive the separate temperature-normal climate map from finalized terrain and latitude context.
+15. Derive separate temperature and precipitation climate normals from finalized terrain, latitude, and transport settings.
+16. Optionally evaluate application-supplied biome rules into a separate biome map.
 
 This follows Mapgen4's layered elevation approach while deliberately retaining a regular-grid representation. The renderer can derive a triangulated regular-grid heightfield for 2.5D presentation without replacing or mutating canonical map data.
 
@@ -98,7 +118,7 @@ This follows Mapgen4's layered elevation approach while deliberately retaining a
 
 Any generated-map change also dirties the debug image and texture upload. Authored-constraint owners call `invalidate(TerrainFields)` after mutation; repeated paint samples coalesce into the existing once-per-frame regeneration path. The cache reports rebuilt-stage flags and, when `REALM_ENABLE_PROCGEN_PROFILING` is enabled, per-stage timings. Tests compare partial output byte-for-byte at the data-field level against clean generation and exercise representative full, relief-only, and channel-only paths at `256x192`.
 
-`GreaterRealmClimateGenerationCache` is a separate derived-map cache. Changes to terrain fields, peaks, relief, or classification invalidate temperature; temperature-setting changes rebuild only temperature; debug base-view and overlay changes rebuild only the retained RGBA visualization and texture.
+`GreaterRealmClimateGenerationCache` is a separate derived-map cache. Changes to terrain fields, peaks, relief, or classification invalidate both normals; temperature-setting changes rebuild only temperature; precipitation-setting changes rebuild only precipitation. `GreaterRealmBiomeGenerationCache` rebuilds assignment when terrain, either climate field, or ordered rule data changes. Debug base-view and overlay changes rebuild only the retained RGBA visualization and texture.
 
 ## Mapgen4 Alignment Boundary
 
@@ -122,7 +142,7 @@ Task 049 records the alignment audit. Differences not listed above require an ex
 - The compile-gated `GreaterRealmDebug` module counts terrain forms and coastal land independently, converts map data into an engine-neutral RGBA image, overlays exported rivers, and marks explicit peak cells.
 - The default terrain view maps normalized land elevation through a continuous nonlinear lowland-to-summit colour ramp with fixed anchors at `0.50, 0.54, 0.59, 0.65, 0.75, 0.86, 1.00`. Closely spaced lowland and hill anchors emphasize the range occupied by most generated terrain while fixed rock and summit anchors preserve cross-map height meaning. A restrained terrain-form tint remains secondary; this is geography visualization only and does not assign biomes or consume runtime weather fields.
 - The debug image preserves relative water-depth shading, distinguishes ocean from inland water, and retains a one-cell dark coastline accent. A separate `Terrain forms` base view retains the categorical water and land-form palette.
-- Runtime base views expose terrain forms, elevation, signed landmass, hill relief, mountain relief, mountain influence, slope, coast distance, catchment area, and temperature normal. The fixed blue-green-red temperature palette is shared by flat and `3D` previews, and the panel reports the field's mean and observed range without using those statistics to alter generation.
+- Runtime base views expose terrain forms, elevation, signed landmass, hill relief, mountain relief, mountain influence, slope, coast distance, catchment area, temperature normal, precipitation normal, and biome assignment. Fixed climate palettes and application-supplied biome colours are shared by flat and `3D` previews; the panel reports climate means and observed ranges without using those statistics to alter generation.
 - Coastlines, mountain peaks, rivers, and sampled drainage directions are independent overlays. Terrain with coastlines, peaks, and rivers enabled remains the default view.
 - Changing a base view or overlay rebuilds only the RGBA image and preview texture from the retained map; it does not regenerate procedural data.
 - The application can switch between the flat debug texture and a lit oblique `3D` heightfield. The heightfield reuses the active debug colours and overlays, and its elevation scale is presentation-only.
@@ -134,14 +154,14 @@ Task 049 records the alignment audit. Differences not listed above require an ex
 - Terrain noise and ocean depth use larger tuning steps and contrast-enhanced debug shading so changes are visible.
 - Debug builds report per-stage generation timings plus end-to-end control-to-preview timing through the Debug-only `REALM_ENABLE_PROCGEN_PROFILING` definition; profiling code is compiled out of production builds.
 - `REALM_OPTIMIZE_PROCGEN_DEBUG` defaults to `ON`, compiling the interactive procgen runtime with optimization in Debug builds while dedicated test targets retain their normal Debug checks. Disable it when stepping through procgen at instruction level is more important than interactive tuning speed.
-- Automated tests cover output shape, deterministic seeds, map lookup, signed constraints, topology stability, ocean connectivity, inland-water classification, sea-level invariance, Mapgen4 coastline attenuation, terrain statistics, hill/mountain relief-stage separation, land-relief control ranges, stable fixed peak selection/spacing/distribution/dormancy/distance fields, one-stage authored-constraint composition, constraint interpolation/serialization, preview-coordinate mapping, paint interaction state, brush setting clamping/effect, drainage invariants, catchment accumulation, channel connectivity, staged-regeneration equivalence and timing paths, climate shape/range/determinism/responses/invalidation, and debug-image output.
+- Automated tests cover output shape, deterministic seeds, map lookup, signed constraints, topology stability, ocean connectivity, inland-water classification, sea-level invariance, Mapgen4 coastline attenuation, terrain statistics, hill/mountain relief-stage separation, land-relief control ranges, stable fixed peak selection/spacing/distribution/dormancy/distance fields, one-stage authored-constraint composition, constraint interpolation/serialization, preview-coordinate mapping, paint interaction state, brush setting clamping/effect, drainage invariants, catchment accumulation, channel connectivity, staged-regeneration equivalence and timing paths, climate shape/range/determinism/transport/responses/invalidation, biome validation/precedence/identity/invalidation, and debug-image output.
 - Test code is compiled only when `REALM_BUILD_TESTS=ON` and does not enter release builds.
 
 ## Not Yet Supported
 
 - Lake retention, shared water-surface levels, river erosion, deltas, or watershed metadata. Enclosed water is classified as inland water without implying those hydrological behaviors.
 - Runtime weather, precipitation events, runoff, soil moisture, or active river discharge; task 040 tracks this future simulation layer.
-- Greater-realm precipitation normals or biome assignment; Tasks 075-076 track their implementation under the ownership contract above.
+- Product biome catalogues, biome asset formats, names, art, resource tables, spawn rules, or gameplay effects. The engine implementation intentionally stops at opaque application IDs and in-memory rules.
 - Resources, settlements, factions, or object placement.
 - Local tile generation or world-region streaming; queued Tasks 067-073 retain that future roadmap while current procgen work remains at greater-realm scale.
 - Beach, cliff, rocky-shore, marsh, delta, or other detailed shoreline classification.

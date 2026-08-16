@@ -73,14 +73,20 @@ std::string hydrology_text(const procgen::GreaterRealmMap& map) {
     return stream.str();
 }
 
-std::string temperature_text(const procgen::TemperatureNormalSummary& summary) {
-    if (summary.sample_count == 0) {
-        return "Temperature unavailable";
+std::string climate_text(
+    const procgen::TemperatureNormalSummary& temperature,
+    const procgen::PrecipitationNormalSummary& precipitation
+) {
+    if (temperature.sample_count == 0 || precipitation.sample_count == 0) {
+        return "Climate unavailable";
     }
     std::ostringstream stream;
-    stream << "Temperature mean " << format_float(summary.mean * 100.0f)
-           << "%  Range " << format_float(summary.minimum * 100.0f)
-           << "-" << format_float(summary.maximum * 100.0f) << "%";
+    stream << "Temp " << format_float(temperature.mean * 100.0f)
+           << "% (" << format_float(temperature.minimum * 100.0f)
+           << "-" << format_float(temperature.maximum * 100.0f)
+           << ")  Precip " << format_float(precipitation.mean * 100.0f)
+           << "% (" << format_float(precipitation.minimum * 100.0f)
+           << "-" << format_float(precipitation.maximum * 100.0f) << ")";
     return stream.str();
 }
 
@@ -219,6 +225,7 @@ std::unique_ptr<ui::UIElement> GreaterRealmDebugPanel::build(
     procgen::TerrainConstraintBrushSettings& brush_settings,
     const procgen::GreaterRealmMap& map,
     const procgen::TemperatureNormalSummary& temperature_summary,
+    const procgen::PrecipitationNormalSummary& precipitation_summary,
     RegenerateCallback on_regenerate,
     ToolChangedCallback on_tool_changed,
     BrushSettingsChangedCallback on_brush_settings_changed,
@@ -565,13 +572,14 @@ std::unique_ptr<ui::UIElement> GreaterRealmDebugPanel::build(
     temperature->setSizeConstraints(summary_constraints);
     root->addChild(std::move(temperature));
 
-    update(map, temperature_summary);
+    update(map, temperature_summary, precipitation_summary);
     return root;
 }
 
 void GreaterRealmDebugPanel::update(
     const procgen::GreaterRealmMap& map,
-    const procgen::TemperatureNormalSummary& temperature_summary
+    const procgen::TemperatureNormalSummary& temperature_summary,
+    const procgen::PrecipitationNormalSummary& precipitation_summary
 ) {
     if (!m_settings) {
         return;
@@ -634,7 +642,7 @@ void GreaterRealmDebugPanel::update(
         if (m_hydrology_text) m_hydrology_text->setText(hydrology_text(map));
     }
     if (m_temperature_text) {
-        m_temperature_text->setText(temperature_text(temperature_summary));
+        m_temperature_text->setText(climate_text(temperature_summary, precipitation_summary));
     }
 }
 

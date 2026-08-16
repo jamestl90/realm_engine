@@ -45,6 +45,7 @@ public:
         procgen::TerrainConstraintBrushSettings& brush_settings,
         const procgen::GreaterRealmMap& map,
         const procgen::TemperatureNormalSummary& temperature_summary,
+        const procgen::PrecipitationNormalSummary& precipitation_summary,
         RegenerateCallback on_regenerate,
         ToolChangedCallback on_tool_changed,
         BrushSettingsChangedCallback on_brush_settings_changed,
@@ -55,7 +56,8 @@ public:
 
     void update(
         const procgen::GreaterRealmMap& map,
-        const procgen::TemperatureNormalSummary& temperature_summary
+        const procgen::TemperatureNormalSummary& temperature_summary,
+        const procgen::PrecipitationNormalSummary& precipitation_summary
     );
 
 private:

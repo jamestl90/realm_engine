@@ -3,9 +3,11 @@
 #include "../../include/core/Game.hpp"
 #include "../../include/ecs/Entity.hpp"
 #include "../../include/rendering/Texture.hpp"
+#include <vector>
 
 #if defined(REALM_ENABLE_PROCGEN_DEBUG_VIEW)
 #include "GreaterRealmDebugPanel.hpp"
+#include "../../include/procgen/Biome.hpp"
 #include "../../include/procgen/Climate.hpp"
 #include "../../include/procgen/TerrainConstraintPainting.hpp"
 #include "../../include/procgen/TerrainConstraints.hpp"
@@ -47,6 +49,10 @@ private:
     procgen::GreaterRealmClimateSettings m_procgen_climate_settings{};
     procgen::GreaterRealmClimateGenerationCache m_procgen_climate_generation_cache;
     procgen::GreaterRealmClimateMap m_procgen_climate_map;
+    procgen::GreaterRealmBiomeRuleSet m_procgen_biome_rules;
+    procgen::GreaterRealmBiomeGenerationCache m_procgen_biome_generation_cache;
+    procgen::GreaterRealmBiomeMap m_procgen_biome_map;
+    std::vector<procgen::BiomeDebugColour> m_procgen_biome_colours;
     procgen::GreaterRealmDebugOptions m_procgen_debug_options;
     GreaterRealmPresentationSettings m_procgen_presentation;
     procgen::TerrainConstraintBrushSettings m_procgen_brush_settings;

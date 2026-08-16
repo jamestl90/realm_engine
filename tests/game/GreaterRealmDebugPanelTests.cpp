@@ -127,6 +127,11 @@ bool test_panel_sliders_update_settings_and_callbacks() {
     temperatureSummary.maximum = 0.75f;
     temperatureSummary.mean = 0.50f;
     temperatureSummary.sample_count = map.cells.size();
+    procgen::PrecipitationNormalSummary precipitationSummary;
+    precipitationSummary.minimum = 0.20f;
+    precipitationSummary.maximum = 0.80f;
+    precipitationSummary.mean = 0.45f;
+    precipitationSummary.sample_count = map.cells.size();
 
     int regenerations = 0;
     int presentationChanges = 0;
@@ -139,6 +144,7 @@ bool test_panel_sliders_update_settings_and_callbacks() {
         brushSettings,
         map,
         temperatureSummary,
+        precipitationSummary,
         [&regenerations](bool) { ++regenerations; },
         [](procgen::TerrainConstraintTool) {},
         [&brushChanges](procgen::TerrainConstraintBrushSettings) { ++brushChanges; },
@@ -174,7 +180,7 @@ bool test_panel_sliders_update_settings_and_callbacks() {
         text_blocks.begin(),
         text_blocks.end(),
         [](const ui::TextBlock* text) {
-            return text->text() == "Temperature mean 50.00%  Range 25.00-75.00%";
+            return text->text() == "Temp 50.00% (25.00-75.00)  Precip 45.00% (20.00-80.00)";
         }
     );
     ok &= require(has_temperature_summary, "temperature summary reports fixed-scale mean and range");

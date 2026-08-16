@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <iostream>
+#include <limits>
 #include <vector>
 
 #if !defined(REALM_TEST_BUILD)
@@ -62,6 +63,22 @@ bool climate_values_match(
     return true;
 }
 
+bool precipitation_values_match(
+    const procgen::GreaterRealmClimateMap& left,
+    const procgen::GreaterRealmClimateMap& right
+) {
+    if (left.cells.size() != right.cells.size()) {
+        return false;
+    }
+    for (std::size_t index = 0; index < left.cells.size(); ++index) {
+        if (left.cells[index].precipitation_normal
+            != right.cells[index].precipitation_normal) {
+            return false;
+        }
+    }
+    return true;
+}
+
 bool test_shape_range_determinism_and_summary() {
     procgen::GreaterRealmGeneratorSettings terrain_settings;
     terrain_settings.seed = 24680;
@@ -72,17 +89,24 @@ bool test_shape_range_determinism_and_summary() {
     const auto first = procgen::generate_greater_realm_climate(terrain);
     const auto second = procgen::generate_greater_realm_climate(terrain);
     const auto summary = procgen::summarize_temperature_normals(first);
+    const auto precipitation_summary = procgen::summarize_precipitation_normals(first);
 
     bool ok = require(first.source_matches(terrain), "climate map retains matching terrain identity");
     ok &= require(first.has_expected_cell_count(), "climate map shape matches its source dimensions");
-    ok &= require(climate_values_match(first, second), "temperature generation is deterministic");
+    ok &= require(
+        climate_values_match(first, second) && precipitation_values_match(first, second),
+        "temperature and precipitation generation are deterministic"
+    );
     ok &= require(
         std::all_of(first.cells.begin(), first.cells.end(), [](const auto& cell) {
             return std::isfinite(cell.temperature_normal)
                 && cell.temperature_normal >= 0.0f
-                && cell.temperature_normal <= 1.0f;
+                && cell.temperature_normal <= 1.0f
+                && std::isfinite(cell.precipitation_normal)
+                && cell.precipitation_normal >= 0.0f
+                && cell.precipitation_normal <= 1.0f;
         }),
-        "land and water temperature normals remain in the fixed 0..1 range"
+        "land and water climate normals remain in the fixed 0..1 range"
     );
     ok &= require(
         summary.sample_count == terrain.cells.size()
@@ -91,6 +115,14 @@ bool test_shape_range_determinism_and_summary() {
             && summary.mean >= summary.minimum
             && summary.mean <= summary.maximum,
         "temperature summary reports a valid fixed-scale range and mean"
+    );
+    ok &= require(
+        precipitation_summary.sample_count == terrain.cells.size()
+            && precipitation_summary.minimum >= 0.0f
+            && precipitation_summary.maximum <= 1.0f
+            && precipitation_summary.mean >= precipitation_summary.minimum
+            && precipitation_summary.mean <= precipitation_summary.maximum,
+        "precipitation summary reports a valid fixed-scale range and mean"
     );
     return ok;
 }
@@ -188,6 +220,121 @@ bool test_seed_domain_behavior() {
     );
 }
 
+bool test_precipitation_settings_validation_and_wind_response() {
+    auto terrain = make_flat_map(7, 1);
+    terrain.cells[0].is_water = true;
+    terrain.cells[0].is_ocean = true;
+    terrain.cells[0].terrain_form = procgen::TerrainForm::Ocean;
+    terrain.cells[0].elevation = 0.25f;
+
+    procgen::GreaterRealmClimateSettings settings;
+    settings.prevailing_wind_degrees = 725.0f;
+    settings.ambient_moisture = -1.0f;
+    settings.moisture_retention = 1.0f;
+    settings.precipitation_efficiency = 0.5f;
+    settings.orographic_lift = 0.0f;
+    settings.rain_shadow_strength = 0.0f;
+    const auto clamped = procgen::clamp_greater_realm_climate_settings(settings);
+    bool ok = require(
+        nearly_equal(clamped.prevailing_wind_degrees, 5.0f)
+            && clamped.ambient_moisture == 0.0f,
+        "wind direction wraps to 0..360 and transport settings clamp to valid ranges"
+    );
+    settings.ocean_moisture_source = std::numeric_limits<float>::quiet_NaN();
+    ok &= require(
+        procgen::clamp_greater_realm_climate_settings(settings).ocean_moisture_source
+            == procgen::GreaterRealmClimateSettings{}.ocean_moisture_source,
+        "non-finite transport settings restore deterministic defaults"
+    );
+
+    settings = clamped;
+    settings.prevailing_wind_degrees = 0.0f;
+    const auto eastward = procgen::generate_greater_realm_climate(terrain, settings);
+    settings.prevailing_wind_degrees = 180.0f;
+    const auto westward = procgen::generate_greater_realm_climate(terrain, settings);
+    ok &= require(
+        eastward.cells[6].precipitation_normal > westward.cells[6].precipitation_normal,
+        "prevailing wind transports water-source moisture downwind"
+    );
+    return ok;
+}
+
+bool test_ocean_and_inland_water_source_strengths() {
+    auto terrain = make_flat_map(2, 1);
+    terrain.cells[0].is_water = true;
+    terrain.cells[0].is_ocean = true;
+    terrain.cells[0].terrain_form = procgen::TerrainForm::Ocean;
+    terrain.cells[1].is_water = true;
+    terrain.cells[1].terrain_form = procgen::TerrainForm::InlandWater;
+
+    procgen::GreaterRealmClimateSettings settings;
+    settings.prevailing_wind_degrees = 90.0f;
+    settings.ambient_moisture = 0.0f;
+    settings.ocean_moisture_source = 1.0f;
+    settings.inland_water_moisture_source = 0.4f;
+    settings.precipitation_efficiency = 0.5f;
+    settings.orographic_lift = 0.0f;
+    const auto climate = procgen::generate_greater_realm_climate(terrain, settings);
+    return require(
+        nearly_equal(climate.cells[0].precipitation_normal, 0.5f)
+            && nearly_equal(climate.cells[1].precipitation_normal, 0.2f),
+        "ocean and inland water use separate documented moisture-source strengths"
+    );
+}
+
+bool test_orographic_lift_and_downwind_shadow() {
+    auto terrain = make_flat_map(7, 1);
+    terrain.cells[0].is_water = true;
+    terrain.cells[0].is_ocean = true;
+    terrain.cells[0].terrain_form = procgen::TerrainForm::Ocean;
+    terrain.cells[0].elevation = 0.25f;
+    terrain.cells[2].elevation = 0.65f;
+    terrain.cells[3].elevation = 1.0f;
+
+    procgen::GreaterRealmClimateSettings settings;
+    settings.prevailing_wind_degrees = 0.0f;
+    settings.ambient_moisture = 0.0f;
+    settings.moisture_retention = 1.0f;
+    settings.precipitation_efficiency = 0.25f;
+    settings.orographic_lift = 1.5f;
+    settings.rain_shadow_strength = 0.7f;
+    settings.rain_shadow_decay = 0.95f;
+    const auto climate = procgen::generate_greater_realm_climate(terrain, settings);
+    return require(
+        climate.cells[3].precipitation_normal > climate.cells[1].precipitation_normal
+            && climate.cells[4].precipitation_normal < climate.cells[1].precipitation_normal,
+        "rising terrain increases precipitation and carries a dry shadow downwind"
+    );
+}
+
+bool test_dry_wet_scale_and_hydrology_independence() {
+    auto terrain = make_flat_map(8, 2);
+    terrain.cells[0].is_water = true;
+    terrain.cells[0].is_ocean = true;
+    terrain.cells[0].terrain_form = procgen::TerrainForm::Ocean;
+    procgen::GreaterRealmClimateSettings settings;
+    settings.precipitation_scale = 0.5f;
+    const auto dry = procgen::generate_greater_realm_climate(terrain, settings);
+    settings.precipitation_scale = 1.5f;
+    const auto wet = procgen::generate_greater_realm_climate(terrain, settings);
+
+    auto hydrology_changed = terrain;
+    for (auto& cell : hydrology_changed.cells) {
+        cell.drainage_area = 10000.0f;
+        cell.downslope_index = 0;
+        cell.is_drainage_outlet = true;
+    }
+    hydrology_changed.rivers.push_back({0, 1, 10000.0f, 10.0f});
+    const auto unchanged = procgen::generate_greater_realm_climate(hydrology_changed, settings);
+    const auto dry_summary = procgen::summarize_precipitation_normals(dry);
+    const auto wet_summary = procgen::summarize_precipitation_normals(wet);
+    return require(
+        wet_summary.mean > dry_summary.mean
+            && precipitation_values_match(wet, unchanged),
+        "wetness scale changes fixed output while drainage and channels do not affect climate"
+    );
+}
+
 bool test_source_identity_debug_view_and_terrain_immutability() {
     auto terrain = make_flat_map(4, 3, 77);
     terrain.cells[0].is_water = true;
@@ -245,28 +392,56 @@ bool test_climate_regeneration_locality() {
         terrain, climate, procgen::NORMALIZED_WATERLINE, options
     );
     const auto after_debug = cache.regenerate(climate, terrain, settings);
+    std::vector<float> precipitation_before;
+    for (const auto& cell : climate.cells) {
+        precipitation_before.push_back(cell.precipitation_normal);
+    }
     settings.elevation_cooling += 0.1f;
-    const auto settings_change = cache.regenerate(climate, terrain, settings);
+    const auto temperature_change = cache.regenerate(climate, terrain, settings);
+    bool precipitation_unchanged = true;
+    for (std::size_t index = 0; index < climate.cells.size(); ++index) {
+        precipitation_unchanged &= precipitation_before[index]
+            == climate.cells[index].precipitation_normal;
+    }
+    std::vector<float> temperature_before;
+    for (const auto& cell : climate.cells) {
+        temperature_before.push_back(cell.temperature_normal);
+    }
+    settings.precipitation_scale += 0.2f;
+    const auto precipitation_change = cache.regenerate(climate, terrain, settings);
+    bool temperature_unchanged = true;
+    for (std::size_t index = 0; index < climate.cells.size(); ++index) {
+        temperature_unchanged &= temperature_before[index] == climate.cells[index].temperature_normal;
+    }
     terrain.cells[0].elevation += 0.05f;
     const auto terrain_change = cache.regenerate(climate, terrain, settings);
 
     bool ok = require(
-        first.rebuilt(procgen::GreaterRealmClimateDirtyStage::Temperature),
-        "initial climate generation builds temperature"
+        first.rebuilt(procgen::GreaterRealmClimateDirtyStage::Temperature)
+            && first.rebuilt(procgen::GreaterRealmClimateDirtyStage::Precipitation),
+        "initial climate generation builds both normal fields"
     );
     ok &= require(
         unchanged.rebuilt_stages == procgen::GreaterRealmClimateDirtyStage::None
             && after_debug.rebuilt_stages == procgen::GreaterRealmClimateDirtyStage::None,
-        "unchanged inputs and debug-only visualization do not rebuild temperature"
+        "unchanged inputs and debug-only visualization do not rebuild climate"
     );
     ok &= require(
-        settings_change.rebuilt(procgen::GreaterRealmClimateDirtyStage::Temperature),
+        temperature_change.rebuilt_stages == procgen::GreaterRealmClimateDirtyStage::Temperature
+            && precipitation_unchanged,
         "temperature-setting changes rebuild temperature only"
     );
     ok &= require(
+        precipitation_change.rebuilt_stages
+                == procgen::GreaterRealmClimateDirtyStage::Precipitation
+            && temperature_unchanged,
+        "precipitation-setting changes rebuild precipitation only"
+    );
+    ok &= require(
         terrain_change.rebuilt(procgen::GreaterRealmClimateDirtyStage::Temperature)
+            && terrain_change.rebuilt(procgen::GreaterRealmClimateDirtyStage::Precipitation)
             && climate.source_matches(terrain),
-        "changed terrain content invalidates and relinks temperature output"
+        "changed terrain content invalidates and relinks both climate outputs"
     );
     return ok;
 }
@@ -280,12 +455,16 @@ int main() {
     ok &= test_elevation_cooling();
     ok &= test_maritime_moderation();
     ok &= test_seed_domain_behavior();
+    ok &= test_precipitation_settings_validation_and_wind_response();
+    ok &= test_ocean_and_inland_water_source_strengths();
+    ok &= test_orographic_lift_and_downwind_shadow();
+    ok &= test_dry_wet_scale_and_hydrology_independence();
     ok &= test_source_identity_debug_view_and_terrain_immutability();
     ok &= test_climate_regeneration_locality();
     if (!ok) {
         return 1;
     }
 
-    std::cout << "Greater realm temperature-normal tests passed.\n";
+    std::cout << "Greater realm climate-normal tests passed.\n";
     return 0;
 }

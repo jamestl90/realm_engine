@@ -1,4 +1,5 @@
 set(REALM_PROCGEN_SOURCES
+    Biome.cpp
     Climate.cpp
     GreaterRealm.cpp
     Hydrology.cpp

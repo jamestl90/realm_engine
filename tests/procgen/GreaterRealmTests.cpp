@@ -1242,6 +1242,20 @@ bool test_debug_base_views() {
     climate_settings.temperature_variation = 0.0f;
     climate_settings.maritime_moderation = 0.0f;
     const auto climate = procgen::generate_greater_realm_climate(map, climate_settings);
+    procgen::GreaterRealmBiomeRuleSet biome_rules;
+    biome_rules.fallback_biome_id = 1;
+    procgen::GreaterRealmBiomeRule high_biome;
+    high_biome.biome_id = 2;
+    high_biome.priority = 1;
+    high_biome.elevation = procgen::BiomeValueRange{0.80f, 1.0f};
+    biome_rules.rules.push_back(high_biome);
+    const auto biomes = procgen::generate_greater_realm_biomes(
+        map, climate, biome_rules
+    );
+    const std::vector<procgen::BiomeDebugColour> biome_colours{
+        {1, {40, 120, 80, 255}},
+        {2, {180, 180, 190, 255}}
+    };
 
     bool ok = true;
     for (std::uint8_t index = 0;
@@ -1251,6 +1265,8 @@ bool test_debug_base_views() {
         const auto image = procgen::build_greater_realm_debug_image(
             map,
             climate,
+            biomes,
+            biome_colours,
             0.5f,
             options
         );
