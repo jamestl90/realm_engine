@@ -168,11 +168,11 @@ sequenceDiagram
 - **GreaterRealm**: Engine-neutral greater realm data and deterministic terrain generation
 - **TerrainConstraints**: Resolution-independent authored terrain field, brush operations, bilinear sampling, and versioned binary serialization
 - **Hydrology**: Priority drainage topology, depression conditioning, terrain-only catchment accumulation, and engine-neutral potential river channels
-- **Stable climate contract**: Planned greater-realm climate generation derives fixed-scale `temperature_normal` and `precipitation_normal` fields into a separate climate map. These are timeless climatological tendencies, not current weather or mutable terrain fields.
+- **Climate**: `GreaterRealmClimateMap` is a versioned derived map with one climate cell per canonical terrain cell and a fingerprinted source-terrain identity. It currently provides fixed-scale `temperature_normal`; precipitation remains the next planned climate layer. Climate values are timeless climatological tendencies, not current weather or mutable terrain fields.
 - **Biome contract**: Applications own biome definitions and opaque biome IDs. A reusable engine evaluator may derive a separate biome map from terrain, climate normals, and application-supplied rules without embedding product labels, colours, art, resources, or gameplay policy in procgen.
 - **Weather boundary**: Current rainfall, humidity, soil moisture, runoff, and active river discharge are runtime world-simulation state. Runtime weather may consume stable climate normals and biome assignments, but procgen does not predetermine events.
 - **MountainPeaks**: Deterministic spaced peak selection and jagged multi-source mountain distance fields
-- **GreaterRealmDebug**: Compile-gated, engine-neutral terrain statistics and RGBA debug visualization
+- **GreaterRealmDebug**: Compile-gated, engine-neutral terrain/climate statistics and RGBA debug visualization
 - **Ownership boundary**: Applications own generator settings, controls, and preview composition; procgen modules own reusable generation and visualization behavior
 - **Canonical terrain representation**: Greater-realm generation and simulation data remain on the regular grid. Irregular or triangulated geometry may be derived for rendering, but must not become authoritative world data without a new measured architecture decision. The task 032 record owns the grid-versus-dual-mesh evaluation.
 

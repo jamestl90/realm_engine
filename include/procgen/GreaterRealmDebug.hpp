@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Climate.hpp"
 #include "GreaterRealm.hpp"
 #include <cstddef>
 #include <cstdint>
@@ -18,6 +19,7 @@ enum class GreaterRealmDebugView : std::uint8_t {
     Slope,
     CoastDistance,
     CatchmentArea,
+    TemperatureNormal,
     Count
 };
 
@@ -71,6 +73,12 @@ struct DebugImage {
 );
 [[nodiscard]] DebugImage build_greater_realm_debug_image(
     const GreaterRealmMap& map,
+    float sea_level,
+    const GreaterRealmDebugOptions& options
+);
+[[nodiscard]] DebugImage build_greater_realm_debug_image(
+    const GreaterRealmMap& map,
+    const GreaterRealmClimateMap& climate,
     float sea_level,
     const GreaterRealmDebugOptions& options
 );

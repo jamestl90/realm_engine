@@ -122,6 +122,11 @@ bool test_panel_sliders_update_settings_and_callbacks() {
     game::GreaterRealmPresentationSettings presentation;
     procgen::TerrainConstraintBrushSettings brushSettings;
     const auto map = make_smoke_map();
+    procgen::TemperatureNormalSummary temperatureSummary;
+    temperatureSummary.minimum = 0.25f;
+    temperatureSummary.maximum = 0.75f;
+    temperatureSummary.mean = 0.50f;
+    temperatureSummary.sample_count = map.cells.size();
 
     int regenerations = 0;
     int presentationChanges = 0;
@@ -133,6 +138,7 @@ bool test_panel_sliders_update_settings_and_callbacks() {
         presentation,
         brushSettings,
         map,
+        temperatureSummary,
         [&regenerations](bool) { ++regenerations; },
         [](procgen::TerrainConstraintTool) {},
         [&brushChanges](procgen::TerrainConstraintBrushSettings) { ++brushChanges; },
@@ -164,6 +170,14 @@ bool test_panel_sliders_update_settings_and_callbacks() {
         }
     );
     ok &= require(has_water_coverage, "coverage summary separates ocean and inland water from land");
+    const bool has_temperature_summary = std::any_of(
+        text_blocks.begin(),
+        text_blocks.end(),
+        [](const ui::TextBlock* text) {
+            return text->text() == "Temperature mean 50.00%  Range 25.00-75.00%";
+        }
+    );
+    ok &= require(has_temperature_summary, "temperature summary reports fixed-scale mean and range");
 
     click_button(*buttons[1]);
     ok &= require(

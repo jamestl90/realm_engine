@@ -44,6 +44,7 @@ const char* to_string(GreaterRealmDebugView view) noexcept {
         case GreaterRealmDebugView::Slope: return "Slope";
         case GreaterRealmDebugView::CoastDistance: return "Coast distance";
         case GreaterRealmDebugView::CatchmentArea: return "Catchment area";
+        case GreaterRealmDebugView::TemperatureNormal: return "Temperature normal";
         case GreaterRealmDebugView::Count: break;
     }
     return "Unknown";

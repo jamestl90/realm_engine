@@ -51,6 +51,7 @@ set(REALM_PROCGEN_DEBUG_SOURCES
     "${CMAKE_SOURCE_DIR}/src/game/GreaterRealmDebugPanel.cpp"
 )
 set(REALM_PROCGEN_RUNTIME_SOURCES
+    "${CMAKE_SOURCE_DIR}/src/procgen/Climate.cpp"
     "${CMAKE_SOURCE_DIR}/src/procgen/GreaterRealm.cpp"
     "${CMAKE_SOURCE_DIR}/src/procgen/GreaterRealmDebug.cpp"
     "${CMAKE_SOURCE_DIR}/src/procgen/Hydrology.cpp"
@@ -119,6 +120,7 @@ if(REALM_BUILD_TESTS)
 
     add_executable(realm_engine_tests EXCLUDE_FROM_ALL
         tests/procgen/GreaterRealmTests.cpp
+        src/procgen/Climate.cpp
         src/procgen/GreaterRealm.cpp
         src/procgen/GreaterRealmDebug.cpp
         src/procgen/Hydrology.cpp
@@ -133,6 +135,24 @@ if(REALM_BUILD_TESTS)
     target_compile_definitions(realm_engine_tests PRIVATE REALM_TEST_BUILD=1)
 
     add_test(NAME procgen_greater_realm COMMAND realm_engine_tests)
+
+    add_executable(realm_climate_tests EXCLUDE_FROM_ALL
+        tests/procgen/ClimateTests.cpp
+        src/procgen/Climate.cpp
+        src/procgen/GreaterRealm.cpp
+        src/procgen/GreaterRealmDebug.cpp
+        src/procgen/Hydrology.cpp
+        src/procgen/MountainPeaks.cpp
+        src/procgen/TerrainConstraints.cpp
+    )
+
+    target_include_directories(realm_climate_tests PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+    )
+
+    target_compile_definitions(realm_climate_tests PRIVATE REALM_TEST_BUILD=1)
+
+    add_test(NAME procgen_greater_realm_climate COMMAND realm_climate_tests)
 
     add_executable(realm_procgen_regeneration_tests EXCLUDE_FROM_ALL
         tests/procgen/GreaterRealmRegenerationTests.cpp
@@ -155,6 +175,7 @@ if(REALM_BUILD_TESTS)
 
     add_executable(realm_procgen_pipeline_tests EXCLUDE_FROM_ALL
         tests/procgen/HydrologyConstraintTests.cpp
+        src/procgen/Climate.cpp
         src/procgen/GreaterRealm.cpp
         src/procgen/GreaterRealmDebug.cpp
         src/procgen/Hydrology.cpp
@@ -186,6 +207,7 @@ if(REALM_BUILD_TESTS)
 
     add_executable(realm_mountain_peak_tests EXCLUDE_FROM_ALL
         tests/procgen/MountainPeakTests.cpp
+        src/procgen/Climate.cpp
         src/procgen/GreaterRealm.cpp
         src/procgen/GreaterRealmDebug.cpp
         src/procgen/Hydrology.cpp

@@ -73,6 +73,17 @@ std::string hydrology_text(const procgen::GreaterRealmMap& map) {
     return stream.str();
 }
 
+std::string temperature_text(const procgen::TemperatureNormalSummary& summary) {
+    if (summary.sample_count == 0) {
+        return "Temperature unavailable";
+    }
+    std::ostringstream stream;
+    stream << "Temperature mean " << format_float(summary.mean * 100.0f)
+           << "%  Range " << format_float(summary.minimum * 100.0f)
+           << "-" << format_float(summary.maximum * 100.0f) << "%";
+    return stream.str();
+}
+
 std::unique_ptr<ui::TextBlock> make_text(const std::string& text, ui::TextBlock** out = nullptr) {
     auto element = std::make_unique<ui::TextBlock>(text);
     element->setFontSize(14.0f);
@@ -207,6 +218,7 @@ std::unique_ptr<ui::UIElement> GreaterRealmDebugPanel::build(
     GreaterRealmPresentationSettings& presentation_settings,
     procgen::TerrainConstraintBrushSettings& brush_settings,
     const procgen::GreaterRealmMap& map,
+    const procgen::TemperatureNormalSummary& temperature_summary,
     RegenerateCallback on_regenerate,
     ToolChangedCallback on_tool_changed,
     BrushSettingsChangedCallback on_brush_settings_changed,
@@ -548,11 +560,19 @@ std::unique_ptr<ui::UIElement> GreaterRealmDebugPanel::build(
     hydrology->setSizeConstraints(summary_constraints);
     root->addChild(std::move(hydrology));
 
-    update(map);
+    auto temperature = make_text("", &m_temperature_text);
+    temperature->setColour(ui::Colour{38, 44, 48, 255});
+    temperature->setSizeConstraints(summary_constraints);
+    root->addChild(std::move(temperature));
+
+    update(map, temperature_summary);
     return root;
 }
 
-void GreaterRealmDebugPanel::update(const procgen::GreaterRealmMap& map) {
+void GreaterRealmDebugPanel::update(
+    const procgen::GreaterRealmMap& map,
+    const procgen::TemperatureNormalSummary& temperature_summary
+) {
     if (!m_settings) {
         return;
     }
@@ -612,6 +632,9 @@ void GreaterRealmDebugPanel::update(const procgen::GreaterRealmMap& map) {
         if (m_coverage_text) m_coverage_text->setText(coverage_text(map, counts));
         if (m_terrain_text) m_terrain_text->setText(terrain_text(map, counts));
         if (m_hydrology_text) m_hydrology_text->setText(hydrology_text(map));
+    }
+    if (m_temperature_text) {
+        m_temperature_text->setText(temperature_text(temperature_summary));
     }
 }
 

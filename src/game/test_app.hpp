@@ -6,6 +6,7 @@
 
 #if defined(REALM_ENABLE_PROCGEN_DEBUG_VIEW)
 #include "GreaterRealmDebugPanel.hpp"
+#include "../../include/procgen/Climate.hpp"
 #include "../../include/procgen/TerrainConstraintPainting.hpp"
 #include "../../include/procgen/TerrainConstraints.hpp"
 #endif
@@ -43,6 +44,9 @@ private:
     procgen::TerrainConstraintField m_procgen_constraints{64, 64};
     procgen::GreaterRealmGenerationCache m_procgen_generation_cache;
     procgen::GreaterRealmMap m_procgen_map;
+    procgen::GreaterRealmClimateSettings m_procgen_climate_settings{};
+    procgen::GreaterRealmClimateGenerationCache m_procgen_climate_generation_cache;
+    procgen::GreaterRealmClimateMap m_procgen_climate_map;
     procgen::GreaterRealmDebugOptions m_procgen_debug_options;
     GreaterRealmPresentationSettings m_procgen_presentation;
     procgen::TerrainConstraintBrushSettings m_procgen_brush_settings;

@@ -1238,13 +1238,22 @@ bool test_debug_base_views() {
     options.show_coastline = false;
     options.show_mountain_peaks = false;
     options.show_rivers = false;
+    procgen::GreaterRealmClimateSettings climate_settings;
+    climate_settings.temperature_variation = 0.0f;
+    climate_settings.maritime_moderation = 0.0f;
+    const auto climate = procgen::generate_greater_realm_climate(map, climate_settings);
 
     bool ok = true;
     for (std::uint8_t index = 0;
          index < static_cast<std::uint8_t>(procgen::GreaterRealmDebugView::Count);
          ++index) {
         options.view = static_cast<procgen::GreaterRealmDebugView>(index);
-        const auto image = procgen::build_greater_realm_debug_image(map, 0.5f, options);
+        const auto image = procgen::build_greater_realm_debug_image(
+            map,
+            climate,
+            0.5f,
+            options
+        );
         ok &= require(image.has_expected_byte_count(), "every debug base view produces a complete image");
         ok &= require(
             image.rgba[0] != image.rgba[4]

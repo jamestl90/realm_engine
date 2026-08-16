@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../../include/procgen/Climate.hpp"
 #include "../../include/procgen/GreaterRealmDebug.hpp"
 #include "../../include/procgen/TerrainConstraintPainting.hpp"
 #include "../../include/procgen/TerrainConstraints.hpp"
@@ -43,6 +44,7 @@ public:
         GreaterRealmPresentationSettings& presentation_settings,
         procgen::TerrainConstraintBrushSettings& brush_settings,
         const procgen::GreaterRealmMap& map,
+        const procgen::TemperatureNormalSummary& temperature_summary,
         RegenerateCallback on_regenerate,
         ToolChangedCallback on_tool_changed,
         BrushSettingsChangedCallback on_brush_settings_changed,
@@ -51,7 +53,10 @@ public:
         PresentationChangedCallback on_presentation_changed
     );
 
-    void update(const procgen::GreaterRealmMap& map);
+    void update(
+        const procgen::GreaterRealmMap& map,
+        const procgen::TemperatureNormalSummary& temperature_summary
+    );
 
 private:
     void regenerate(bool force_full = false);
@@ -93,6 +98,7 @@ private:
     ui::TextBlock* m_coverage_text{nullptr};
     ui::TextBlock* m_terrain_text{nullptr};
     ui::TextBlock* m_hydrology_text{nullptr};
+    ui::TextBlock* m_temperature_text{nullptr};
     ui::TextBlock* m_brush_size_text{nullptr};
     ui::TextBlock* m_brush_strength_text{nullptr};
     ui::Slider* m_island_bias_slider{nullptr};

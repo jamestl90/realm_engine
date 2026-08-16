@@ -41,17 +41,36 @@ bool TestApp::regenerate_procgen_debug_map(core::Engine& engine, bool force_full
         m_procgen_settings,
         m_procgen_constraints
     );
+    constexpr procgen::GreaterRealmDirtyStage temperature_source_stages =
+        procgen::GreaterRealmDirtyStage::TerrainFields
+        | procgen::GreaterRealmDirtyStage::MountainPeaks
+        | procgen::GreaterRealmDirtyStage::Relief
+        | procgen::GreaterRealmDirtyStage::Classification;
+    if (procgen::has_dirty_stage(regeneration.rebuilt_stages, temperature_source_stages)) {
+        m_procgen_climate_generation_cache.invalidate();
+    }
+    const auto climate_regeneration = m_procgen_climate_generation_cache.regenerate(
+        m_procgen_climate_map,
+        m_procgen_map,
+        m_procgen_climate_settings
+    );
 #if defined(REALM_ENABLE_PROCGEN_PROFILING)
     const auto generated_at = ProfileClock::now();
 #endif
 
-    if (regeneration.rebuilt_stages == procgen::GreaterRealmDirtyStage::None) {
-        m_procgen_debug_panel.update(m_procgen_map);
+    if (regeneration.rebuilt_stages == procgen::GreaterRealmDirtyStage::None
+        && climate_regeneration.rebuilt_stages
+            == procgen::GreaterRealmClimateDirtyStage::None) {
+        m_procgen_debug_panel.update(
+            m_procgen_map,
+            procgen::summarize_temperature_normals(m_procgen_climate_map)
+        );
         return true;
     }
 
     const auto image = procgen::build_greater_realm_debug_image(
         m_procgen_map,
+        m_procgen_climate_map,
         procgen::NORMALIZED_WATERLINE,
         m_procgen_debug_options
     );
@@ -73,7 +92,10 @@ bool TestApp::regenerate_procgen_debug_map(core::Engine& engine, bool force_full
     const auto texture_uploaded_at = ProfileClock::now();
 #endif
 
-    m_procgen_debug_panel.update(m_procgen_map);
+    m_procgen_debug_panel.update(
+        m_procgen_map,
+        procgen::summarize_temperature_normals(m_procgen_climate_map)
+    );
 #if defined(REALM_ENABLE_PROCGEN_PROFILING)
     const auto finished_at = ProfileClock::now();
     const auto elapsed_ms = [](auto start, auto finish) {
@@ -119,6 +141,7 @@ bool TestApp::refresh_procgen_debug_view(core::Engine& engine) {
 
     const auto image = procgen::build_greater_realm_debug_image(
         m_procgen_map,
+        m_procgen_climate_map,
         procgen::NORMALIZED_WATERLINE,
         m_procgen_debug_options
     );
@@ -338,8 +361,14 @@ void TestApp::on_startup(core::Engine& engine) {
         m_procgen_settings,
         m_procgen_constraints
     );
+    (void)m_procgen_climate_generation_cache.regenerate(
+        m_procgen_climate_map,
+        m_procgen_map,
+        m_procgen_climate_settings
+    );
     const auto initial_image = procgen::build_greater_realm_debug_image(
         m_procgen_map,
+        m_procgen_climate_map,
         procgen::NORMALIZED_WATERLINE,
         m_procgen_debug_options
     );
@@ -410,6 +439,7 @@ void TestApp::on_startup(core::Engine& engine) {
         m_procgen_presentation,
         m_procgen_brush_settings,
         m_procgen_map,
+        procgen::summarize_temperature_normals(m_procgen_climate_map),
         [this, &engine](bool force_full) {
             regenerate_procgen_debug_map(engine, force_full);
         },

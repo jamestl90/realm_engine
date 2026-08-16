@@ -212,6 +212,7 @@ const char* to_string(GreaterRealmDebugView view) noexcept {
         case GreaterRealmDebugView::Slope: return "Slope";
         case GreaterRealmDebugView::CoastDistance: return "Coast distance";
         case GreaterRealmDebugView::CatchmentArea: return "Catchment area";
+        case GreaterRealmDebugView::TemperatureNormal: return "Temperature normal";
         case GreaterRealmDebugView::Count: break;
     }
     return "Unknown";
@@ -287,11 +288,19 @@ DebugColour greater_realm_debug_colour(
             return terrain_form_colour(cell);
         case GreaterRealmDebugView::Terrain:
             return continuous_terrain_colour(cell);
+        case GreaterRealmDebugView::TemperatureNormal:
         case GreaterRealmDebugView::Count:
             break;
     }
     return {255, 0, 255, 255};
 }
+
+static DebugImage build_greater_realm_debug_image_impl(
+    const GreaterRealmMap& map,
+    const GreaterRealmClimateMap* climate,
+    float sea_level,
+    const GreaterRealmDebugOptions& options
+);
 
 DebugImage build_greater_realm_debug_image(const GreaterRealmMap& map, float sea_level) {
     return build_greater_realm_debug_image(map, sea_level, GreaterRealmDebugOptions{});
@@ -302,23 +311,50 @@ DebugImage build_greater_realm_debug_image(
     float sea_level,
     const GreaterRealmDebugOptions& options
 ) {
+    return build_greater_realm_debug_image_impl(map, nullptr, sea_level, options);
+}
+
+DebugImage build_greater_realm_debug_image(
+    const GreaterRealmMap& map,
+    const GreaterRealmClimateMap& climate,
+    float sea_level,
+    const GreaterRealmDebugOptions& options
+) {
+    return build_greater_realm_debug_image_impl(map, &climate, sea_level, options);
+}
+
+static DebugImage build_greater_realm_debug_image_impl(
+    const GreaterRealmMap& map,
+    const GreaterRealmClimateMap* climate,
+    float sea_level,
+    const GreaterRealmDebugOptions& options
+) {
     DebugImage image;
     image.width = map.width;
     image.height = map.height;
 
-    if (!map.has_expected_cell_count()) {
+    const bool temperature_view = options.view == GreaterRealmDebugView::TemperatureNormal;
+    if (!map.has_expected_cell_count()
+        || (temperature_view && (!climate || !climate->source_matches(map)))) {
         return image;
     }
 
     const float scalar_maximum = scalar_maximum_for_view(map, options.view);
     image.rgba.resize(image.expected_byte_count());
     for (std::size_t index = 0; index < map.cells.size(); ++index) {
-        DebugColour colour = greater_realm_debug_colour(
-            map.cells[index],
-            sea_level,
-            options.view,
-            scalar_maximum
-        );
+        DebugColour colour = temperature_view
+            ? three_colour_gradient(
+                climate->cells[index].temperature_normal,
+                {38, 82, 148, 255},
+                {104, 172, 120, 255},
+                {222, 82, 48, 255}
+            )
+            : greater_realm_debug_colour(
+                map.cells[index],
+                sea_level,
+                options.view,
+                scalar_maximum
+            );
         if (options.show_coastline && map.cells[index].is_coastal) {
             constexpr float coastline_outline = 0.72f;
             colour.r = static_cast<std::uint8_t>(static_cast<float>(colour.r) * coastline_outline);
