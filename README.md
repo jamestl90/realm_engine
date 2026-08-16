@@ -11,3 +11,5 @@
 **SCREENSHOTS**
 
 ![Procedural map generation screenshot](screenshots/Screenshot%202026-08-16%20194726.png)
+
+![Procedural map generation demo](screenshots/demo1.gif)
