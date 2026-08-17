@@ -324,6 +324,70 @@ DebugColour greater_realm_debug_colour(
     return {255, 0, 255, 255};
 }
 
+void apply_greater_realm_debug_overlays(
+    DebugImage& image,
+    const GreaterRealmMap& map,
+    const GreaterRealmDebugOptions& options
+) noexcept {
+    if (!map.has_expected_cell_count()
+        || image.width != map.width
+        || image.height != map.height
+        || !image.has_expected_byte_count()) {
+        return;
+    }
+
+    if (options.show_coastline) {
+        constexpr float coastline_outline = 0.72f;
+        for (std::size_t index = 0; index < map.cells.size(); ++index) {
+            if (!map.cells[index].is_coastal) {
+                continue;
+            }
+            const std::size_t pixel = index * 4;
+            image.rgba[pixel] = static_cast<std::uint8_t>(
+                static_cast<float>(image.rgba[pixel]) * coastline_outline
+            );
+            image.rgba[pixel + 1] = static_cast<std::uint8_t>(
+                static_cast<float>(image.rgba[pixel + 1]) * coastline_outline
+            );
+            image.rgba[pixel + 2] = static_cast<std::uint8_t>(
+                static_cast<float>(image.rgba[pixel + 2]) * coastline_outline
+            );
+        }
+    }
+
+    if (options.show_drainage_directions && map.width > 0 && map.height > 0) {
+        constexpr std::uint32_t sample_stride = 8;
+        constexpr DebugColour drainage_colour{246, 198, 64, 255};
+        for (std::uint32_t y = sample_stride / 2; y < map.height; y += sample_stride) {
+            for (std::uint32_t x = sample_stride / 2; x < map.width; x += sample_stride) {
+                const std::size_t index = map.index(x, y);
+                const auto& cell = map.cells[index];
+                if (cell.downslope_index == INVALID_CELL_INDEX || cell.downslope_index == index) {
+                    continue;
+                }
+                set_pixel(image, index, drainage_colour);
+                set_pixel(image, cell.downslope_index, drainage_colour);
+            }
+        }
+    }
+
+    if (options.show_rivers) {
+        constexpr DebugColour river_colour{40, 156, 224, 255};
+        for (const auto& river : map.rivers) {
+            for (const std::uint32_t index : {river.source_index, river.destination_index}) {
+                set_pixel(image, index, river_colour);
+            }
+        }
+    }
+
+    if (options.show_mountain_peaks) {
+        constexpr DebugColour peak_colour{232, 62, 48, 255};
+        for (const auto& peak : map.mountain_peaks) {
+            set_pixel(image, peak.cell_index, peak_colour);
+        }
+    }
+}
+
 static DebugImage build_greater_realm_debug_image_impl(
     const GreaterRealmMap& map,
     const GreaterRealmClimateMap* climate,
@@ -422,12 +486,6 @@ static DebugImage build_greater_realm_debug_image_impl(
                 scalar_maximum
             );
         }
-        if (options.show_coastline && map.cells[index].is_coastal) {
-            constexpr float coastline_outline = 0.72f;
-            colour.r = static_cast<std::uint8_t>(static_cast<float>(colour.r) * coastline_outline);
-            colour.g = static_cast<std::uint8_t>(static_cast<float>(colour.g) * coastline_outline);
-            colour.b = static_cast<std::uint8_t>(static_cast<float>(colour.b) * coastline_outline);
-        }
         const std::size_t pixel = index * 4;
         image.rgba[pixel] = colour.r;
         image.rgba[pixel + 1] = colour.g;
@@ -435,37 +493,7 @@ static DebugImage build_greater_realm_debug_image_impl(
         image.rgba[pixel + 3] = colour.a;
     }
 
-    if (options.show_drainage_directions && map.width > 0 && map.height > 0) {
-        constexpr std::uint32_t sample_stride = 8;
-        constexpr DebugColour drainage_colour{246, 198, 64, 255};
-        for (std::uint32_t y = sample_stride / 2; y < map.height; y += sample_stride) {
-            for (std::uint32_t x = sample_stride / 2; x < map.width; x += sample_stride) {
-                const std::size_t index = map.index(x, y);
-                const auto& cell = map.cells[index];
-                if (cell.downslope_index == INVALID_CELL_INDEX || cell.downslope_index == index) {
-                    continue;
-                }
-                set_pixel(image, index, drainage_colour);
-                set_pixel(image, cell.downslope_index, drainage_colour);
-            }
-        }
-    }
-
-    if (options.show_rivers) {
-        constexpr DebugColour river_colour{40, 156, 224, 255};
-        for (const auto& river : map.rivers) {
-            for (const std::uint32_t index : {river.source_index, river.destination_index}) {
-                set_pixel(image, index, river_colour);
-            }
-        }
-    }
-
-    if (options.show_mountain_peaks) {
-        constexpr DebugColour peak_colour{232, 62, 48, 255};
-        for (const auto& peak : map.mountain_peaks) {
-            set_pixel(image, peak.cell_index, peak_colour);
-        }
-    }
+    apply_greater_realm_debug_overlays(image, map, options);
 
     return image;
 }

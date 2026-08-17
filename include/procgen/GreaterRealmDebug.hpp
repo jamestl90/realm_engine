@@ -75,6 +75,11 @@ struct DebugImage {
     GreaterRealmDebugView view = GreaterRealmDebugView::Terrain,
     float scalar_maximum = 1.0f
 ) noexcept;
+void apply_greater_realm_debug_overlays(
+    DebugImage& image,
+    const GreaterRealmMap& map,
+    const GreaterRealmDebugOptions& options
+) noexcept;
 [[nodiscard]] DebugImage build_greater_realm_debug_image(
     const GreaterRealmMap& map,
     float sea_level

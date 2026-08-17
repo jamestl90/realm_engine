@@ -1,5 +1,6 @@
 #pragma once
 
+#include "GreaterRealmClimateWeatherInspection.hpp"
 #include "../../include/procgen/Climate.hpp"
 #include "../../include/procgen/GreaterRealmDebug.hpp"
 #include "../../include/procgen/TerrainConstraintPainting.hpp"
@@ -37,10 +38,12 @@ public:
     using ClearConstraintsCallback = std::function<void()>;
     using ViewChangedCallback = std::function<void()>;
     using PresentationChangedCallback = std::function<void()>;
+    using ClimateTimeChangedCallback = std::function<void(bool)>;
 
     [[nodiscard]] std::unique_ptr<ui::UIElement> build(
         procgen::GreaterRealmGeneratorSettings& settings,
         procgen::GreaterRealmDebugOptions& debug_options,
+        GreaterRealmInspectionSettings& inspection_settings,
         GreaterRealmPresentationSettings& presentation_settings,
         procgen::TerrainConstraintBrushSettings& brush_settings,
         const procgen::GreaterRealmMap& map,
@@ -51,7 +54,8 @@ public:
         BrushSettingsChangedCallback on_brush_settings_changed,
         ClearConstraintsCallback on_clear_constraints,
         ViewChangedCallback on_view_changed,
-        PresentationChangedCallback on_presentation_changed
+        PresentationChangedCallback on_presentation_changed,
+        ClimateTimeChangedCallback on_climate_time_changed
     );
 
     void update(
@@ -64,6 +68,7 @@ private:
     void regenerate(bool force_full = false);
     void notify_view_changed();
     void notify_presentation_changed();
+    void notify_climate_time_changed(bool preserve_previous_weather);
     void update_overlay_buttons();
     void select_presentation_mode(GreaterRealmPresentationMode mode);
     void update_presentation_buttons();
@@ -73,6 +78,7 @@ private:
 
     procgen::GreaterRealmGeneratorSettings* m_settings{nullptr};
     procgen::GreaterRealmDebugOptions* m_debug_options{nullptr};
+    GreaterRealmInspectionSettings* m_inspection_settings{nullptr};
     GreaterRealmPresentationSettings* m_presentation_settings{nullptr};
     procgen::TerrainConstraintBrushSettings* m_brush_settings{nullptr};
     RegenerateCallback m_on_regenerate;
@@ -81,6 +87,7 @@ private:
     ClearConstraintsCallback m_on_clear_constraints;
     ViewChangedCallback m_on_view_changed;
     PresentationChangedCallback m_on_presentation_changed;
+    ClimateTimeChangedCallback m_on_climate_time_changed;
     procgen::TerrainConstraintTool m_selected_tool{procgen::TerrainConstraintTool::Mountain};
     ui::TextBlock* m_seed_text{nullptr};
     ui::TextBlock* m_island_bias_text{nullptr};
@@ -97,6 +104,8 @@ private:
     ui::TextBlock* m_ocean_depth_text{nullptr};
     ui::TextBlock* m_channel_threshold_text{nullptr};
     ui::TextBlock* m_elevation_scale_text{nullptr};
+    ui::TextBlock* m_year_fraction_text{nullptr};
+    ui::TextBlock* m_weather_tick_text{nullptr};
     ui::TextBlock* m_coverage_text{nullptr};
     ui::TextBlock* m_terrain_text{nullptr};
     ui::TextBlock* m_hydrology_text{nullptr};
@@ -117,6 +126,7 @@ private:
     ui::Slider* m_ocean_depth_slider{nullptr};
     ui::Slider* m_channel_threshold_slider{nullptr};
     ui::Slider* m_elevation_scale_slider{nullptr};
+    ui::Slider* m_year_fraction_slider{nullptr};
     ui::Slider* m_brush_size_slider{nullptr};
     ui::Slider* m_brush_strength_slider{nullptr};
     ui::Button* m_coastline_button{nullptr};

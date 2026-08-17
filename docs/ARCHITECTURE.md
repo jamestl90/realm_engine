@@ -174,7 +174,7 @@ sequenceDiagram
 - **Climatological transport**: Precipitation-normal circulation settings describe long-term moisture transport for annual climate only. They are not persistent runtime wind, pressure, storm motion, or airflow state.
 - **Weather boundary**: Current temperature anomaly, pressure, runtime wind, humidity, cloud cover, active precipitation, soil moisture, runoff, and active river discharge are runtime world-simulation state. Runtime weather may consume stable climate normals and biome assignments, but procgen does not predetermine events.
 - **MountainPeaks**: Deterministic spaced peak selection and jagged multi-source mountain distance fields
-- **GreaterRealmDebug**: Build-configurable, engine-neutral terrain/climate/biome statistics and RGBA inspection visualization; shipped Debug and Release presets include it, while biome colours are supplied by the application with a neutral engine fallback
+- **GreaterRealm inspection**: Build-configurable, engine-neutral terrain/climate/biome statistics and RGBA visualization are combined by the application with seasonal and runtime weather inspection. Shipped Debug and Release presets include the unified selector, explicit calendar/weather-tick controls, and sampled runtime-wind vectors; biome colours remain application supplied with a neutral engine fallback.
 - **Ownership boundary**: Applications own generator settings, controls, and preview composition; procgen modules own reusable generation and visualization behavior
 - **Canonical terrain representation**: Greater-realm generation and simulation data remain on the regular grid. Irregular or triangulated geometry may be derived for rendering, but must not become authoritative world data without a new measured architecture decision. The task 032 record owns the grid-versus-dual-mesh evaluation.
 
@@ -184,6 +184,7 @@ sequenceDiagram
 - **Runtime atmosphere**: `world::RuntimeAtmosphericState` owns current temperature anomaly, pressure, runtime wind vector, humidity, cloud cover, active precipitation intensity/type, schema identity, weather seed, region identity, and simulation tick. It advances from explicit ticks rather than render frames.
 - **Persistence**: Annual climate and biome maps remain regenerated from versioned inputs by default. Seasonal samples can be recomputed from calendar/profile inputs. Runtime weather state carries schema, source, seed, region, and timestamp identity so active or streamed regions can persist it later; runoff, soil moisture, and discharge remain future world/region simulation state.
 - **Queries**: `world::ClimateWeatherSample` distinguishes stable annual climate, seasonal tendency, runtime atmospheric state, composed experienced conditions, active precipitation, and stable biome ID so consumers do not accidentally treat weather as biome-defining climate.
+- **Inspection boundary**: `game::GreaterRealmInspectionView` and the application-side climate/weather compositor visualize world-simulation data without making procgen depend on mutable weather. Inspection time changes rebuild seasonal/runtime preview state only and never regenerate or relabel biomes.
 
 ### Physics (`include/physics/`)
 - **SpatialPartition**: Grid-based spatial hash for broad-phase collision

@@ -29,6 +29,8 @@ public:
 private:
 #if defined(REALM_ENABLE_PROCGEN_DEBUG_VIEW)
     bool regenerate_procgen_debug_map(core::Engine& engine, bool force_full = false);
+    bool regenerate_climate_weather_inspection(bool preserve_previous_weather = false);
+    [[nodiscard]] procgen::DebugImage build_current_inspection_image() const;
     bool refresh_procgen_debug_view(core::Engine& engine);
     bool upload_procgen_debug_texture(core::Engine& engine, const procgen::DebugImage& image);
     bool refresh_procgen_terrain_mesh(core::Engine& engine, const procgen::DebugImage& image);
@@ -54,6 +56,15 @@ private:
     procgen::GreaterRealmBiomeMap m_procgen_biome_map;
     std::vector<procgen::BiomeDebugColour> m_procgen_biome_colours;
     procgen::GreaterRealmDebugOptions m_procgen_debug_options;
+    GreaterRealmInspectionSettings m_inspection_settings;
+    world::SeasonalTemperatureSettings m_seasonal_temperature_settings;
+    world::SeasonalPrecipitationSettings m_seasonal_precipitation_settings;
+    world::SeasonalTemperatureEvaluationCache m_seasonal_temperature_cache;
+    world::SeasonalPrecipitationEvaluationCache m_seasonal_precipitation_cache;
+    world::SeasonalTemperatureMap m_seasonal_temperature;
+    world::SeasonalPrecipitationMap m_seasonal_precipitation;
+    world::RuntimeWeatherSettings m_runtime_weather_settings;
+    world::RuntimeAtmosphericState m_runtime_weather;
     GreaterRealmPresentationSettings m_procgen_presentation;
     procgen::TerrainConstraintBrushSettings m_procgen_brush_settings;
     procgen::TerrainConstraintPaintSession m_procgen_paint_session;

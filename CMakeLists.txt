@@ -44,6 +44,8 @@ file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS "src/*.cpp")
 
 # Procgen visualization and its application panel remain optional, but all shipped presets enable them.
 set(REALM_PROCGEN_DEBUG_SOURCES
+    "${CMAKE_SOURCE_DIR}/src/game/GreaterRealmClimateWeatherInspection.cpp"
+    "${CMAKE_SOURCE_DIR}/src/game/GreaterRealmInspectionView.cpp"
     "${CMAKE_SOURCE_DIR}/src/game/GreaterRealmDebugBiomes.cpp"
     "${CMAKE_SOURCE_DIR}/src/game/GreaterRealmDebugPanel.cpp"
 )
@@ -365,6 +367,7 @@ if(REALM_BUILD_TESTS)
         tests/game/GreaterRealmDebugPanelTests.cpp
         tests/game/GreaterRealmDebugPanelProcgenStubs.cpp
         src/game/GreaterRealmDebugPanel.cpp
+        src/game/GreaterRealmInspectionView.cpp
         src/procgen/TerrainConstraintPainting.cpp
         src/ui/Button.cpp
         src/ui/ComboBox.cpp
@@ -388,6 +391,30 @@ if(REALM_BUILD_TESTS)
     target_compile_definitions(realm_greater_realm_debug_panel_tests PRIVATE REALM_TEST_BUILD=1)
 
     add_test(NAME ui_greater_realm_debug_panel COMMAND realm_greater_realm_debug_panel_tests)
+
+    add_executable(realm_climate_weather_inspection_tests EXCLUDE_FROM_ALL
+        tests/game/ClimateWeatherInspectionTests.cpp
+        src/game/GreaterRealmClimateWeatherInspection.cpp
+        src/game/GreaterRealmInspectionView.cpp
+        src/world/SeasonalClimate.cpp
+        src/world/Weather.cpp
+        src/procgen/Biome.cpp
+        src/procgen/Climate.cpp
+        src/procgen/GreaterRealm.cpp
+        src/procgen/GreaterRealmDebug.cpp
+        src/procgen/Hydrology.cpp
+        src/procgen/MountainPeaks.cpp
+        src/procgen/TerrainConstraints.cpp
+    )
+
+    target_include_directories(realm_climate_weather_inspection_tests PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/src
+    )
+
+    target_compile_definitions(realm_climate_weather_inspection_tests PRIVATE REALM_TEST_BUILD=1)
+
+    add_test(NAME game_climate_weather_inspection COMMAND realm_climate_weather_inspection_tests)
 
     add_executable(realm_terrain_mesh_tests EXCLUDE_FROM_ALL
         tests/rendering/TerrainMeshTests.cpp
