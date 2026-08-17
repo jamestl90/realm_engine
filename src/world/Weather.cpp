@@ -66,6 +66,10 @@ void initialize_runtime_state(
     state.source_terrain_fingerprint =
         procgen::greater_realm_climate_source_fingerprint(terrain);
     state.source_climate_fingerprint = procgen::greater_realm_climate_fingerprint(climate);
+    state.source_seasonal_temperature_provenance_fingerprint =
+        seasonal_temperature_provenance_fingerprint(seasonal_temperature);
+    state.source_seasonal_precipitation_provenance_fingerprint =
+        seasonal_precipitation_provenance_fingerprint(seasonal_precipitation);
     state.source_seasonal_temperature_fingerprint =
         seasonal_temperature_fingerprint(seasonal_temperature);
     state.source_seasonal_precipitation_fingerprint =
@@ -91,10 +95,10 @@ void initialize_runtime_state(
         && previous->weather_cell_size == target_identity.weather_cell_size
         && previous->source_terrain_fingerprint == target_identity.source_terrain_fingerprint
         && previous->source_climate_fingerprint == target_identity.source_climate_fingerprint
-        && previous->source_seasonal_temperature_fingerprint
-            == target_identity.source_seasonal_temperature_fingerprint
-        && previous->source_seasonal_precipitation_fingerprint
-            == target_identity.source_seasonal_precipitation_fingerprint
+        && previous->source_seasonal_temperature_provenance_fingerprint
+            == target_identity.source_seasonal_temperature_provenance_fingerprint
+        && previous->source_seasonal_precipitation_provenance_fingerprint
+            == target_identity.source_seasonal_precipitation_provenance_fingerprint
         && previous->settings_fingerprint == target_identity.settings_fingerprint
         && previous->has_expected_cell_count()
         && previous->simulation_tick < simulation_tick;
@@ -128,6 +132,10 @@ bool RuntimeAtmosphericState::source_matches(
         && source_terrain_fingerprint
             == procgen::greater_realm_climate_source_fingerprint(terrain)
         && source_climate_fingerprint == procgen::greater_realm_climate_fingerprint(climate)
+        && source_seasonal_temperature_provenance_fingerprint
+            == seasonal_temperature_provenance_fingerprint(seasonal_temperature)
+        && source_seasonal_precipitation_provenance_fingerprint
+            == seasonal_precipitation_provenance_fingerprint(seasonal_precipitation)
         && source_seasonal_temperature_fingerprint
             == seasonal_temperature_fingerprint(seasonal_temperature)
         && source_seasonal_precipitation_fingerprint
@@ -135,6 +143,8 @@ bool RuntimeAtmosphericState::source_matches(
         && settings_fingerprint == runtime_weather_settings_fingerprint(settings)
         && terrain.has_expected_cell_count()
         && climate.source_matches(terrain)
+        && seasonal_temperature.source_maps_match(terrain, climate)
+        && seasonal_precipitation.source_maps_match(terrain, climate)
         && has_expected_cell_count();
 }
 
@@ -217,15 +227,7 @@ std::uint64_t runtime_weather_settings_fingerprint(
 std::uint64_t seasonal_temperature_fingerprint(
     const SeasonalTemperatureMap& seasonal_temperature
 ) noexcept {
-    std::uint64_t hash = mix_hash(seasonal_temperature.version, seasonal_temperature.source_seed);
-    hash = mix_hash(hash, seasonal_temperature.source_width);
-    hash = mix_hash(hash, seasonal_temperature.source_height);
-    hash = mix_hash(hash, std::bit_cast<std::uint32_t>(
-        seasonal_temperature.source_cell_size
-    ));
-    hash = mix_hash(hash, seasonal_temperature.source_terrain_fingerprint);
-    hash = mix_hash(hash, seasonal_temperature.source_temperature_fingerprint);
-    hash = mix_hash(hash, seasonal_temperature.settings_fingerprint);
+    std::uint64_t hash = seasonal_temperature_provenance_fingerprint(seasonal_temperature);
     hash = mix_hash(hash, std::bit_cast<std::uint32_t>(seasonal_temperature.year_fraction));
     for (const auto& cell : seasonal_temperature.cells) {
         hash = mix_hash(hash, std::bit_cast<std::uint32_t>(cell.seasonal_offset));
@@ -235,6 +237,36 @@ std::uint64_t seasonal_temperature_fingerprint(
 }
 
 std::uint64_t seasonal_precipitation_fingerprint(
+    const SeasonalPrecipitationMap& seasonal_precipitation
+) noexcept {
+    std::uint64_t hash = seasonal_precipitation_provenance_fingerprint(
+        seasonal_precipitation
+    );
+    hash = mix_hash(hash, std::bit_cast<std::uint32_t>(seasonal_precipitation.year_fraction));
+    for (const auto& cell : seasonal_precipitation.cells) {
+        hash = mix_hash(hash, std::bit_cast<std::uint32_t>(cell.seasonal_multiplier));
+        hash = mix_hash(hash, std::bit_cast<std::uint32_t>(
+            cell.seasonal_precipitation_normal
+        ));
+    }
+    return hash;
+}
+
+std::uint64_t seasonal_temperature_provenance_fingerprint(
+    const SeasonalTemperatureMap& seasonal_temperature
+) noexcept {
+    std::uint64_t hash = mix_hash(seasonal_temperature.version, seasonal_temperature.source_seed);
+    hash = mix_hash(hash, seasonal_temperature.source_width);
+    hash = mix_hash(hash, seasonal_temperature.source_height);
+    hash = mix_hash(hash, std::bit_cast<std::uint32_t>(
+        seasonal_temperature.source_cell_size
+    ));
+    hash = mix_hash(hash, seasonal_temperature.source_terrain_fingerprint);
+    hash = mix_hash(hash, seasonal_temperature.source_temperature_fingerprint);
+    return mix_hash(hash, seasonal_temperature.settings_fingerprint);
+}
+
+std::uint64_t seasonal_precipitation_provenance_fingerprint(
     const SeasonalPrecipitationMap& seasonal_precipitation
 ) noexcept {
     std::uint64_t hash = mix_hash(
@@ -248,15 +280,7 @@ std::uint64_t seasonal_precipitation_fingerprint(
     ));
     hash = mix_hash(hash, seasonal_precipitation.source_terrain_fingerprint);
     hash = mix_hash(hash, seasonal_precipitation.source_precipitation_fingerprint);
-    hash = mix_hash(hash, seasonal_precipitation.settings_fingerprint);
-    hash = mix_hash(hash, std::bit_cast<std::uint32_t>(seasonal_precipitation.year_fraction));
-    for (const auto& cell : seasonal_precipitation.cells) {
-        hash = mix_hash(hash, std::bit_cast<std::uint32_t>(cell.seasonal_multiplier));
-        hash = mix_hash(hash, std::bit_cast<std::uint32_t>(
-            cell.seasonal_precipitation_normal
-        ));
-    }
-    return hash;
+    return mix_hash(hash, seasonal_precipitation.settings_fingerprint);
 }
 
 RuntimeAtmosphericState evolve_runtime_weather(
@@ -281,18 +305,8 @@ RuntimeAtmosphericState evolve_runtime_weather(
     );
     if (!terrain.has_expected_cell_count()
         || !climate.source_matches(terrain)
-        || !seasonal_temperature.has_expected_cell_count()
-        || !seasonal_precipitation.has_expected_cell_count()
-        || seasonal_temperature.source_seed != terrain.seed
-        || seasonal_temperature.source_width != terrain.width
-        || seasonal_temperature.source_height != terrain.height
-        || seasonal_temperature.source_terrain_fingerprint
-            != procgen::greater_realm_climate_source_fingerprint(terrain)
-        || seasonal_precipitation.source_seed != terrain.seed
-        || seasonal_precipitation.source_width != terrain.width
-        || seasonal_precipitation.source_height != terrain.height
-        || seasonal_precipitation.source_terrain_fingerprint
-            != procgen::greater_realm_climate_source_fingerprint(terrain)) {
+        || !seasonal_temperature.source_maps_match(terrain, climate)
+        || !seasonal_precipitation.source_maps_match(terrain, climate)) {
         state.cells.clear();
         return state;
     }

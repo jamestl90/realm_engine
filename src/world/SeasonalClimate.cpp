@@ -204,11 +204,9 @@ bool SeasonalTemperatureMap::has_expected_cell_count() const noexcept {
     return cells.size() == expected_cell_count();
 }
 
-bool SeasonalTemperatureMap::source_matches(
+bool SeasonalTemperatureMap::source_maps_match(
     const procgen::GreaterRealmMap& terrain,
-    const procgen::GreaterRealmClimateMap& climate,
-    const SeasonalTemperatureSettings& settings,
-    float requested_year_fraction
+    const procgen::GreaterRealmClimateMap& climate
 ) const noexcept {
     return version == SEASONAL_TEMPERATURE_VERSION
         && source_seed == terrain.seed
@@ -218,11 +216,20 @@ bool SeasonalTemperatureMap::source_matches(
         && source_terrain_fingerprint
             == procgen::greater_realm_climate_source_fingerprint(terrain)
         && source_temperature_fingerprint == annual_temperature_fingerprint(climate)
-        && settings_fingerprint == seasonal_temperature_settings_fingerprint(settings)
-        && year_fraction == normalize_year_fraction(requested_year_fraction)
         && terrain.has_expected_cell_count()
         && climate.source_matches(terrain)
         && has_expected_cell_count();
+}
+
+bool SeasonalTemperatureMap::source_matches(
+    const procgen::GreaterRealmMap& terrain,
+    const procgen::GreaterRealmClimateMap& climate,
+    const SeasonalTemperatureSettings& settings,
+    float requested_year_fraction
+) const noexcept {
+    return source_maps_match(terrain, climate)
+        && settings_fingerprint == seasonal_temperature_settings_fingerprint(settings)
+        && year_fraction == normalize_year_fraction(requested_year_fraction);
 }
 
 std::size_t SeasonalPrecipitationMap::expected_cell_count() const noexcept {
@@ -233,11 +240,9 @@ bool SeasonalPrecipitationMap::has_expected_cell_count() const noexcept {
     return cells.size() == expected_cell_count();
 }
 
-bool SeasonalPrecipitationMap::source_matches(
+bool SeasonalPrecipitationMap::source_maps_match(
     const procgen::GreaterRealmMap& terrain,
-    const procgen::GreaterRealmClimateMap& climate,
-    const SeasonalPrecipitationSettings& settings,
-    float requested_year_fraction
+    const procgen::GreaterRealmClimateMap& climate
 ) const noexcept {
     return version == SEASONAL_PRECIPITATION_VERSION
         && source_seed == terrain.seed
@@ -247,11 +252,20 @@ bool SeasonalPrecipitationMap::source_matches(
         && source_terrain_fingerprint
             == procgen::greater_realm_climate_source_fingerprint(terrain)
         && source_precipitation_fingerprint == annual_precipitation_fingerprint(climate)
-        && settings_fingerprint == seasonal_precipitation_settings_fingerprint(settings)
-        && year_fraction == normalize_year_fraction(requested_year_fraction)
         && terrain.has_expected_cell_count()
         && climate.source_matches(terrain)
         && has_expected_cell_count();
+}
+
+bool SeasonalPrecipitationMap::source_matches(
+    const procgen::GreaterRealmMap& terrain,
+    const procgen::GreaterRealmClimateMap& climate,
+    const SeasonalPrecipitationSettings& settings,
+    float requested_year_fraction
+) const noexcept {
+    return source_maps_match(terrain, climate)
+        && settings_fingerprint == seasonal_precipitation_settings_fingerprint(settings)
+        && year_fraction == normalize_year_fraction(requested_year_fraction);
 }
 
 SeasonalTemperatureSettings clamp_seasonal_temperature_settings(

@@ -8,7 +8,7 @@
 
 namespace world {
 
-inline constexpr std::uint32_t RUNTIME_ATMOSPHERE_VERSION = 1;
+inline constexpr std::uint32_t RUNTIME_ATMOSPHERE_VERSION = 2;
 
 enum class RuntimePrecipitationType : std::uint8_t {
     None,
@@ -56,6 +56,8 @@ struct RuntimeAtmosphericState {
     float weather_cell_size{8.0f};
     std::uint64_t source_terrain_fingerprint{0};
     std::uint64_t source_climate_fingerprint{0};
+    std::uint64_t source_seasonal_temperature_provenance_fingerprint{0};
+    std::uint64_t source_seasonal_precipitation_provenance_fingerprint{0};
     std::uint64_t source_seasonal_temperature_fingerprint{0};
     std::uint64_t source_seasonal_precipitation_fingerprint{0};
     std::uint64_t settings_fingerprint{0};
@@ -104,6 +106,12 @@ struct ClimateWeatherSample {
     const SeasonalTemperatureMap& seasonal_temperature
 ) noexcept;
 [[nodiscard]] std::uint64_t seasonal_precipitation_fingerprint(
+    const SeasonalPrecipitationMap& seasonal_precipitation
+) noexcept;
+[[nodiscard]] std::uint64_t seasonal_temperature_provenance_fingerprint(
+    const SeasonalTemperatureMap& seasonal_temperature
+) noexcept;
+[[nodiscard]] std::uint64_t seasonal_precipitation_provenance_fingerprint(
     const SeasonalPrecipitationMap& seasonal_precipitation
 ) noexcept;
 [[nodiscard]] RuntimeAtmosphericState evolve_runtime_weather(

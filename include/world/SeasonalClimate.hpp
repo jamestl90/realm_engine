@@ -49,6 +49,10 @@ struct SeasonalTemperatureMap {
 
     [[nodiscard]] std::size_t expected_cell_count() const noexcept;
     [[nodiscard]] bool has_expected_cell_count() const noexcept;
+    [[nodiscard]] bool source_maps_match(
+        const procgen::GreaterRealmMap& terrain,
+        const procgen::GreaterRealmClimateMap& climate
+    ) const noexcept;
     [[nodiscard]] bool source_matches(
         const procgen::GreaterRealmMap& terrain,
         const procgen::GreaterRealmClimateMap& climate,
@@ -100,6 +104,10 @@ struct SeasonalPrecipitationMap {
 
     [[nodiscard]] std::size_t expected_cell_count() const noexcept;
     [[nodiscard]] bool has_expected_cell_count() const noexcept;
+    [[nodiscard]] bool source_maps_match(
+        const procgen::GreaterRealmMap& terrain,
+        const procgen::GreaterRealmClimateMap& climate
+    ) const noexcept;
     [[nodiscard]] bool source_matches(
         const procgen::GreaterRealmMap& terrain,
         const procgen::GreaterRealmClimateMap& climate,

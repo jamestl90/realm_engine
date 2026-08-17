@@ -42,6 +42,8 @@ Task 081 defines the runtime atmospheric state container. This task adds the evo
 - The optional previous state is blended only when schema, source, season, settings, seed, region, and timestamp identity are compatible. A save/load-style copy therefore preserves continuity.
 - Runtime precipitation is exposed for future runoff/discharge, but this task does not route runoff, change discharge, mutate terrain drainage, or alter potential channels.
 - Weather evolution can create heatwaves and cold snaps relative to annual/seasonal climate without changing annual climate identity or biome assignments.
+- Seasonal maps must match the current terrain and annual climate fingerprints before weather can evolve. This guards regenerated static climate inputs; it does not simulate climate change or mutate annual normals.
+- Runtime state records exact seasonal-sample fingerprints for reproducibility and separate stable seasonal-provenance fingerprints for continuity. Advancing deterministic calendar time therefore preserves compatible prior weather, while climate-normal or seasonal-profile changes invalidate it.
 
 ## Commit Message
 
@@ -50,6 +52,7 @@ Task 081 defines the runtime atmospheric state container. This task adds the evo
 ## Verification
 
 - Added climate/weather tests for deterministic replay from explicit simulation ticks, save/load-style continuity from prior state copies, plausible bounds, active precipitation exposure, heatwaves/cold snaps relative to baseline climate, and biome immutability.
+- Added regression coverage for rejecting stale seasonal maps after static annual-climate regeneration and preserving weather continuity across ordinary seasonal calendar advancement.
 - `ctest --test-dir out/build/debug-with-tests -R procgen_greater_realm_climate --output-on-failure` passed, 1/1.
 - Full `ctest --test-dir out/build/debug-with-tests --output-on-failure` passed, 16/16.
 - `scripts/build.ps1 -Preset release-no-tests` passed.

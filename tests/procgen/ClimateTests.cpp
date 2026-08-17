@@ -1159,6 +1159,71 @@ bool test_runtime_weather_state_identity_evolution_and_bounds() {
         &loaded
     );
 
+    const auto later_seasonal_temperature = world::evaluate_seasonal_temperature(
+        terrain,
+        climate,
+        world::SeasonalTemperatureSettings{},
+        0.35f
+    );
+    const auto later_seasonal_precipitation = world::evaluate_seasonal_precipitation(
+        terrain,
+        climate,
+        world::SeasonalPrecipitationSettings{},
+        0.35f
+    );
+    auto continuity_settings = settings;
+    continuity_settings.state_memory = 1.0f;
+    const auto before_season_advance = world::evolve_runtime_weather(
+        terrain,
+        climate,
+        seasonal_temperature,
+        seasonal_precipitation,
+        continuity_settings,
+        20
+    );
+    const auto after_season_advance = world::evolve_runtime_weather(
+        terrain,
+        climate,
+        later_seasonal_temperature,
+        later_seasonal_precipitation,
+        continuity_settings,
+        21,
+        &before_season_advance
+    );
+
+    auto changed_climate = climate;
+    changed_climate.cells[0].temperature_normal += 0.01f;
+    const auto current_seasonal_precipitation = world::evaluate_seasonal_precipitation(
+        terrain,
+        changed_climate,
+        world::SeasonalPrecipitationSettings{},
+        0.25f
+    );
+    const auto rejected_stale_season = world::evolve_runtime_weather(
+        terrain,
+        changed_climate,
+        seasonal_temperature,
+        current_seasonal_precipitation,
+        settings,
+        12
+    );
+    auto changed_precipitation_climate = climate;
+    changed_precipitation_climate.cells[0].precipitation_normal += 0.01f;
+    const auto current_seasonal_temperature = world::evaluate_seasonal_temperature(
+        terrain,
+        changed_precipitation_climate,
+        world::SeasonalTemperatureSettings{},
+        0.25f
+    );
+    const auto rejected_stale_precipitation = world::evolve_runtime_weather(
+        terrain,
+        changed_precipitation_climate,
+        current_seasonal_temperature,
+        seasonal_precipitation,
+        settings,
+        12
+    );
+
     bool ok = require(
         first.source_matches(terrain, climate, seasonal_temperature, seasonal_precipitation, settings)
             && first.has_expected_cell_count(),
@@ -1174,6 +1239,31 @@ bool test_runtime_weather_state_identity_evolution_and_bounds() {
         continued.cells[0].humidity == continued_from_loaded.cells[0].humidity
             && continued.cells[0].cloud_cover == continued_from_loaded.cells[0].cloud_cover,
         "runtime weather continuity survives a save/load-style state copy"
+    );
+    ok &= require(
+        world::seasonal_temperature_provenance_fingerprint(seasonal_temperature)
+                == world::seasonal_temperature_provenance_fingerprint(
+                    later_seasonal_temperature
+                )
+            && world::seasonal_temperature_fingerprint(seasonal_temperature)
+                != world::seasonal_temperature_fingerprint(later_seasonal_temperature)
+            && world::seasonal_precipitation_provenance_fingerprint(
+                seasonal_precipitation
+            ) == world::seasonal_precipitation_provenance_fingerprint(
+                later_seasonal_precipitation
+            )
+            && world::seasonal_precipitation_fingerprint(seasonal_precipitation)
+                != world::seasonal_precipitation_fingerprint(later_seasonal_precipitation)
+            && before_season_advance.cells[0].pressure_normal
+                == after_season_advance.cells[0].pressure_normal
+            && before_season_advance.cells[0].humidity
+                == after_season_advance.cells[0].humidity,
+        "ordinary seasonal calendar advancement preserves compatible weather continuity"
+    );
+    ok &= require(
+        rejected_stale_season.cells.empty()
+            && rejected_stale_precipitation.cells.empty(),
+        "runtime weather rejects temperature or precipitation seasons from stale annual normals"
     );
     ok &= require(
         std::all_of(continued.cells.begin(), continued.cells.end(), [](const auto& cell) {
