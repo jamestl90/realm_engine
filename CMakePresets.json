@@ -20,7 +20,7 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "REALM_BUILD_TESTS": "OFF",
-        "REALM_ENABLE_PROCGEN_DEBUG_VIEW": "OFF"
+        "REALM_ENABLE_PROCGEN_DEBUG_VIEW": "ON"
       }
     },
     {

@@ -7,11 +7,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(REALM_BUILD_TESTS "Create engine test targets" OFF)
 
-set(REALM_ENABLE_PROCGEN_DEBUG_VIEW_DEFAULT ON)
-if(CMAKE_BUILD_TYPE STREQUAL "Release")
-    set(REALM_ENABLE_PROCGEN_DEBUG_VIEW_DEFAULT OFF)
-endif()
-option(REALM_ENABLE_PROCGEN_DEBUG_VIEW "Build the procgen debug map view into the runtime executable" ${REALM_ENABLE_PROCGEN_DEBUG_VIEW_DEFAULT})
+option(REALM_ENABLE_PROCGEN_DEBUG_VIEW "Build procgen inspection views into the runtime executable" ON)
 option(REALM_OPTIMIZE_PROCGEN_DEBUG "Optimize procgen sources in Debug builds for interactive tooling" ON)
 
 # MSVC: Force synchronous PDB writes to avoid C1041 errors during parallel builds
@@ -46,7 +42,7 @@ set(REALM_FONT_ASSETS
 # Automatically find all .cpp files in src directory
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS "src/*.cpp")
 
-# Procgen visualization and its application panel are omitted from normal release builds.
+# Procgen visualization and its application panel remain optional, but all shipped presets enable them.
 set(REALM_PROCGEN_DEBUG_SOURCES
     "${CMAKE_SOURCE_DIR}/src/game/GreaterRealmDebugBiomes.cpp"
     "${CMAKE_SOURCE_DIR}/src/game/GreaterRealmDebugPanel.cpp"
