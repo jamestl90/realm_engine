@@ -14,6 +14,8 @@ namespace {
 
 constexpr std::uint64_t TEMPERATURE_NOISE_DOMAIN = 0x74656d7065726174ull;
 constexpr std::uint64_t PRECIPITATION_CHARACTER_DOMAIN = 0x7072656369706368ull;
+constexpr std::uint64_t WIND_CHARACTER_DOMAIN = 0x77696e6463686172ull;
+constexpr std::uint64_t REGIONAL_WIND_DOMAIN = 0x726567696f6e7764ull;
 
 [[nodiscard]] float clamp01(float value) noexcept {
     return std::clamp(value, 0.0f, 1.0f);
@@ -179,6 +181,7 @@ void initialize_climate_map(
     climate.source_cell_size = terrain.cell_size;
     climate.source_terrain_fingerprint = greater_realm_climate_source_fingerprint(terrain);
     climate.precipitation_character = {};
+    climate.wind_character = {};
     climate.cells.assign(terrain.cells.size(), GreaterRealmClimateCell{});
 }
 
@@ -335,27 +338,10 @@ void generate_temperature_normals(
     return precipitation;
 }
 
-void generate_precipitation_normals(
-    GreaterRealmClimateMap& climate,
+[[nodiscard]] std::vector<float> generate_latitude_band_precipitation(
     const GreaterRealmMap& terrain,
     const GreaterRealmClimateSettings& settings
 ) {
-    const auto character = derive_greater_realm_precipitation_character(
-        terrain.seed,
-        settings.precipitation_seed_variation
-    );
-    climate.precipitation_character = character;
-
-    GreaterRealmClimateSettings effective = settings;
-    effective.precipitation_scale = std::clamp(
-        settings.precipitation_scale * character.wetness_scale,
-        0.0f,
-        2.0f
-    );
-    effective.moisture_retention = clamp01(
-        1.0f - (1.0f - settings.moisture_retention) * character.retention_scale
-    );
-
     const auto rotated = [&](float degrees) {
         float result = std::fmod(degrees + settings.prevailing_wind_degrees, 360.0f);
         if (result < 0.0f) {
@@ -364,30 +350,25 @@ void generate_precipitation_normals(
         return result;
     };
     if (settings.latitude_wind_band_strength <= 0.0f) {
-        const auto global = generate_precipitation_pass(
-            terrain, effective, rotated(0.0f)
-        );
-        for (std::size_t index = 0; index < climate.cells.size(); ++index) {
-            climate.cells[index].precipitation_normal = global[index];
-        }
-        return;
+        return generate_precipitation_pass(terrain, settings, rotated(0.0f));
     }
 
     const auto north_tropical = generate_precipitation_pass(
-        terrain, effective, rotated(135.0f)
+        terrain, settings, rotated(135.0f)
     );
     const auto north_midlatitude = generate_precipitation_pass(
-        terrain, effective, rotated(315.0f)
+        terrain, settings, rotated(315.0f)
     );
     const auto south_tropical = generate_precipitation_pass(
-        terrain, effective, rotated(225.0f)
+        terrain, settings, rotated(225.0f)
     );
     const auto south_midlatitude = generate_precipitation_pass(
-        terrain, effective, rotated(45.0f)
+        terrain, settings, rotated(45.0f)
     );
     const auto global = settings.latitude_wind_band_strength < 1.0f
-        ? generate_precipitation_pass(terrain, effective, rotated(0.0f))
+        ? generate_precipitation_pass(terrain, settings, rotated(0.0f))
         : std::vector<float>{};
+    std::vector<float> precipitation(terrain.cells.size(), 0.0f);
 
     for (std::uint32_t y = 0; y < terrain.height; ++y) {
         const float latitude = greater_realm_latitude_for_row(settings, y, terrain.height);
@@ -418,7 +399,7 @@ void generate_precipitation_normals(
                 midlatitude,
                 midlatitude_weight
             );
-            climate.cells[index].precipitation_normal = global.empty()
+            precipitation[index] = global.empty()
                 ? circulation
                 : lerp(
                     global[index],
@@ -426,6 +407,155 @@ void generate_precipitation_normals(
                     settings.latitude_wind_band_strength
                 );
         }
+    }
+    return precipitation;
+}
+
+[[nodiscard]] std::vector<float> generate_regionally_varied_precipitation(
+    const GreaterRealmMap& terrain,
+    const GreaterRealmClimateSettings& settings,
+    const GreaterRealmWindCharacter& character
+) {
+    constexpr float PI = 3.14159265358979323846f;
+    constexpr float DIRECTION_STEP = 45.0f;
+    constexpr std::size_t DIRECTION_COUNT = 8;
+
+    const auto normalize_degrees = [](float degrees) {
+        float result = std::fmod(degrees, 360.0f);
+        return result < 0.0f ? result + 360.0f : result;
+    };
+    const float rotation = normalize_degrees(
+        settings.prevailing_wind_degrees + character.global_rotation_degrees
+    );
+    std::array<std::vector<float>, DIRECTION_COUNT> passes;
+    for (std::size_t direction = 0; direction < passes.size(); ++direction) {
+        passes[direction] = generate_precipitation_pass(
+            terrain,
+            settings,
+            normalize_degrees(rotation + static_cast<float>(direction) * DIRECTION_STEP)
+        );
+    }
+
+    const auto direction_vector = [PI](float degrees) {
+        const float radians = degrees * PI / 180.0f;
+        return std::array<float, 2>{std::cos(radians), std::sin(radians)};
+    };
+    const auto blend_vector = [](const auto& from, const auto& to, float amount) {
+        return std::array<float, 2>{
+            lerp(from[0], to[0], amount),
+            lerp(from[1], to[1], amount)
+        };
+    };
+    const auto sample_passes = [&](std::size_t index, float degrees) {
+        const float slot = normalize_degrees(degrees) / DIRECTION_STEP;
+        const auto lower = static_cast<std::size_t>(std::floor(slot)) % DIRECTION_COUNT;
+        const std::size_t upper = (lower + 1) % DIRECTION_COUNT;
+        return lerp(passes[lower][index], passes[upper][index], slot - std::floor(slot));
+    };
+
+    const auto north_tropical = direction_vector(135.0f);
+    const auto north_midlatitude = direction_vector(315.0f);
+    const auto south_tropical = direction_vector(225.0f);
+    const auto south_midlatitude = direction_vector(45.0f);
+    const auto global = direction_vector(0.0f);
+    std::vector<float> precipitation(terrain.cells.size(), 0.0f);
+
+    for (std::uint32_t y = 0; y < terrain.height; ++y) {
+        const float latitude = greater_realm_latitude_for_row(settings, y, terrain.height)
+            + character.latitude_shift_degrees;
+        const float north_weight = smoothstep01((latitude + 8.0f) / 16.0f);
+        const float midlatitude_weight = smoothstep01((std::abs(latitude) - 25.0f) / 15.0f);
+        const auto tropical = blend_vector(
+            south_tropical, north_tropical, north_weight
+        );
+        const auto midlatitude = blend_vector(
+            south_midlatitude, north_midlatitude, north_weight
+        );
+        const auto circulation = blend_vector(
+            tropical, midlatitude, midlatitude_weight
+        );
+        const auto base = blend_vector(
+            global, circulation, settings.latitude_wind_band_strength
+        );
+        const float hemisphere_offset = lerp(
+            character.south_angle_offset_degrees,
+            character.north_angle_offset_degrees,
+            north_weight
+        );
+
+        for (std::uint32_t x = 0; x < terrain.width; ++x) {
+            const std::size_t index = terrain.index(x, y);
+            const float normalized_x = terrain.width > 1
+                ? static_cast<float>(x) / static_cast<float>(terrain.width - 1)
+                : 0.5f;
+            const float normalized_y = terrain.height > 1
+                ? static_cast<float>(y) / static_cast<float>(terrain.height - 1)
+                : 0.5f;
+            const float regional_noise = value_noise(
+                terrain.seed,
+                normalized_x,
+                normalized_y,
+                settings.regional_wind_frequency,
+                REGIONAL_WIND_DOMAIN
+            ) * 2.0f - 1.0f;
+            const float regional_offset = regional_noise
+                * 180.0f
+                * settings.regional_wind_strength
+                * character.regional_strength_scale;
+            const float base_degrees = std::atan2(base[1], base[0]) * 180.0f / PI;
+            const float direction = base_degrees + hemisphere_offset + regional_offset;
+            const float primary = sample_passes(index, direction);
+            const float opposing = sample_passes(index, direction + 180.0f);
+            precipitation[index] = lerp(
+                primary, opposing, settings.secondary_wind_strength
+            );
+        }
+    }
+    return precipitation;
+}
+
+void generate_precipitation_normals(
+    GreaterRealmClimateMap& climate,
+    const GreaterRealmMap& terrain,
+    const GreaterRealmClimateSettings& settings
+) {
+    const auto precipitation_character = derive_greater_realm_precipitation_character(
+        terrain.seed,
+        settings.precipitation_seed_variation
+    );
+    const auto wind_character = derive_greater_realm_wind_character(
+        terrain.seed,
+        settings.wind_seed_variation
+    );
+    climate.precipitation_character = precipitation_character;
+    climate.wind_character = wind_character;
+
+    GreaterRealmClimateSettings effective = settings;
+    effective.precipitation_scale = std::clamp(
+        settings.precipitation_scale * precipitation_character.wetness_scale,
+        0.0f,
+        2.0f
+    );
+    effective.moisture_retention = clamp01(
+        1.0f
+            - (1.0f - settings.moisture_retention)
+                * precipitation_character.retention_scale
+    );
+
+    const auto baseline = settings.wind_seed_variation < 1.0f
+        ? generate_latitude_band_precipitation(terrain, effective)
+        : std::vector<float>{};
+    const auto regional = settings.wind_seed_variation > 0.0f
+        ? generate_regionally_varied_precipitation(
+            terrain, effective, wind_character
+        )
+        : std::vector<float>{};
+    for (std::size_t index = 0; index < climate.cells.size(); ++index) {
+        climate.cells[index].precipitation_normal = baseline.empty()
+            ? regional[index]
+            : regional.empty()
+                ? baseline[index]
+                : lerp(baseline[index], regional[index], settings.wind_seed_variation);
     }
 }
 
@@ -455,6 +585,9 @@ void generate_precipitation_normals(
         || previous.precipitation_scale != current.precipitation_scale
         || previous.latitude_wind_band_strength != current.latitude_wind_band_strength
         || previous.secondary_wind_strength != current.secondary_wind_strength
+        || previous.wind_seed_variation != current.wind_seed_variation
+        || previous.regional_wind_strength != current.regional_wind_strength
+        || previous.regional_wind_frequency != current.regional_wind_frequency
         || previous.precipitation_seed_variation != current.precipitation_seed_variation) {
         stages |= GreaterRealmClimateDirtyStage::Precipitation;
     }
@@ -544,6 +677,15 @@ GreaterRealmClimateSettings clamp_greater_realm_climate_settings(
     clamped.secondary_wind_strength = finite_or(
         clamped.secondary_wind_strength, defaults.secondary_wind_strength
     );
+    clamped.wind_seed_variation = finite_or(
+        clamped.wind_seed_variation, defaults.wind_seed_variation
+    );
+    clamped.regional_wind_strength = finite_or(
+        clamped.regional_wind_strength, defaults.regional_wind_strength
+    );
+    clamped.regional_wind_frequency = finite_or(
+        clamped.regional_wind_frequency, defaults.regional_wind_frequency
+    );
     clamped.precipitation_seed_variation = finite_or(
         clamped.precipitation_seed_variation, defaults.precipitation_seed_variation
     );
@@ -579,6 +721,11 @@ GreaterRealmClimateSettings clamp_greater_realm_climate_settings(
     clamped.latitude_wind_band_strength = clamp01(clamped.latitude_wind_band_strength);
     clamped.secondary_wind_strength = std::clamp(
         clamped.secondary_wind_strength, 0.0f, 0.5f
+    );
+    clamped.wind_seed_variation = clamp01(clamped.wind_seed_variation);
+    clamped.regional_wind_strength = clamp01(clamped.regional_wind_strength);
+    clamped.regional_wind_frequency = std::clamp(
+        clamped.regional_wind_frequency, 0.25f, 8.0f
     );
     clamped.precipitation_seed_variation = clamp01(clamped.precipitation_seed_variation);
     return clamped;
@@ -624,6 +771,27 @@ GreaterRealmPrecipitationCharacter derive_greater_realm_precipitation_character(
     GreaterRealmPrecipitationCharacter character;
     character.wetness_scale = lerp(1.0f, lerp(0.70f, 1.75f, wetness), amount);
     character.retention_scale = lerp(1.0f, lerp(1.35f, 0.50f, wetness), amount);
+    return character;
+}
+
+GreaterRealmWindCharacter derive_greater_realm_wind_character(
+    Seed seed,
+    float variation
+) noexcept {
+    const float amount = std::isfinite(variation) ? clamp01(variation) : 1.0f;
+    if (amount == 0.0f) {
+        return {};
+    }
+
+    const auto sample = [seed](std::int32_t coordinate) {
+        return random01(seed, coordinate, 0, WIND_CHARACTER_DOMAIN) * 2.0f - 1.0f;
+    };
+    GreaterRealmWindCharacter character;
+    character.global_rotation_degrees = sample(0) * 180.0f * amount;
+    character.latitude_shift_degrees = sample(1) * 8.0f * amount;
+    character.north_angle_offset_degrees = sample(2) * 20.0f * amount;
+    character.south_angle_offset_degrees = sample(3) * 20.0f * amount;
+    character.regional_strength_scale = lerp(0.0f, 0.8f + (sample(4) + 1.0f) * 0.2f, amount);
     return character;
 }
 

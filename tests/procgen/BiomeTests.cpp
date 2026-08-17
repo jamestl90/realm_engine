@@ -369,6 +369,7 @@ bool test_seeded_aridity_spans_low_and_high_desert_realms() {
     return require(
         minimum_desert_fraction < 0.08f
             && maximum_desert_fraction > 0.30f
+            && maximum_desert_fraction < 0.70f
             && maximum_desert_fraction - minimum_desert_fraction > 0.25f,
         "seeded realm aridity spans limited-desert and heavily desert generations"
     );

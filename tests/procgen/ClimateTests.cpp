@@ -1,6 +1,7 @@
 #include "procgen/Climate.hpp"
 #include "procgen/GreaterRealmDebug.hpp"
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <iostream>
 #include <limits>
@@ -236,13 +237,19 @@ bool test_precipitation_settings_validation_and_wind_response() {
     settings.rain_shadow_strength = 0.0f;
     settings.latitude_wind_band_strength = -1.0f;
     settings.secondary_wind_strength = 2.0f;
+    settings.wind_seed_variation = -1.0f;
+    settings.regional_wind_strength = 2.0f;
+    settings.regional_wind_frequency = 0.0f;
     settings.precipitation_seed_variation = 0.0f;
     const auto clamped = procgen::clamp_greater_realm_climate_settings(settings);
     bool ok = require(
         nearly_equal(clamped.prevailing_wind_degrees, 5.0f)
             && clamped.ambient_moisture == 0.0f
             && clamped.latitude_wind_band_strength == 0.0f
-            && clamped.secondary_wind_strength == 0.5f,
+            && clamped.secondary_wind_strength == 0.5f
+            && clamped.wind_seed_variation == 0.0f
+            && clamped.regional_wind_strength == 1.0f
+            && clamped.regional_wind_frequency == 0.25f,
         "wind direction wraps to 0..360 and transport settings clamp to valid ranges"
     );
     settings.ocean_moisture_source = std::numeric_limits<float>::quiet_NaN();
@@ -280,6 +287,7 @@ bool test_ocean_and_inland_water_source_strengths() {
     settings.precipitation_efficiency = 0.5f;
     settings.orographic_lift = 0.0f;
     settings.latitude_wind_band_strength = 0.0f;
+    settings.wind_seed_variation = 0.0f;
     settings.precipitation_seed_variation = 0.0f;
     const auto climate = procgen::generate_greater_realm_climate(terrain, settings);
     return require(
@@ -307,6 +315,7 @@ bool test_orographic_lift_and_downwind_shadow() {
     settings.rain_shadow_strength = 0.7f;
     settings.rain_shadow_decay = 0.95f;
     settings.latitude_wind_band_strength = 0.0f;
+    settings.wind_seed_variation = 0.0f;
     settings.precipitation_seed_variation = 0.0f;
     const auto climate = procgen::generate_greater_realm_climate(terrain, settings);
     return require(
@@ -322,6 +331,7 @@ bool test_dry_wet_scale_and_hydrology_independence() {
     terrain.cells[0].is_ocean = true;
     terrain.cells[0].terrain_form = procgen::TerrainForm::Ocean;
     procgen::GreaterRealmClimateSettings settings;
+    settings.wind_seed_variation = 0.0f;
     settings.precipitation_seed_variation = 0.0f;
     settings.precipitation_scale = 0.5f;
     const auto dry = procgen::generate_greater_realm_climate(terrain, settings);
@@ -364,6 +374,8 @@ bool test_latitude_wind_bands_reverse_coastal_influence() {
     settings.orographic_lift = 0.0f;
     settings.rain_shadow_strength = 0.0f;
     settings.secondary_wind_strength = 0.0f;
+    settings.latitude_wind_band_strength = 1.0f;
+    settings.wind_seed_variation = 0.0f;
     settings.precipitation_seed_variation = 0.0f;
     const auto climate = procgen::generate_greater_realm_climate(terrain, settings);
 
@@ -393,6 +405,191 @@ bool test_seed_driven_precipitation_character() {
             && neutral_first == procgen::GreaterRealmPrecipitationCharacter{}
             && neutral_first == neutral_second,
         "realm precipitation character is deterministic and variation zero is exactly neutral"
+    );
+}
+
+bool test_seed_driven_regional_wind_character_and_neutral_mode() {
+    const auto first = procgen::derive_greater_realm_wind_character(101, 1.0f);
+    const auto repeated = procgen::derive_greater_realm_wind_character(101, 1.0f);
+    const auto different = procgen::derive_greater_realm_wind_character(202, 1.0f);
+    const auto neutral = procgen::derive_greater_realm_wind_character(101, 0.0f);
+
+    auto first_terrain = make_flat_map(17, 11, 101);
+    auto second_terrain = first_terrain;
+    second_terrain.seed = 202;
+    for (std::uint32_t y = 0; y < first_terrain.height; ++y) {
+        for (const std::uint32_t x : {0u, first_terrain.width - 1}) {
+            for (auto* terrain : {&first_terrain, &second_terrain}) {
+                auto& cell = terrain->cells[terrain->index(x, y)];
+                cell.is_water = true;
+                cell.is_ocean = true;
+                cell.terrain_form = procgen::TerrainForm::Ocean;
+                cell.elevation = 0.25f;
+            }
+        }
+    }
+    procgen::GreaterRealmClimateSettings settings;
+    settings.precipitation_seed_variation = 0.0f;
+    settings.wind_seed_variation = 0.0f;
+    const auto neutral_first = procgen::generate_greater_realm_climate(
+        first_terrain, settings
+    );
+    const auto neutral_second = procgen::generate_greater_realm_climate(
+        second_terrain, settings
+    );
+    settings.wind_seed_variation = 1.0f;
+    const auto varied_first = procgen::generate_greater_realm_climate(
+        first_terrain, settings
+    );
+    const auto varied_second = procgen::generate_greater_realm_climate(
+        second_terrain, settings
+    );
+
+    return require(
+        first == repeated
+            && first != different
+            && neutral == procgen::GreaterRealmWindCharacter{}
+            && precipitation_values_match(neutral_first, neutral_second)
+            && !precipitation_values_match(varied_first, varied_second),
+        "regional wind character is deterministic and zero variation restores a seed-neutral baseline"
+    );
+}
+
+bool test_regional_winds_vary_dominant_coast_across_seeds() {
+    auto terrain = make_flat_map(41, 31);
+    for (std::uint32_t y = 0; y < terrain.height; ++y) {
+        for (std::uint32_t x = 0; x < terrain.width; ++x) {
+            if (x != 0 && y != 0 && x + 1 != terrain.width && y + 1 != terrain.height) {
+                continue;
+            }
+            auto& cell = terrain.cells[terrain.index(x, y)];
+            cell.is_water = true;
+            cell.is_ocean = true;
+            cell.terrain_form = procgen::TerrainForm::Ocean;
+            cell.elevation = 0.25f;
+        }
+    }
+
+    procgen::GreaterRealmClimateSettings settings;
+    settings.ambient_moisture = 0.0f;
+    settings.moisture_retention = 0.99f;
+    settings.precipitation_efficiency = 0.4f;
+    settings.orographic_lift = 0.0f;
+    settings.rain_shadow_strength = 0.0f;
+    settings.secondary_wind_strength = 0.0f;
+    settings.precipitation_seed_variation = 0.0f;
+    std::array<std::size_t, 4> dominant_coast_counts{};
+
+    for (procgen::Seed seed = 1; seed <= 32; ++seed) {
+        terrain.seed = seed;
+        const auto climate = procgen::generate_greater_realm_climate(terrain, settings);
+        std::array<float, 4> coast_means{};
+        for (std::uint32_t y = 3; y + 3 < terrain.height; ++y) {
+            coast_means[0] += climate.cells[terrain.index(2, y)].precipitation_normal;
+            coast_means[1] += climate.cells[
+                terrain.index(terrain.width - 3, y)
+            ].precipitation_normal;
+        }
+        for (std::uint32_t x = 3; x + 3 < terrain.width; ++x) {
+            coast_means[2] += climate.cells[terrain.index(x, 2)].precipitation_normal;
+            coast_means[3] += climate.cells[
+                terrain.index(x, terrain.height - 3)
+            ].precipitation_normal;
+        }
+        const float vertical_samples = static_cast<float>(terrain.height - 6);
+        const float horizontal_samples = static_cast<float>(terrain.width - 6);
+        coast_means[0] /= vertical_samples;
+        coast_means[1] /= vertical_samples;
+        coast_means[2] /= horizontal_samples;
+        coast_means[3] /= horizontal_samples;
+        const auto dominant = static_cast<std::size_t>(
+            std::distance(
+                coast_means.begin(),
+                std::max_element(coast_means.begin(), coast_means.end())
+            )
+        );
+        ++dominant_coast_counts[dominant];
+    }
+
+    const auto represented_coasts = std::count_if(
+        dominant_coast_counts.begin(), dominant_coast_counts.end(),
+        [](std::size_t count) { return count > 0; }
+    );
+    const auto largest_count = *std::max_element(
+        dominant_coast_counts.begin(), dominant_coast_counts.end()
+    );
+    const auto smallest_count = *std::min_element(
+        dominant_coast_counts.begin(), dominant_coast_counts.end()
+    );
+    std::cout << "dominant wet coasts W/E/N/S: "
+              << dominant_coast_counts[0] << '/' << dominant_coast_counts[1] << '/'
+              << dominant_coast_counts[2] << '/' << dominant_coast_counts[3] << '\n';
+    return require(
+        represented_coasts == 4 && smallest_count >= 4 && largest_count <= 12,
+        "regional wind seeds vary dominant coastal moisture without one fixed map side"
+    );
+}
+
+bool test_regional_wind_perturbation_is_broad_and_material() {
+    auto terrain = make_flat_map(41, 31, 17);
+    for (std::uint32_t y = 0; y < terrain.height; ++y) {
+        for (std::uint32_t x = 0; x < terrain.width; ++x) {
+            if (x != 0 && y != 0 && x + 1 != terrain.width && y + 1 != terrain.height) {
+                continue;
+            }
+            auto& cell = terrain.cells[terrain.index(x, y)];
+            cell.is_water = true;
+            cell.is_ocean = true;
+            cell.terrain_form = procgen::TerrainForm::Ocean;
+            cell.elevation = 0.25f;
+        }
+    }
+
+    procgen::GreaterRealmClimateSettings settings;
+    settings.ambient_moisture = 0.0f;
+    settings.moisture_retention = 0.99f;
+    settings.precipitation_efficiency = 0.4f;
+    settings.orographic_lift = 0.0f;
+    settings.rain_shadow_strength = 0.0f;
+    settings.secondary_wind_strength = 0.0f;
+    settings.precipitation_seed_variation = 0.0f;
+    const auto regional = procgen::generate_greater_realm_climate(terrain, settings);
+    settings.regional_wind_strength = 0.0f;
+    const auto unperturbed = procgen::generate_greater_realm_climate(terrain, settings);
+
+    std::vector<float> difference(terrain.cells.size(), 0.0f);
+    std::size_t materially_changed = 0;
+    for (std::size_t index = 0; index < difference.size(); ++index) {
+        difference[index] = regional.cells[index].precipitation_normal
+            - unperturbed.cells[index].precipitation_normal;
+        materially_changed += std::abs(difference[index]) > 0.005f ? 1u : 0u;
+    }
+
+    float adjacent_difference = 0.0f;
+    float distant_difference = 0.0f;
+    std::size_t adjacent_samples = 0;
+    std::size_t distant_samples = 0;
+    for (std::uint32_t y = 3; y + 3 < terrain.height; ++y) {
+        for (std::uint32_t x = 3; x + 4 < terrain.width; ++x) {
+            adjacent_difference += std::abs(
+                difference[terrain.index(x, y)] - difference[terrain.index(x + 1, y)]
+            );
+            ++adjacent_samples;
+        }
+        for (std::uint32_t x = 3; x < terrain.width / 2; ++x) {
+            distant_difference += std::abs(
+                difference[terrain.index(x, y)]
+                    - difference[terrain.index(terrain.width - 1 - x, y)]
+            );
+            ++distant_samples;
+        }
+    }
+    const float adjacent_mean = adjacent_difference / static_cast<float>(adjacent_samples);
+    const float distant_mean = distant_difference / static_cast<float>(distant_samples);
+    return require(
+        materially_changed * 2 > terrain.cells.size()
+            && adjacent_mean < distant_mean * 0.75f,
+        "regional wind variation materially changes broad areas without cell-scale noise"
     );
 }
 
@@ -522,6 +719,9 @@ int main() {
     ok &= test_dry_wet_scale_and_hydrology_independence();
     ok &= test_latitude_wind_bands_reverse_coastal_influence();
     ok &= test_seed_driven_precipitation_character();
+    ok &= test_seed_driven_regional_wind_character_and_neutral_mode();
+    ok &= test_regional_winds_vary_dominant_coast_across_seeds();
+    ok &= test_regional_wind_perturbation_is_broad_and_material();
     ok &= test_source_identity_debug_view_and_terrain_immutability();
     ok &= test_climate_regeneration_locality();
     if (!ok) {

@@ -7,13 +7,23 @@
 
 namespace procgen {
 
-inline constexpr std::uint32_t GREATER_REALM_CLIMATE_VERSION = 3;
+inline constexpr std::uint32_t GREATER_REALM_CLIMATE_VERSION = 4;
 
 struct GreaterRealmPrecipitationCharacter {
     float wetness_scale{1.0f};
     float retention_scale{1.0f};
 
     [[nodiscard]] bool operator==(const GreaterRealmPrecipitationCharacter&) const noexcept = default;
+};
+
+struct GreaterRealmWindCharacter {
+    float global_rotation_degrees{0.0f};
+    float latitude_shift_degrees{0.0f};
+    float north_angle_offset_degrees{0.0f};
+    float south_angle_offset_degrees{0.0f};
+    float regional_strength_scale{0.0f};
+
+    [[nodiscard]] bool operator==(const GreaterRealmWindCharacter&) const noexcept = default;
 };
 
 struct GreaterRealmClimateSettings {
@@ -35,8 +45,11 @@ struct GreaterRealmClimateSettings {
     float rain_shadow_strength{0.70f};
     float rain_shadow_decay{0.92f};
     float precipitation_scale{1.0f};
-    float latitude_wind_band_strength{1.0f};
+    float latitude_wind_band_strength{0.35f};
     float secondary_wind_strength{0.20f};
+    float wind_seed_variation{1.0f};
+    float regional_wind_strength{0.45f};
+    float regional_wind_frequency{1.5f};
     float precipitation_seed_variation{1.0f};
 
     [[nodiscard]] bool operator==(const GreaterRealmClimateSettings&) const noexcept = default;
@@ -55,6 +68,7 @@ struct GreaterRealmClimateMap {
     float source_cell_size{1.0f};
     std::uint64_t source_terrain_fingerprint{0};
     GreaterRealmPrecipitationCharacter precipitation_character;
+    GreaterRealmWindCharacter wind_character;
     std::vector<GreaterRealmClimateCell> cells;
 
     [[nodiscard]] std::size_t expected_cell_count() const noexcept;
@@ -159,6 +173,10 @@ private:
     const GreaterRealmMap& map
 ) noexcept;
 [[nodiscard]] GreaterRealmPrecipitationCharacter derive_greater_realm_precipitation_character(
+    Seed seed,
+    float variation
+) noexcept;
+[[nodiscard]] GreaterRealmWindCharacter derive_greater_realm_wind_character(
     Seed seed,
     float variation
 ) noexcept;
