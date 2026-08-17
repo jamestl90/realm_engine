@@ -27,6 +27,31 @@ constexpr std::uint64_t SEASONAL_PRECIPITATION_REGIONAL_DOMAIN = 0x736561736f6e7
     return clamped * clamped * (3.0f - 2.0f * clamped);
 }
 
+[[nodiscard]] float blended_hemisphere_wave(
+    float normalized_year,
+    float northern_peak,
+    float southern_peak,
+    float latitude,
+    float transition_degrees,
+    float phase_variation
+) noexcept {
+    constexpr float PI = 3.14159265358979323846f;
+    const float northern_wave = std::cos(
+        2.0f * PI * (
+            normalized_year - normalize_year_fraction(northern_peak + phase_variation)
+        )
+    );
+    const float southern_wave = std::cos(
+        2.0f * PI * (
+            normalized_year - normalize_year_fraction(southern_peak + phase_variation)
+        )
+    );
+    const float northern_weight = smoothstep01(
+        (latitude + transition_degrees) / (2.0f * transition_degrees)
+    );
+    return lerp(southern_wave, northern_wave, northern_weight);
+}
+
 [[nodiscard]] std::uint64_t mix_hash(std::uint64_t hash, std::uint64_t value) noexcept {
     hash ^= value + 0x9e3779b97f4a7c15ull + (hash << 6) + (hash >> 2);
     hash ^= hash >> 30;
@@ -304,6 +329,10 @@ SeasonalTemperatureSettings clamp_seasonal_temperature_settings(
         clamped.southern_peak_year_fraction,
         defaults.southern_peak_year_fraction
     );
+    clamped.equatorial_transition_degrees = finite_or(
+        clamped.equatorial_transition_degrees,
+        defaults.equatorial_transition_degrees
+    );
     clamped.regional_phase_variation = finite_or(
         clamped.regional_phase_variation,
         defaults.regional_phase_variation
@@ -335,6 +364,9 @@ SeasonalTemperatureSettings clamp_seasonal_temperature_settings(
     );
     clamped.southern_peak_year_fraction = normalize_year_fraction(
         clamped.southern_peak_year_fraction
+    );
+    clamped.equatorial_transition_degrees = std::clamp(
+        clamped.equatorial_transition_degrees, 1.0f, 90.0f
     );
     clamped.regional_phase_variation = std::clamp(
         clamped.regional_phase_variation, 0.0f, 0.5f
@@ -389,6 +421,9 @@ std::uint64_t seasonal_temperature_settings_fingerprint(
     hash = mix_hash(hash, std::bit_cast<std::uint32_t>(clamped.maritime_influence_distance));
     hash = mix_hash(hash, std::bit_cast<std::uint32_t>(clamped.northern_peak_year_fraction));
     hash = mix_hash(hash, std::bit_cast<std::uint32_t>(clamped.southern_peak_year_fraction));
+    hash = mix_hash(hash, std::bit_cast<std::uint32_t>(
+        clamped.equatorial_transition_degrees
+    ));
     hash = mix_hash(hash, std::bit_cast<std::uint32_t>(clamped.regional_phase_variation));
     hash = mix_hash(hash, std::bit_cast<std::uint32_t>(clamped.regional_amplitude_variation));
     return mix_hash(
@@ -438,6 +473,10 @@ SeasonalPrecipitationSettings clamp_seasonal_precipitation_settings(
         clamped.southern_wet_peak_year_fraction,
         defaults.southern_wet_peak_year_fraction
     );
+    clamped.equatorial_transition_degrees = finite_or(
+        clamped.equatorial_transition_degrees,
+        defaults.equatorial_transition_degrees
+    );
     clamped.regional_phase_variation = finite_or(
         clamped.regional_phase_variation,
         defaults.regional_phase_variation
@@ -471,6 +510,9 @@ SeasonalPrecipitationSettings clamp_seasonal_precipitation_settings(
     );
     clamped.southern_wet_peak_year_fraction = normalize_year_fraction(
         clamped.southern_wet_peak_year_fraction
+    );
+    clamped.equatorial_transition_degrees = std::clamp(
+        clamped.equatorial_transition_degrees, 1.0f, 90.0f
     );
     clamped.regional_phase_variation = std::clamp(
         clamped.regional_phase_variation, 0.0f, 0.5f
@@ -515,6 +557,9 @@ std::uint64_t seasonal_precipitation_settings_fingerprint(
     hash = mix_hash(hash, std::bit_cast<std::uint32_t>(clamped.inland_damping));
     hash = mix_hash(hash, std::bit_cast<std::uint32_t>(clamped.northern_wet_peak_year_fraction));
     hash = mix_hash(hash, std::bit_cast<std::uint32_t>(clamped.southern_wet_peak_year_fraction));
+    hash = mix_hash(hash, std::bit_cast<std::uint32_t>(
+        clamped.equatorial_transition_degrees
+    ));
     hash = mix_hash(hash, std::bit_cast<std::uint32_t>(clamped.regional_phase_variation));
     hash = mix_hash(hash, std::bit_cast<std::uint32_t>(clamped.regional_amplitude_variation));
     hash = mix_hash(hash, std::bit_cast<std::uint32_t>(clamped.regional_variation_frequency));
@@ -565,15 +610,11 @@ SeasonalTemperatureMap evaluate_seasonal_temperature(
         return seasonal_temperature;
     }
 
-    constexpr float PI = 3.14159265358979323846f;
     const float normalized_year = normalize_year_fraction(year_fraction);
     const auto water_distances = distance_to_water(terrain);
     for (std::uint32_t y = 0; y < terrain.height; ++y) {
         const float latitude = seasonal_temperature_latitude_for_row(clamped, y, terrain.height);
         const float latitude_strength = std::abs(latitude) / 90.0f;
-        const float hemisphere_peak = latitude >= 0.0f
-            ? clamped.northern_peak_year_fraction
-            : clamped.southern_peak_year_fraction;
         for (std::uint32_t x = 0; x < terrain.width; ++x) {
             const std::size_t index = terrain.index(x, y);
             const float normalized_x = terrain.width > 1
@@ -582,9 +623,9 @@ SeasonalTemperatureMap evaluate_seasonal_temperature(
             const float normalized_y = terrain.height > 1
                 ? static_cast<float>(y) / static_cast<float>(terrain.height - 1)
                 : 0.5f;
-            float phase = hemisphere_peak;
+            float phase_variation = 0.0f;
             if (clamped.regional_phase_variation > 0.0f) {
-                phase += (
+                phase_variation = (
                     value_noise(
                         clamped.profile_seed,
                         normalized_x,
@@ -619,8 +660,13 @@ SeasonalTemperatureMap evaluate_seasonal_temperature(
                 );
             }
 
-            const float seasonal_wave = std::cos(
-                2.0f * PI * (normalized_year - normalize_year_fraction(phase))
+            const float seasonal_wave = blended_hemisphere_wave(
+                normalized_year,
+                clamped.northern_peak_year_fraction,
+                clamped.southern_peak_year_fraction,
+                latitude,
+                clamped.equatorial_transition_degrees,
+                phase_variation
             );
             auto& cell = seasonal_temperature.cells[index];
             cell.annual_temperature_normal = climate.cells[index].temperature_normal;
@@ -653,7 +699,6 @@ SeasonalPrecipitationMap evaluate_seasonal_precipitation(
         return seasonal_precipitation;
     }
 
-    constexpr float PI = 3.14159265358979323846f;
     const float normalized_year = normalize_year_fraction(year_fraction);
     for (std::uint32_t y = 0; y < terrain.height; ++y) {
         const float latitude = seasonal_precipitation_latitude_for_row(
@@ -662,9 +707,6 @@ SeasonalPrecipitationMap evaluate_seasonal_precipitation(
             terrain.height
         );
         const float latitude_strength = std::abs(latitude) / 90.0f;
-        const float hemisphere_peak = latitude >= 0.0f
-            ? clamped.northern_wet_peak_year_fraction
-            : clamped.southern_wet_peak_year_fraction;
         for (std::uint32_t x = 0; x < terrain.width; ++x) {
             const std::size_t index = terrain.index(x, y);
             const float normalized_x = terrain.width > 1
@@ -673,9 +715,9 @@ SeasonalPrecipitationMap evaluate_seasonal_precipitation(
             const float normalized_y = terrain.height > 1
                 ? static_cast<float>(y) / static_cast<float>(terrain.height - 1)
                 : 0.5f;
-            float phase = hemisphere_peak;
+            float phase_variation = 0.0f;
             if (clamped.regional_phase_variation > 0.0f) {
-                phase += (
+                phase_variation = (
                     value_noise(
                         clamped.profile_seed,
                         normalized_x,
@@ -704,8 +746,13 @@ SeasonalPrecipitationMap evaluate_seasonal_precipitation(
                 );
             }
 
-            const float wetness_wave = std::cos(
-                2.0f * PI * (normalized_year - normalize_year_fraction(phase))
+            const float wetness_wave = blended_hemisphere_wave(
+                normalized_year,
+                clamped.northern_wet_peak_year_fraction,
+                clamped.southern_wet_peak_year_fraction,
+                latitude,
+                clamped.equatorial_transition_degrees,
+                phase_variation
             );
             auto& cell = seasonal_precipitation.cells[index];
             cell.annual_precipitation_normal = climate.cells[index].precipitation_normal;

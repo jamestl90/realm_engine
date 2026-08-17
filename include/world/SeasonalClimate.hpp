@@ -7,8 +7,8 @@
 
 namespace world {
 
-inline constexpr std::uint32_t SEASONAL_TEMPERATURE_VERSION = 1;
-inline constexpr std::uint32_t SEASONAL_PRECIPITATION_VERSION = 1;
+inline constexpr std::uint32_t SEASONAL_TEMPERATURE_VERSION = 2;
+inline constexpr std::uint32_t SEASONAL_PRECIPITATION_VERSION = 2;
 
 struct SeasonalTemperatureSettings {
     procgen::Seed profile_seed{1};
@@ -22,6 +22,7 @@ struct SeasonalTemperatureSettings {
     float maritime_influence_distance{16.0f};
     float northern_peak_year_fraction{0.50f};
     float southern_peak_year_fraction{0.0f};
+    float equatorial_transition_degrees{15.0f};
     float regional_phase_variation{0.0f};
     float regional_amplitude_variation{0.0f};
     float regional_variation_frequency{1.5f};
@@ -75,6 +76,7 @@ struct SeasonalPrecipitationSettings {
     float inland_damping{0.10f};
     float northern_wet_peak_year_fraction{0.0f};
     float southern_wet_peak_year_fraction{0.50f};
+    float equatorial_transition_degrees{15.0f};
     float regional_phase_variation{0.0f};
     float regional_amplitude_variation{0.0f};
     float regional_variation_frequency{1.25f};

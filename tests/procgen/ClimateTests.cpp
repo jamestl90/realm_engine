@@ -842,6 +842,107 @@ bool test_seasonal_temperature_hemisphere_phase_opposition() {
     return ok;
 }
 
+bool test_seasonal_equatorial_transition_continuity() {
+    const auto terrain = make_flat_map(1, 193, 313);
+    auto climate = procgen::generate_greater_realm_climate(terrain);
+    for (auto& cell : climate.cells) {
+        cell.temperature_normal = 0.50f;
+        cell.precipitation_normal = 0.50f;
+    }
+
+    world::SeasonalTemperatureSettings temperature_settings;
+    temperature_settings.base_amplitude = 0.20f;
+    temperature_settings.latitude_amplitude = 0.0f;
+    temperature_settings.elevation_amplitude = 0.0f;
+    temperature_settings.maritime_damping = 0.0f;
+    temperature_settings.northern_peak_year_fraction = 0.0f;
+    temperature_settings.southern_peak_year_fraction = 0.50f;
+    temperature_settings.equatorial_transition_degrees = 15.0f;
+    const auto seasonal_temperature = world::evaluate_seasonal_temperature(
+        terrain,
+        climate,
+        temperature_settings,
+        0.0f
+    );
+
+    world::SeasonalPrecipitationSettings precipitation_settings;
+    precipitation_settings.base_amplitude = 0.40f;
+    precipitation_settings.latitude_amplitude = 0.0f;
+    precipitation_settings.inland_damping = 0.0f;
+    precipitation_settings.northern_wet_peak_year_fraction = 0.0f;
+    precipitation_settings.southern_wet_peak_year_fraction = 0.50f;
+    precipitation_settings.equatorial_transition_degrees = 15.0f;
+    const auto seasonal_precipitation = world::evaluate_seasonal_precipitation(
+        terrain,
+        climate,
+        precipitation_settings,
+        0.0f
+    );
+
+    constexpr std::size_t equator = 96;
+    constexpr std::size_t adjacent_north = equator - 1;
+    constexpr std::size_t adjacent_south = equator + 1;
+    bool ok = require(
+        nearly_equal(seasonal_temperature.cells[equator].seasonal_offset, 0.0f)
+            && seasonal_temperature.cells[adjacent_north].seasonal_offset > 0.0f
+            && seasonal_temperature.cells[adjacent_south].seasonal_offset < 0.0f
+            && std::abs(
+                seasonal_temperature.cells[adjacent_north].seasonal_offset
+                    - seasonal_temperature.cells[adjacent_south].seasonal_offset
+            ) < 0.03f,
+        "seasonal temperature blends opposite hemisphere phases smoothly across the equator"
+    );
+    ok &= require(
+        nearly_equal(seasonal_precipitation.cells[equator].seasonal_multiplier, 1.0f)
+            && seasonal_precipitation.cells[adjacent_north].seasonal_multiplier > 1.0f
+            && seasonal_precipitation.cells[adjacent_south].seasonal_multiplier < 1.0f
+            && std::abs(
+                seasonal_precipitation.cells[adjacent_north].seasonal_multiplier
+                    - seasonal_precipitation.cells[adjacent_south].seasonal_multiplier
+            ) < 0.08f,
+        "seasonal precipitation blends opposite wet phases smoothly across the equator"
+    );
+
+    world::RuntimeWeatherSettings weather_settings;
+    weather_settings.temperature_anomaly_strength = 0.0f;
+    weather_settings.pressure_variation_strength = 0.0f;
+    weather_settings.wind_speed_scale = 0.0f;
+    weather_settings.humidity_variation_strength = 0.0f;
+    weather_settings.cloud_variation_strength = 0.0f;
+    weather_settings.precipitation_threshold = 1.0f;
+    const auto weather = world::evolve_runtime_weather(
+        terrain,
+        climate,
+        seasonal_temperature,
+        seasonal_precipitation,
+        weather_settings,
+        0
+    );
+    ok &= require(
+        weather.cells[adjacent_north].temperature_anomaly == 0.0f
+            && weather.cells[adjacent_south].temperature_anomaly == 0.0f
+            && weather.cells[adjacent_north].pressure_normal == 0.5f
+            && weather.cells[adjacent_south].pressure_normal == 0.5f
+            && weather.cells[adjacent_north].wind_x == 0.0f
+            && weather.cells[adjacent_south].wind_x == 0.0f,
+        "independent runtime anomaly, pressure, and wind fields add no equatorial seam"
+    );
+    ok &= require(
+        std::abs(
+            weather.cells[adjacent_north].humidity
+                - weather.cells[adjacent_south].humidity
+        ) < 0.04f
+            && std::abs(
+                weather.cells[adjacent_north].cloud_cover
+                    - weather.cells[adjacent_south].cloud_cover
+            ) < 0.04f
+            && weather.cells[adjacent_north].active_precipitation == 0.0f
+            && weather.cells[adjacent_south].active_precipitation == 0.0f,
+        "runtime humidity, cloud, and precipitation inherit the smooth seasonal transition"
+    );
+    return ok;
+}
+
 bool test_seasonal_temperature_validation_and_local_modifiers() {
     auto terrain = make_flat_map(3, 1, 404);
     terrain.cells[0].is_water = true;
@@ -863,6 +964,7 @@ bool test_seasonal_temperature_validation_and_local_modifiers() {
     invalid.maritime_influence_distance = -5.0f;
     invalid.northern_peak_year_fraction = 1.25f;
     invalid.southern_peak_year_fraction = -0.25f;
+    invalid.equatorial_transition_degrees = 999.0f;
     invalid.regional_phase_variation = 2.0f;
     invalid.regional_amplitude_variation = 2.0f;
     invalid.regional_variation_frequency = 99.0f;
@@ -892,6 +994,7 @@ bool test_seasonal_temperature_validation_and_local_modifiers() {
             && clamped.maritime_influence_distance == 0.0f
             && nearly_equal(clamped.northern_peak_year_fraction, 0.25f)
             && nearly_equal(clamped.southern_peak_year_fraction, 0.75f)
+            && clamped.equatorial_transition_degrees == 90.0f
             && clamped.regional_phase_variation == 0.5f
             && clamped.regional_amplitude_variation == 1.0f
             && clamped.regional_variation_frequency == 8.0f,
@@ -976,6 +1079,8 @@ bool test_seasonal_temperature_does_not_relabel_biomes() {
     settings.base_amplitude = 0.30f;
     settings.latitude_amplitude = 0.0f;
     settings.maritime_damping = 0.0f;
+    settings.northern_peak_year_fraction = 0.50f;
+    settings.southern_peak_year_fraction = 0.50f;
     const auto hot_season = world::evaluate_seasonal_temperature(
         terrain, climate, settings, 0.50f
     );
@@ -1066,6 +1171,7 @@ bool test_seasonal_precipitation_validation_cache_and_biome_immutability() {
     invalid.latitude_amplitude = -1.0f;
     invalid.inland_damping = 2.0f;
     invalid.northern_wet_peak_year_fraction = 1.25f;
+    invalid.equatorial_transition_degrees = 999.0f;
     invalid.minimum_multiplier = -1.0f;
     invalid.maximum_multiplier = 99.0f;
     const auto clamped = world::clamp_seasonal_precipitation_settings(invalid);
@@ -1089,6 +1195,7 @@ bool test_seasonal_precipitation_validation_cache_and_biome_immutability() {
             && clamped.latitude_amplitude == 0.0f
             && clamped.inland_damping == 1.0f
             && nearly_equal(clamped.northern_wet_peak_year_fraction, 0.25f)
+            && clamped.equatorial_transition_degrees == 90.0f
             && clamped.minimum_multiplier == 0.0f
             && clamped.maximum_multiplier == 3.0f,
         "seasonal precipitation settings clamp invalid amplitudes, phases, and multipliers"
@@ -1443,6 +1550,7 @@ int main() {
     ok &= test_climate_regeneration_locality();
     ok &= test_seasonal_temperature_determinism_and_calendar_repeatability();
     ok &= test_seasonal_temperature_hemisphere_phase_opposition();
+    ok &= test_seasonal_equatorial_transition_continuity();
     ok &= test_seasonal_temperature_validation_and_local_modifiers();
     ok &= test_seasonal_temperature_cache_and_source_invalidation();
     ok &= test_seasonal_temperature_does_not_relabel_biomes();

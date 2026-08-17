@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstddef>
+#include <cstdlib>
 #include <iostream>
 #include <vector>
 
@@ -43,6 +44,12 @@ procgen::DebugColour pixel_at(
         image.rgba[pixel + 2],
         image.rgba[pixel + 3]
     };
+}
+
+int colour_distance(procgen::DebugColour left, procgen::DebugColour right) {
+    return std::abs(static_cast<int>(left.r) - static_cast<int>(right.r))
+        + std::abs(static_cast<int>(left.g) - static_cast<int>(right.g))
+        + std::abs(static_cast<int>(left.b) - static_cast<int>(right.b));
 }
 
 bool test_climate_weather_inspection_views() {
@@ -240,6 +247,92 @@ bool test_greater_realm_resolution_rendering_is_interactive() {
     return ok;
 }
 
+bool test_all_world_inspection_views_are_continuous_at_equator() {
+    procgen::GreaterRealmGeneratorSettings terrain_settings;
+    terrain_settings.seed = 86420;
+    terrain_settings.width = 3;
+    terrain_settings.height = 193;
+    const auto terrain = procgen::generate_greater_realm(terrain_settings);
+    auto climate = procgen::generate_greater_realm_climate(terrain);
+    for (auto& cell : climate.cells) {
+        cell.temperature_normal = 0.50f;
+        cell.precipitation_normal = 0.50f;
+    }
+
+    world::SeasonalTemperatureSettings temperature_settings;
+    temperature_settings.base_amplitude = 0.20f;
+    temperature_settings.latitude_amplitude = 0.0f;
+    temperature_settings.elevation_amplitude = 0.0f;
+    temperature_settings.maritime_damping = 0.0f;
+    temperature_settings.northern_peak_year_fraction = 0.0f;
+    temperature_settings.southern_peak_year_fraction = 0.50f;
+    const auto seasonal_temperature = world::evaluate_seasonal_temperature(
+        terrain,
+        climate,
+        temperature_settings,
+        0.0f
+    );
+
+    world::SeasonalPrecipitationSettings precipitation_settings;
+    precipitation_settings.base_amplitude = 0.40f;
+    precipitation_settings.latitude_amplitude = 0.0f;
+    precipitation_settings.inland_damping = 0.0f;
+    precipitation_settings.northern_wet_peak_year_fraction = 0.0f;
+    precipitation_settings.southern_wet_peak_year_fraction = 0.50f;
+    const auto seasonal_precipitation = world::evaluate_seasonal_precipitation(
+        terrain,
+        climate,
+        precipitation_settings,
+        0.0f
+    );
+
+    world::RuntimeWeatherSettings weather_settings;
+    weather_settings.temperature_anomaly_strength = 0.0f;
+    weather_settings.pressure_variation_strength = 0.0f;
+    weather_settings.wind_speed_scale = 0.0f;
+    weather_settings.humidity_variation_strength = 0.0f;
+    weather_settings.cloud_variation_strength = 0.0f;
+    weather_settings.precipitation_threshold = 1.0f;
+    const auto weather = world::evolve_runtime_weather(
+        terrain,
+        climate,
+        seasonal_temperature,
+        seasonal_precipitation,
+        weather_settings,
+        0
+    );
+
+    procgen::GreaterRealmDebugOptions overlays;
+    overlays.show_coastline = false;
+    overlays.show_mountain_peaks = false;
+    overlays.show_rivers = false;
+    overlays.show_drainage_directions = false;
+    for (std::uint8_t value = static_cast<std::uint8_t>(
+            game::GreaterRealmInspectionView::SeasonalTemperature
+        );
+         value <= static_cast<std::uint8_t>(
+            game::GreaterRealmInspectionView::ExperiencedPrecipitation
+         );
+         ++value) {
+        const auto image = game::build_greater_realm_climate_weather_inspection_image(
+            terrain,
+            climate,
+            seasonal_temperature,
+            seasonal_precipitation,
+            weather,
+            static_cast<game::GreaterRealmInspectionView>(value),
+            overlays
+        );
+        if (!require(
+                colour_distance(pixel_at(image, 1, 95), pixel_at(image, 1, 97)) < 64,
+                "seasonal and runtime inspection views do not introduce an equatorial seam"
+            )) {
+            return false;
+        }
+    }
+    return true;
+}
+
 } // namespace
 
 int main() {
@@ -247,6 +340,9 @@ int main() {
         return 1;
     }
     if (!test_greater_realm_resolution_rendering_is_interactive()) {
+        return 1;
+    }
+    if (!test_all_world_inspection_views_are_continuous_at_equator()) {
         return 1;
     }
     std::cout << "Climate and weather inspection tests passed.\n";
