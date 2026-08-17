@@ -51,8 +51,8 @@ Greater-realm climate is intentionally split into three layers with separate own
 | Layer | Owner | Core fields | Resolution | Cadence | Persistence |
 |---|---|---|---|---|---|
 | Annual climate normals | Procgen derived data | `temperature_normal`, `precipitation_normal`, source terrain identity, climate data/settings versions, effective climatological transport and aridity character | One climate cell per canonical greater-realm terrain cell | Rebuilt only when terrain source identity or climate-normal settings change | Regenerated from versioned inputs by default |
-| Seasonal climate evaluation | World simulation/application climate layer | Implemented temperature amplitude/phase plus future precipitation amplitude/phase, optional profile IDs and seasonal modifiers sampled from annual normals and deterministic calendar input | Implemented seasonal temperature uses one sample per greater-realm cell; later layers may cache or aggregate by region | Calendar-scale tick or on-demand deterministic evaluation, never render-frame driven | Derived/cacheable; profile/settings are persisted, samples usually are not |
-| Transient runtime weather | Future world simulation state | Current temperature anomaly, pressure, runtime wind vector, humidity, cloud cover, active precipitation intensity/type, storm or drought state, simulation timestamp | Explicit weather cells or region-scoped state, typically coarser than terrain and sampled/interpolated for gameplay | Fixed simulation step or explicit event schedule independent from frame rate | Mutable region/world state with schema, algorithm, seed, region, and timestamp identity |
+| Seasonal climate evaluation | World simulation/application climate layer | Temperature amplitude/phase, precipitation amplitude/phase, optional profile IDs and seasonal modifiers sampled from annual normals and deterministic calendar input | Implemented seasonal maps use one sample per greater-realm cell; later layers may cache or aggregate by region | Calendar-scale tick or on-demand deterministic evaluation, never render-frame driven | Derived/cacheable; profile/settings are persisted, samples usually are not |
+| Transient runtime weather | World simulation state | Current temperature anomaly, pressure, runtime wind vector, humidity, cloud cover, active precipitation intensity/type, schema identity, weather seed, region identity, simulation tick | Implemented foundation uses one sample per greater-realm cell; later region systems may use coarser weather cells and interpolation | Fixed simulation tick or explicit event schedule independent from frame rate | Mutable state carries schema, source, seed, region, and timestamp identity; durable region persistence remains future work |
 
 - Annual normals describe what a place is generally like across long time spans. They are the only climate values biome generation may inspect.
 - Seasonal evaluation describes predictable calendar-scale departures from annual normals, such as winter cooling or wet seasons. It consumes explicit deterministic time inputs such as normalized year fraction or calendar tick, a world/profile seed, stable coordinates, and seasonal profile versions.
@@ -82,6 +82,14 @@ Greater-realm climate is intentionally split into three layers with separate own
 - `SeasonalTemperatureMap` stores version `1`, source terrain identity, an annual-temperature fingerprint, a seasonal-settings fingerprint, normalized year fraction, and one `SeasonalTemperatureCell` per greater-realm cell. Each cell stores the source `annual_temperature_normal`, the signed seasonal offset, and the clamped composed `seasonal_temperature_normal`.
 - The seasonal cache rebuilds when terrain identity, annual temperature normals, seasonal settings/profile identity, or normalized year fraction changes. It is a derived/cacheable world-simulation layer, not an extension of `GreaterRealmClimateGenerationCache`.
 - Seasonal temperature evaluation may change experienced conditions, but it does not alter terrain, annual climate normals, precipitation normals, hydrology, debug image source data, or biome assignments. Biome generation continues to inspect only terrain and annual climate normals.
+
+### Seasonal Precipitation Evaluation
+
+- `world::SeasonalPrecipitationSettings` owns deterministic wet/dry seasonal settings outside procgen. Defaults use `+60` north edge and `-60` south edge latitude context, base multiplier amplitude `0.25`, latitude amplitude `0.15`, inland/elevation damping `0.10`, northern wet peak year fraction `0.00`, southern wet peak year fraction `0.50`, and multiplier bounds `0.25..1.75`.
+- Seasonal precipitation consumes annual `precipitation_normal`, terrain coordinates, explicit normalized year fraction, and profile identity. It never reads frame time and does not use Task 077 climatological transport as runtime wind.
+- `SeasonalPrecipitationMap` stores version `1`, source terrain identity, an annual-precipitation fingerprint, a seasonal-settings fingerprint, normalized year fraction, and one `SeasonalPrecipitationCell` per greater-realm cell. Each cell stores annual precipitation, seasonal multiplier, and clamped composed seasonal precipitation tendency.
+- The seasonal precipitation cache rebuilds only when terrain identity, annual precipitation normals, seasonal settings/profile identity, or normalized year fraction changes. It does not dirty terrain, annual climate normals, potential river channels, debug source data, or biome assignment.
+- Seasonal precipitation is a tendency/probability input for runtime weather. It is not current rain, humidity, runoff, soil moisture, or river discharge.
 
 ### Precipitation Normals
 
@@ -153,6 +161,10 @@ Any generated-map change also dirties the debug image and texture upload. Author
 
 Seasonal climate evaluation and runtime weather are separate caches/state, not extensions of `GreaterRealmClimateGenerationCache`. The implemented seasonal-temperature cache may invalidate seasonal samples and gameplay-facing composed-condition queries, but it does not dirty terrain, annual climate normals, or biome assignment. Runtime weather ticks may invalidate runtime atmospheric queries, runoff, soil moisture, or active discharge once those systems exist, but they do not dirty procgen output.
 
+`RuntimeAtmosphericState` is mutable world-simulation state. Its versioned identity includes schema version, weather seed, region identity, source terrain/climate/seasonal fingerprints, settings fingerprint, and simulation tick. Deterministic evolution updates current temperature anomaly, pressure, runtime wind, humidity, cloud cover, and active precipitation from explicit tick input, stable annual climate, seasonal maps, and optional prior state. It does not mutate terrain, climate normals, seasonal samples, hydrology, potential channels, or biome maps.
+
+`ClimateWeatherSample` is the gameplay-facing query contract for this foundation. A query can expose stable annual normals, seasonal offsets/multipliers, runtime atmospheric fields, composed experienced temperature and precipitation, active precipitation type/intensity, and the stable biome ID. Missing seasonal or weather data falls back to annual normals and calm/currently dry conditions.
+
 ## Mapgen4 Alignment Boundary
 
 Mapgen4 is the reference for the generator's layered terrain behavior, not a requirement for identical storage or rendering. The following differences are intentional:
@@ -193,7 +205,7 @@ Task 049 records the alignment audit. Differences not listed above require an ex
 ## Not Yet Supported
 
 - Lake retention, shared water-surface levels, river erosion, deltas, or watershed metadata. Enclosed water is classified as inland water without implying those hydrological behaviors.
-- Seasonal precipitation evaluation, runtime weather, precipitation events, runoff, soil moisture, or active river discharge. Tasks 080-083 queue the remaining weather foundation; parked task 040 tracks later runoff and discharge through generated drainage data.
+- Runtime runoff, soil moisture, snowpack, active river discharge, flooding, erosion, weather fronts, storm entities, long-duration drought events, weather rendering, particles, or audio. Parked task 040 tracks later runoff and discharge through generated drainage data.
 - Product biome catalogues, biome asset formats, names, art, resource tables, spawn rules, or gameplay effects. The engine implementation intentionally stops at opaque application IDs and in-memory rules.
 - Resources, settlements, factions, or object placement.
 - Local tile generation or world-region streaming; queued Tasks 067-073 retain that future roadmap while current procgen work remains at greater-realm scale.

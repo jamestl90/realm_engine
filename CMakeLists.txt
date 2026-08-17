@@ -142,6 +142,7 @@ if(REALM_BUILD_TESTS)
     add_executable(realm_climate_tests EXCLUDE_FROM_ALL
         tests/procgen/ClimateTests.cpp
         src/world/SeasonalClimate.cpp
+        src/world/Weather.cpp
         src/procgen/Biome.cpp
         src/procgen/Climate.cpp
         src/procgen/GreaterRealm.cpp

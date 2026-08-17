@@ -1,6 +1,6 @@
 # Add Climate And Weather Query API
 
-Status: todo
+Status: complete
 Priority: high
 Area: World Simulation / Gameplay Queries
 
@@ -35,3 +35,22 @@ Task 078 defines three distinct environmental layers. Once seasonal evaluation a
 - Weather rendering, particles, audio, or presentation.
 - Dynamic biome regeneration or biome relabeling.
 
+## Implementation Decisions
+
+- Added `world::ClimateWeatherSample` and `sample_climate_weather_cell`.
+- Query samples expose stable annual temperature/precipitation normals, seasonal temperature offset, seasonal temperature normal, seasonal precipitation multiplier, seasonal precipitation tendency, runtime atmospheric fields, active precipitation intensity/type, composed experienced temperature/precipitation, and stable biome ID.
+- Missing seasonal or weather inputs fall back to annual normals and calm/currently dry runtime conditions.
+- Query composition is explicit: annual climate remains stable, seasonal maps are deterministic calendar inputs, runtime weather provides current anomalies/events, and biome ID is read from the stable biome map only.
+- The query API does not read hidden global time, mutate any layer, or regenerate/relabel biomes.
+
+## Commit Message
+
+`feat(world): add climate weather query samples`
+
+## Verification
+
+- Added climate/weather tests for annual-only fallback sampling, seasonal composition, runtime weather composition, active precipitation exposure, stable biome ID sampling, and normalized experienced-condition bounds.
+- `ctest --test-dir out/build/debug-with-tests -R procgen_greater_realm_climate --output-on-failure` passed, 1/1.
+- Full `ctest --test-dir out/build/debug-with-tests --output-on-failure` passed, 16/16.
+- `scripts/build.ps1 -Preset release-no-tests` passed.
+- `git diff --check` passed; Git reported only the repository's existing LF-to-CRLF warnings.

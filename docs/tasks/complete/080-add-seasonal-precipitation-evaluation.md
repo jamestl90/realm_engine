@@ -1,6 +1,6 @@
 # Add Seasonal Precipitation Evaluation
 
-Status: todo
+Status: complete
 Priority: high
 Area: World Simulation / Climate
 
@@ -36,3 +36,23 @@ Task 078 defines annual precipitation normal as long-term climate and seasonal p
 - Replacing Task 077 climatological transport with weather simulation.
 - Dynamic biome regeneration or biome relabeling.
 
+## Implementation Decisions
+
+- Added seasonal precipitation to `world::SeasonalClimate` alongside seasonal temperature instead of extending `GreaterRealmClimateMap`.
+- Added `SeasonalPrecipitationSettings`, `SeasonalPrecipitationMap`, `SeasonalPrecipitationCell`, and `SeasonalPrecipitationEvaluationCache`.
+- Seasonal precipitation consumes annual `precipitation_normal`, terrain coordinates, explicit normalized year fraction, profile seed/identity, and seasonal settings. It never reads frame time and does not treat Task 077 climatological transport as runtime wind.
+- Defaults use base multiplier amplitude `0.25`, latitude amplitude `0.15`, inland/elevation damping `0.10`, northern wet peak `0.00`, southern wet peak `0.50`, and multiplier bounds `0.25..1.75`.
+- The output stores annual precipitation, a seasonal multiplier, and clamped composed seasonal precipitation tendency. It is a probability/intensity tendency for runtime weather, not current rainfall.
+- The cache invalidates only seasonal precipitation when terrain identity, annual precipitation normals, seasonal settings/profile identity, or normalized year fraction changes. It does not dirty terrain, annual climate normals, hydrology, potential river channels, debug source data, or biome assignment.
+
+## Commit Message
+
+`feat(world): add seasonal precipitation evaluation`
+
+## Verification
+
+- Added climate tests for seasonal precipitation determinism, calendar repeatability, hemisphere wet/dry phase behavior, validation, cache invalidation, fixed-scale bounds, and biome immutability.
+- `ctest --test-dir out/build/debug-with-tests -R procgen_greater_realm_climate --output-on-failure` passed, 1/1.
+- Full `ctest --test-dir out/build/debug-with-tests --output-on-failure` passed, 16/16.
+- `scripts/build.ps1 -Preset release-no-tests` passed.
+- `git diff --check` passed; Git reported only the repository's existing LF-to-CRLF warnings.
