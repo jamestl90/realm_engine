@@ -1,5 +1,7 @@
 #include "procgen/Climate.hpp"
+#include "procgen/Biome.hpp"
 #include "procgen/GreaterRealmDebug.hpp"
+#include "world/SeasonalClimate.hpp"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -74,6 +76,25 @@ bool precipitation_values_match(
     for (std::size_t index = 0; index < left.cells.size(); ++index) {
         if (left.cells[index].precipitation_normal
             != right.cells[index].precipitation_normal) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool seasonal_temperature_values_match(
+    const world::SeasonalTemperatureMap& left,
+    const world::SeasonalTemperatureMap& right
+) {
+    if (left.cells.size() != right.cells.size()) {
+        return false;
+    }
+    for (std::size_t index = 0; index < left.cells.size(); ++index) {
+        if (left.cells[index].annual_temperature_normal
+                != right.cells[index].annual_temperature_normal
+            || left.cells[index].seasonal_offset != right.cells[index].seasonal_offset
+            || left.cells[index].seasonal_temperature_normal
+                != right.cells[index].seasonal_temperature_normal) {
             return false;
         }
     }
@@ -704,6 +725,256 @@ bool test_climate_regeneration_locality() {
     return ok;
 }
 
+bool test_seasonal_temperature_determinism_and_calendar_repeatability() {
+    const auto terrain = make_flat_map(4, 3, 202);
+    procgen::GreaterRealmClimateSettings climate_settings;
+    climate_settings.temperature_variation = 0.0f;
+    climate_settings.precipitation_scale = 0.0f;
+    const auto climate = procgen::generate_greater_realm_climate(terrain, climate_settings);
+
+    world::SeasonalTemperatureSettings settings;
+    settings.northern_peak_year_fraction = 0.25f;
+    settings.southern_peak_year_fraction = 0.75f;
+    settings.maritime_damping = 0.0f;
+    settings.regional_phase_variation = 0.10f;
+    settings.regional_amplitude_variation = 0.20f;
+    const auto first = world::evaluate_seasonal_temperature(
+        terrain, climate, settings, 0.25f
+    );
+    const auto second = world::evaluate_seasonal_temperature(
+        terrain, climate, settings, 0.25f
+    );
+    const auto repeated_year = world::evaluate_seasonal_temperature(
+        terrain, climate, settings, 1.25f
+    );
+    const auto opposite_season = world::evaluate_seasonal_temperature(
+        terrain, climate, settings, 0.75f
+    );
+
+    bool ok = require(
+        first.source_matches(terrain, climate, settings, 0.25f),
+        "seasonal temperature output records matching terrain, climate, settings, and calendar identity"
+    );
+    ok &= require(
+        seasonal_temperature_values_match(first, second)
+            && seasonal_temperature_values_match(first, repeated_year),
+        "seasonal temperature evaluation is deterministic and repeats by normalized year fraction"
+    );
+    ok &= require(
+        std::all_of(first.cells.begin(), first.cells.end(), [](const auto& cell) {
+            return std::isfinite(cell.annual_temperature_normal)
+                && std::isfinite(cell.seasonal_offset)
+                && std::isfinite(cell.seasonal_temperature_normal)
+                && cell.seasonal_temperature_normal >= 0.0f
+                && cell.seasonal_temperature_normal <= 1.0f;
+        }),
+        "seasonal temperature samples stay finite and clamp composed normals to 0..1"
+    );
+    ok &= require(
+        first.cells[0].seasonal_offset > opposite_season.cells[0].seasonal_offset,
+        "explicit calendar input changes the seasonal offset without consuming frame time"
+    );
+    return ok;
+}
+
+bool test_seasonal_temperature_hemisphere_phase_opposition() {
+    const auto terrain = make_flat_map(1, 3, 303);
+    auto climate = procgen::generate_greater_realm_climate(terrain);
+    for (auto& cell : climate.cells) {
+        cell.temperature_normal = 0.50f;
+    }
+
+    world::SeasonalTemperatureSettings settings;
+    settings.north_edge_latitude_degrees = 60.0f;
+    settings.south_edge_latitude_degrees = -60.0f;
+    settings.base_amplitude = 0.0f;
+    settings.latitude_amplitude = 0.30f;
+    settings.elevation_amplitude = 0.0f;
+    settings.maritime_damping = 0.0f;
+    settings.northern_peak_year_fraction = 0.25f;
+    settings.southern_peak_year_fraction = 0.75f;
+
+    const auto northern_summer = world::evaluate_seasonal_temperature(
+        terrain, climate, settings, 0.25f
+    );
+    const auto southern_summer = world::evaluate_seasonal_temperature(
+        terrain, climate, settings, 0.75f
+    );
+
+    bool ok = require(
+        nearly_equal(
+            world::seasonal_temperature_latitude_for_row(settings, 1, 3),
+            0.0f
+        ),
+        "seasonal rows interpolate latitude between explicit edge settings"
+    );
+    ok &= require(
+        northern_summer.cells[0].seasonal_offset > 0.19f
+            && northern_summer.cells[2].seasonal_offset < -0.19f,
+        "northern summer warms the north while cooling the south"
+    );
+    ok &= require(
+        southern_summer.cells[0].seasonal_offset < -0.19f
+            && southern_summer.cells[2].seasonal_offset > 0.19f,
+        "southern summer reverses the hemisphere temperature phase"
+    );
+    return ok;
+}
+
+bool test_seasonal_temperature_validation_and_local_modifiers() {
+    auto terrain = make_flat_map(3, 1, 404);
+    terrain.cells[0].is_water = true;
+    terrain.cells[0].terrain_form = procgen::TerrainForm::InlandWater;
+    terrain.cells[1].elevation = procgen::NORMALIZED_WATERLINE;
+    terrain.cells[2].elevation = 1.0f;
+    auto climate = procgen::generate_greater_realm_climate(terrain);
+    for (auto& cell : climate.cells) {
+        cell.temperature_normal = 0.50f;
+    }
+
+    world::SeasonalTemperatureSettings invalid;
+    invalid.north_edge_latitude_degrees = 120.0f;
+    invalid.south_edge_latitude_degrees = -120.0f;
+    invalid.base_amplitude = std::numeric_limits<float>::infinity();
+    invalid.latitude_amplitude = -1.0f;
+    invalid.elevation_amplitude = 2.0f;
+    invalid.maritime_damping = 2.0f;
+    invalid.maritime_influence_distance = -5.0f;
+    invalid.northern_peak_year_fraction = 1.25f;
+    invalid.southern_peak_year_fraction = -0.25f;
+    invalid.regional_phase_variation = 2.0f;
+    invalid.regional_amplitude_variation = 2.0f;
+    invalid.regional_variation_frequency = 99.0f;
+    const auto clamped = world::clamp_seasonal_temperature_settings(invalid);
+
+    world::SeasonalTemperatureSettings settings;
+    settings.north_edge_latitude_degrees = 0.0f;
+    settings.south_edge_latitude_degrees = 0.0f;
+    settings.base_amplitude = 0.10f;
+    settings.latitude_amplitude = 0.0f;
+    settings.elevation_amplitude = 0.20f;
+    settings.maritime_damping = 1.0f;
+    settings.maritime_influence_distance = 2.0f;
+    settings.northern_peak_year_fraction = 0.0f;
+    settings.southern_peak_year_fraction = 0.0f;
+    const auto seasonal = world::evaluate_seasonal_temperature(
+        terrain, climate, settings, 0.0f
+    );
+
+    bool ok = require(
+        clamped.north_edge_latitude_degrees == 90.0f
+            && clamped.south_edge_latitude_degrees == -90.0f
+            && clamped.base_amplitude == world::SeasonalTemperatureSettings{}.base_amplitude
+            && clamped.latitude_amplitude == 0.0f
+            && clamped.elevation_amplitude == 0.5f
+            && clamped.maritime_damping == 1.0f
+            && clamped.maritime_influence_distance == 0.0f
+            && nearly_equal(clamped.northern_peak_year_fraction, 0.25f)
+            && nearly_equal(clamped.southern_peak_year_fraction, 0.75f)
+            && clamped.regional_phase_variation == 0.5f
+            && clamped.regional_amplitude_variation == 1.0f
+            && clamped.regional_variation_frequency == 8.0f,
+        "seasonal temperature settings clamp invalid amplitudes, phases, and modifiers"
+    );
+    ok &= require(
+        seasonal.cells[0].seasonal_offset < seasonal.cells[1].seasonal_offset
+            && seasonal.cells[2].seasonal_offset > seasonal.cells[1].seasonal_offset,
+        "maritime damping reduces seasonal swing near water and elevation can increase it"
+    );
+    return ok;
+}
+
+bool test_seasonal_temperature_cache_and_source_invalidation() {
+    const auto terrain = make_flat_map(3, 2, 505);
+    auto climate = procgen::generate_greater_realm_climate(terrain);
+    const auto temperature_fingerprint_before = world::annual_temperature_fingerprint(climate);
+    std::vector<float> precipitation_before;
+    for (const auto& cell : climate.cells) {
+        precipitation_before.push_back(cell.precipitation_normal);
+    }
+
+    world::SeasonalTemperatureSettings settings;
+    world::SeasonalTemperatureEvaluationCache cache;
+    world::SeasonalTemperatureMap seasonal;
+    const auto first = cache.regenerate(seasonal, terrain, climate, settings, 0.10f);
+    const auto unchanged = cache.regenerate(seasonal, terrain, climate, settings, 1.10f);
+    const auto different_calendar = cache.regenerate(
+        seasonal, terrain, climate, settings, 0.60f
+    );
+    climate.cells[0].temperature_normal += 0.01f;
+    const auto changed_climate = cache.regenerate(
+        seasonal, terrain, climate, settings, 0.60f
+    );
+
+    bool precipitation_unchanged = true;
+    for (std::size_t index = 0; index < climate.cells.size(); ++index) {
+        precipitation_unchanged &= precipitation_before[index]
+            == climate.cells[index].precipitation_normal;
+    }
+    bool ok = require(
+        first.rebuilt && !unchanged.rebuilt && different_calendar.rebuilt,
+        "seasonal temperature cache rebuilds only for changed source or calendar inputs"
+    );
+    ok &= require(
+        changed_climate.rebuilt
+            && world::annual_temperature_fingerprint(climate)
+                != temperature_fingerprint_before
+            && seasonal.source_matches(terrain, climate, settings, 0.60f),
+        "changed annual temperature normals invalidate cached seasonal samples"
+    );
+    ok &= require(
+        precipitation_unchanged,
+        "seasonal temperature evaluation does not alter precipitation normals"
+    );
+    return ok;
+}
+
+bool test_seasonal_temperature_does_not_relabel_biomes() {
+    const auto terrain = make_flat_map(4, 1, 606);
+    auto climate = procgen::generate_greater_realm_climate(terrain);
+    for (auto& cell : climate.cells) {
+        cell.temperature_normal = 0.50f;
+        cell.precipitation_normal = 0.50f;
+    }
+
+    procgen::GreaterRealmBiomeRuleSet rules;
+    rules.identity = 77;
+    rules.fallback_biome_id = 9;
+    procgen::GreaterRealmBiomeRule cool;
+    cool.biome_id = 1;
+    cool.priority = 10;
+    cool.temperature_normal = procgen::BiomeValueRange{0.0f, 0.55f};
+    rules.rules.push_back(cool);
+    const auto biomes = procgen::generate_greater_realm_biomes(terrain, climate, rules);
+    std::vector<procgen::BiomeId> biome_ids_before;
+    for (const auto& cell : biomes.cells) {
+        biome_ids_before.push_back(cell.biome_id);
+    }
+
+    world::SeasonalTemperatureSettings settings;
+    settings.base_amplitude = 0.30f;
+    settings.latitude_amplitude = 0.0f;
+    settings.maritime_damping = 0.0f;
+    const auto hot_season = world::evaluate_seasonal_temperature(
+        terrain, climate, settings, 0.50f
+    );
+
+    bool biome_ids_unchanged = true;
+    for (std::size_t index = 0; index < biomes.cells.size(); ++index) {
+        biome_ids_unchanged &= biome_ids_before[index] == biomes.cells[index].biome_id;
+    }
+    bool ok = require(
+        hot_season.cells[0].seasonal_temperature_normal
+            != hot_season.cells[0].annual_temperature_normal,
+        "seasonal temperature can change experienced conditions"
+    );
+    ok &= require(
+        biomes.sources_match(terrain, climate, rules) && biome_ids_unchanged,
+        "seasonal temperature samples do not regenerate or relabel stable biomes"
+    );
+    return ok;
+}
+
 } // namespace
 
 int main() {
@@ -724,10 +995,15 @@ int main() {
     ok &= test_regional_wind_perturbation_is_broad_and_material();
     ok &= test_source_identity_debug_view_and_terrain_immutability();
     ok &= test_climate_regeneration_locality();
+    ok &= test_seasonal_temperature_determinism_and_calendar_repeatability();
+    ok &= test_seasonal_temperature_hemisphere_phase_opposition();
+    ok &= test_seasonal_temperature_validation_and_local_modifiers();
+    ok &= test_seasonal_temperature_cache_and_source_invalidation();
+    ok &= test_seasonal_temperature_does_not_relabel_biomes();
     if (!ok) {
         return 1;
     }
 
-    std::cout << "Greater realm climate-normal tests passed.\n";
+    std::cout << "Greater realm climate and seasonal temperature tests passed.\n";
     return 0;
 }
