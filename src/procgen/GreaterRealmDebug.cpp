@@ -157,6 +157,31 @@ void set_pixel(DebugImage& image, std::size_t cell_index, DebugColour colour) no
     image.rgba[pixel + 3] = colour.a;
 }
 
+DebugColour biome_debug_colour(
+    BiomeId biome_id,
+    const std::vector<BiomeDebugColour>* biome_colours
+) noexcept {
+    if (biome_colours) {
+        const auto found = std::find_if(
+            biome_colours->begin(),
+            biome_colours->end(),
+            [biome_id](const BiomeDebugColour& entry) { return entry.biome_id == biome_id; }
+        );
+        if (found != biome_colours->end()) {
+            return found->colour;
+        }
+    }
+    if (biome_id == INVALID_BIOME_ID) {
+        return {72, 72, 76, 255};
+    }
+    constexpr std::array<DebugColour, 8> FALLBACK_PALETTE{{
+        {88, 126, 118, 255}, {154, 118, 82, 255}, {92, 112, 156, 255},
+        {142, 92, 112, 255}, {112, 142, 82, 255}, {86, 138, 158, 255},
+        {158, 142, 88, 255}, {118, 98, 148, 255}
+    }};
+    return FALLBACK_PALETTE[biome_id % FALLBACK_PALETTE.size()];
+}
+
 } // namespace
 
 std::size_t DebugImage::expected_byte_count() const noexcept {
@@ -213,6 +238,8 @@ const char* to_string(GreaterRealmDebugView view) noexcept {
         case GreaterRealmDebugView::CoastDistance: return "Coast distance";
         case GreaterRealmDebugView::CatchmentArea: return "Catchment area";
         case GreaterRealmDebugView::TemperatureNormal: return "Temperature normal";
+        case GreaterRealmDebugView::PrecipitationNormal: return "Precipitation normal";
+        case GreaterRealmDebugView::Biome: return "Biome";
         case GreaterRealmDebugView::Count: break;
     }
     return "Unknown";
@@ -289,83 +316,43 @@ DebugColour greater_realm_debug_colour(
         case GreaterRealmDebugView::Terrain:
             return continuous_terrain_colour(cell);
         case GreaterRealmDebugView::TemperatureNormal:
+        case GreaterRealmDebugView::PrecipitationNormal:
+        case GreaterRealmDebugView::Biome:
         case GreaterRealmDebugView::Count:
             break;
     }
     return {255, 0, 255, 255};
 }
 
-static DebugImage build_greater_realm_debug_image_impl(
+void apply_greater_realm_debug_overlays(
+    DebugImage& image,
     const GreaterRealmMap& map,
-    const GreaterRealmClimateMap* climate,
-    float sea_level,
     const GreaterRealmDebugOptions& options
-);
-
-DebugImage build_greater_realm_debug_image(const GreaterRealmMap& map, float sea_level) {
-    return build_greater_realm_debug_image(map, sea_level, GreaterRealmDebugOptions{});
-}
-
-DebugImage build_greater_realm_debug_image(
-    const GreaterRealmMap& map,
-    float sea_level,
-    const GreaterRealmDebugOptions& options
-) {
-    return build_greater_realm_debug_image_impl(map, nullptr, sea_level, options);
-}
-
-DebugImage build_greater_realm_debug_image(
-    const GreaterRealmMap& map,
-    const GreaterRealmClimateMap& climate,
-    float sea_level,
-    const GreaterRealmDebugOptions& options
-) {
-    return build_greater_realm_debug_image_impl(map, &climate, sea_level, options);
-}
-
-static DebugImage build_greater_realm_debug_image_impl(
-    const GreaterRealmMap& map,
-    const GreaterRealmClimateMap* climate,
-    float sea_level,
-    const GreaterRealmDebugOptions& options
-) {
-    DebugImage image;
-    image.width = map.width;
-    image.height = map.height;
-
-    const bool temperature_view = options.view == GreaterRealmDebugView::TemperatureNormal;
+) noexcept {
     if (!map.has_expected_cell_count()
-        || (temperature_view && (!climate || !climate->source_matches(map)))) {
-        return image;
+        || image.width != map.width
+        || image.height != map.height
+        || !image.has_expected_byte_count()) {
+        return;
     }
 
-    const float scalar_maximum = scalar_maximum_for_view(map, options.view);
-    image.rgba.resize(image.expected_byte_count());
-    for (std::size_t index = 0; index < map.cells.size(); ++index) {
-        DebugColour colour = temperature_view
-            ? three_colour_gradient(
-                climate->cells[index].temperature_normal,
-                {38, 82, 148, 255},
-                {104, 172, 120, 255},
-                {222, 82, 48, 255}
-            )
-            : greater_realm_debug_colour(
-                map.cells[index],
-                sea_level,
-                options.view,
-                scalar_maximum
+    if (options.show_coastline) {
+        constexpr float coastline_outline = 0.72f;
+        for (std::size_t index = 0; index < map.cells.size(); ++index) {
+            if (!map.cells[index].is_coastal) {
+                continue;
+            }
+            const std::size_t pixel = index * 4;
+            image.rgba[pixel] = static_cast<std::uint8_t>(
+                static_cast<float>(image.rgba[pixel]) * coastline_outline
             );
-        if (options.show_coastline && map.cells[index].is_coastal) {
-            constexpr float coastline_outline = 0.72f;
-            colour.r = static_cast<std::uint8_t>(static_cast<float>(colour.r) * coastline_outline);
-            colour.g = static_cast<std::uint8_t>(static_cast<float>(colour.g) * coastline_outline);
-            colour.b = static_cast<std::uint8_t>(static_cast<float>(colour.b) * coastline_outline);
+            image.rgba[pixel + 1] = static_cast<std::uint8_t>(
+                static_cast<float>(image.rgba[pixel + 1]) * coastline_outline
+            );
+            image.rgba[pixel + 2] = static_cast<std::uint8_t>(
+                static_cast<float>(image.rgba[pixel + 2]) * coastline_outline
+            );
         }
-        const std::size_t pixel = index * 4;
-        image.rgba[pixel] = colour.r;
-        image.rgba[pixel + 1] = colour.g;
-        image.rgba[pixel + 2] = colour.b;
-        image.rgba[pixel + 3] = colour.a;
     }
 
     if (options.show_drainage_directions && map.width > 0 && map.height > 0) {
@@ -399,6 +386,114 @@ static DebugImage build_greater_realm_debug_image_impl(
             set_pixel(image, peak.cell_index, peak_colour);
         }
     }
+}
+
+static DebugImage build_greater_realm_debug_image_impl(
+    const GreaterRealmMap& map,
+    const GreaterRealmClimateMap* climate,
+    const GreaterRealmBiomeMap* biomes,
+    const std::vector<BiomeDebugColour>* biome_colours,
+    float sea_level,
+    const GreaterRealmDebugOptions& options
+);
+
+DebugImage build_greater_realm_debug_image(const GreaterRealmMap& map, float sea_level) {
+    return build_greater_realm_debug_image(map, sea_level, GreaterRealmDebugOptions{});
+}
+
+DebugImage build_greater_realm_debug_image(
+    const GreaterRealmMap& map,
+    float sea_level,
+    const GreaterRealmDebugOptions& options
+) {
+    return build_greater_realm_debug_image_impl(
+        map, nullptr, nullptr, nullptr, sea_level, options
+    );
+}
+
+DebugImage build_greater_realm_debug_image(
+    const GreaterRealmMap& map,
+    const GreaterRealmClimateMap& climate,
+    float sea_level,
+    const GreaterRealmDebugOptions& options
+) {
+    return build_greater_realm_debug_image_impl(
+        map, &climate, nullptr, nullptr, sea_level, options
+    );
+}
+
+DebugImage build_greater_realm_debug_image(
+    const GreaterRealmMap& map,
+    const GreaterRealmClimateMap& climate,
+    const GreaterRealmBiomeMap& biomes,
+    const std::vector<BiomeDebugColour>& biome_colours,
+    float sea_level,
+    const GreaterRealmDebugOptions& options
+) {
+    return build_greater_realm_debug_image_impl(
+        map, &climate, &biomes, &biome_colours, sea_level, options
+    );
+}
+
+static DebugImage build_greater_realm_debug_image_impl(
+    const GreaterRealmMap& map,
+    const GreaterRealmClimateMap* climate,
+    const GreaterRealmBiomeMap* biomes,
+    const std::vector<BiomeDebugColour>* biome_colours,
+    float sea_level,
+    const GreaterRealmDebugOptions& options
+) {
+    DebugImage image;
+    image.width = map.width;
+    image.height = map.height;
+
+    const bool temperature_view = options.view == GreaterRealmDebugView::TemperatureNormal;
+    const bool precipitation_view = options.view == GreaterRealmDebugView::PrecipitationNormal;
+    const bool biome_view = options.view == GreaterRealmDebugView::Biome;
+    if (!map.has_expected_cell_count()
+        || ((temperature_view || precipitation_view)
+            && (!climate || !climate->source_matches(map)))
+        || (biome_view
+            && (!climate || !biomes || !biomes->source_maps_match(map, *climate)))) {
+        return image;
+    }
+
+    const float scalar_maximum = scalar_maximum_for_view(map, options.view);
+    image.rgba.resize(image.expected_byte_count());
+    for (std::size_t index = 0; index < map.cells.size(); ++index) {
+        DebugColour colour;
+        if (temperature_view) {
+            colour = three_colour_gradient(
+                climate->cells[index].temperature_normal,
+                {38, 82, 148, 255},
+                {104, 172, 120, 255},
+                {222, 82, 48, 255}
+            );
+        } else if (precipitation_view) {
+            colour = three_colour_gradient(
+                climate->cells[index].precipitation_normal,
+                {196, 158, 78, 255},
+                {72, 158, 104, 255},
+                {46, 102, 178, 255}
+            );
+        } else if (biome_view) {
+            colour = biome_debug_colour(biomes->cells[index].biome_id, biome_colours);
+        } else {
+            colour = greater_realm_debug_colour(
+                map.cells[index],
+                sea_level,
+                options.view,
+                scalar_maximum
+            );
+        }
+        const std::size_t pixel = index * 4;
+        image.rgba[pixel] = colour.r;
+        image.rgba[pixel + 1] = colour.g;
+        image.rgba[pixel + 2] = colour.b;
+        image.rgba[pixel + 3] = colour.a;
+    }
+
+    apply_greater_realm_debug_overlays(image, map, options);
 
     return image;
 }

@@ -1,4 +1,5 @@
 #include "test_app.hpp"
+#include "GreaterRealmDebugBiomes.hpp"
 #include "../../include/core/Engine.hpp"
 #include "../../include/core/Config.hpp"
 #include "../../include/core/Utils.hpp"
@@ -17,6 +18,7 @@
 #include <chrono>
 #endif
 #include <vector>
+#include <utility>
 
 #if defined(REALM_ENABLE_PROCGEN_DEBUG_VIEW)
 #include "../../include/procgen/GreaterRealmDebug.hpp"
@@ -25,6 +27,65 @@
 namespace game {
 
 #if defined(REALM_ENABLE_PROCGEN_DEBUG_VIEW)
+bool TestApp::regenerate_climate_weather_inspection() {
+    m_seasonal_temperature_settings.profile_seed = m_procgen_map.seed;
+    m_seasonal_precipitation_settings.profile_seed = m_procgen_map.seed;
+
+    (void)m_seasonal_temperature_cache.regenerate(
+        m_seasonal_temperature,
+        m_procgen_map,
+        m_procgen_climate_map,
+        m_seasonal_temperature_settings,
+        m_inspection_settings.year_fraction
+    );
+    (void)m_seasonal_precipitation_cache.regenerate(
+        m_seasonal_precipitation,
+        m_procgen_map,
+        m_procgen_climate_map,
+        m_seasonal_precipitation_settings,
+        m_inspection_settings.year_fraction
+    );
+    if (!m_seasonal_temperature.source_matches(
+            m_procgen_map,
+            m_procgen_climate_map,
+            m_seasonal_temperature_settings,
+            m_inspection_settings.year_fraction
+        )
+        || !m_seasonal_precipitation.source_matches(
+            m_procgen_map,
+            m_procgen_climate_map,
+            m_seasonal_precipitation_settings,
+            m_inspection_settings.year_fraction
+        )) {
+        return false;
+    }
+    return true;
+}
+
+procgen::DebugImage TestApp::build_current_inspection_image() const {
+    procgen::GreaterRealmDebugView debug_view;
+    if (procgen_debug_view_for(m_inspection_settings.view, debug_view)) {
+        auto options = m_procgen_debug_options;
+        options.view = debug_view;
+        return procgen::build_greater_realm_debug_image(
+            m_procgen_map,
+            m_procgen_climate_map,
+            m_procgen_biome_map,
+            m_procgen_biome_colours,
+            procgen::NORMALIZED_WATERLINE,
+            options
+        );
+    }
+    return build_greater_realm_climate_weather_inspection_image(
+        m_procgen_map,
+        m_procgen_climate_map,
+        m_seasonal_temperature,
+        m_seasonal_precipitation,
+        m_inspection_settings.view,
+        m_procgen_debug_options
+    );
+}
+
 bool TestApp::regenerate_procgen_debug_map(core::Engine& engine, bool force_full) {
     m_procgen_paint_dirty = false;
     if (force_full) {
@@ -41,12 +102,12 @@ bool TestApp::regenerate_procgen_debug_map(core::Engine& engine, bool force_full
         m_procgen_settings,
         m_procgen_constraints
     );
-    constexpr procgen::GreaterRealmDirtyStage temperature_source_stages =
+    constexpr procgen::GreaterRealmDirtyStage climate_source_stages =
         procgen::GreaterRealmDirtyStage::TerrainFields
         | procgen::GreaterRealmDirtyStage::MountainPeaks
         | procgen::GreaterRealmDirtyStage::Relief
         | procgen::GreaterRealmDirtyStage::Classification;
-    if (procgen::has_dirty_stage(regeneration.rebuilt_stages, temperature_source_stages)) {
+    if (procgen::has_dirty_stage(regeneration.rebuilt_stages, climate_source_stages)) {
         m_procgen_climate_generation_cache.invalidate();
     }
     const auto climate_regeneration = m_procgen_climate_generation_cache.regenerate(
@@ -54,26 +115,34 @@ bool TestApp::regenerate_procgen_debug_map(core::Engine& engine, bool force_full
         m_procgen_map,
         m_procgen_climate_settings
     );
+    const auto biome_regeneration = m_procgen_biome_generation_cache.regenerate(
+        m_procgen_biome_map,
+        m_procgen_map,
+        m_procgen_climate_map,
+        m_procgen_biome_rules
+    );
+    if (!regenerate_climate_weather_inspection()) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to regenerate climate inspection data");
+        return false;
+    }
 #if defined(REALM_ENABLE_PROCGEN_PROFILING)
     const auto generated_at = ProfileClock::now();
 #endif
 
     if (regeneration.rebuilt_stages == procgen::GreaterRealmDirtyStage::None
         && climate_regeneration.rebuilt_stages
-            == procgen::GreaterRealmClimateDirtyStage::None) {
+            == procgen::GreaterRealmClimateDirtyStage::None
+        && biome_regeneration.rebuilt_stages
+            == procgen::GreaterRealmBiomeDirtyStage::None) {
         m_procgen_debug_panel.update(
             m_procgen_map,
-            procgen::summarize_temperature_normals(m_procgen_climate_map)
+            procgen::summarize_temperature_normals(m_procgen_climate_map),
+            procgen::summarize_precipitation_normals(m_procgen_climate_map)
         );
         return true;
     }
 
-    const auto image = procgen::build_greater_realm_debug_image(
-        m_procgen_map,
-        m_procgen_climate_map,
-        procgen::NORMALIZED_WATERLINE,
-        m_procgen_debug_options
-    );
+    const auto image = build_current_inspection_image();
 #if defined(REALM_ENABLE_PROCGEN_PROFILING)
     const auto image_built_at = ProfileClock::now();
 #endif
@@ -94,7 +163,8 @@ bool TestApp::regenerate_procgen_debug_map(core::Engine& engine, bool force_full
 
     m_procgen_debug_panel.update(
         m_procgen_map,
-        procgen::summarize_temperature_normals(m_procgen_climate_map)
+        procgen::summarize_temperature_normals(m_procgen_climate_map),
+        procgen::summarize_precipitation_normals(m_procgen_climate_map)
     );
 #if defined(REALM_ENABLE_PROCGEN_PROFILING)
     const auto finished_at = ProfileClock::now();
@@ -139,12 +209,7 @@ bool TestApp::refresh_procgen_debug_view(core::Engine& engine) {
         return false;
     }
 
-    const auto image = procgen::build_greater_realm_debug_image(
-        m_procgen_map,
-        m_procgen_climate_map,
-        procgen::NORMALIZED_WATERLINE,
-        m_procgen_debug_options
-    );
+    const auto image = build_current_inspection_image();
     return upload_procgen_debug_texture(engine, image)
         && refresh_procgen_terrain_mesh(engine, image);
 }
@@ -356,6 +421,8 @@ void TestApp::on_startup(core::Engine& engine) {
     m_procgen_settings.seed = 8675309;
     m_procgen_settings.width = 256;
     m_procgen_settings.height = 192;
+    m_procgen_biome_rules = make_greater_realm_debug_biome_rules();
+    m_procgen_biome_colours = make_greater_realm_debug_biome_colours();
     (void)m_procgen_generation_cache.regenerate(
         m_procgen_map,
         m_procgen_settings,
@@ -366,12 +433,17 @@ void TestApp::on_startup(core::Engine& engine) {
         m_procgen_map,
         m_procgen_climate_settings
     );
-    const auto initial_image = procgen::build_greater_realm_debug_image(
+    (void)m_procgen_biome_generation_cache.regenerate(
+        m_procgen_biome_map,
         m_procgen_map,
         m_procgen_climate_map,
-        procgen::NORMALIZED_WATERLINE,
-        m_procgen_debug_options
+        m_procgen_biome_rules
     );
+    if (!regenerate_climate_weather_inspection()) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to initialize climate inspection data");
+        return;
+    }
+    const auto initial_image = build_current_inspection_image();
 #else
     constexpr std::uint32_t test_texture_width = 24;
     constexpr std::uint32_t test_texture_height = 24;
@@ -436,10 +508,12 @@ void TestApp::on_startup(core::Engine& engine) {
     ui_manager.setRoot(m_procgen_debug_panel.build(
         m_procgen_settings,
         m_procgen_debug_options,
+        m_inspection_settings,
         m_procgen_presentation,
         m_procgen_brush_settings,
         m_procgen_map,
         procgen::summarize_temperature_normals(m_procgen_climate_map),
+        procgen::summarize_precipitation_normals(m_procgen_climate_map),
         [this, &engine](bool force_full) {
             regenerate_procgen_debug_map(engine, force_full);
         },
@@ -458,7 +532,12 @@ void TestApp::on_startup(core::Engine& engine) {
             regenerate_procgen_debug_map(engine);
         },
         [this, &engine]() { refresh_procgen_debug_view(engine); },
-        [this, &engine]() { apply_procgen_presentation(engine); }
+        [this, &engine]() { apply_procgen_presentation(engine); },
+        [this, &engine]() {
+            if (regenerate_climate_weather_inspection()) {
+                refresh_procgen_debug_view(engine);
+            }
+        }
     ));
 #else
     auto root = std::make_unique<ui::StackPanel>(ui::Orientation::Vertical);

@@ -1,4 +1,5 @@
 #include "../../include/procgen/TerrainConstraints.hpp"
+#include "../../include/procgen/detail/GenerationUtility.hpp"
 #include <algorithm>
 #include <bit>
 #include <cmath>
@@ -39,10 +40,6 @@ bool read_float(std::span<const std::uint8_t> bytes, std::size_t& cursor, float&
     }
     value = std::bit_cast<float>(bits);
     return std::isfinite(value);
-}
-
-float lerp(float a, float b, float t) noexcept {
-    return a + (b - a) * t;
 }
 
 } // namespace
@@ -104,7 +101,7 @@ void TerrainConstraintField::paint(
             const float falloff = 1.0f - distance / normalized_radius;
             const float amount = strength * falloff * falloff * (3.0f - 2.0f * falloff);
             const auto sample_index = index(x, y);
-            m_values[sample_index] = lerp(m_values[sample_index], target, amount);
+            m_values[sample_index] = detail::lerp(m_values[sample_index], target, amount);
             m_influences[sample_index] = std::max(m_influences[sample_index], amount);
         }
     }
@@ -138,8 +135,16 @@ TerrainConstraintSample TerrainConstraintField::sample(float normalized_x, float
     const auto c = sample_at(x0, y1);
     const auto d = sample_at(x1, y1);
     return {
-        lerp(lerp(a.elevation, b.elevation, tx), lerp(c.elevation, d.elevation, tx), ty),
-        lerp(lerp(a.influence, b.influence, tx), lerp(c.influence, d.influence, tx), ty)
+        detail::lerp(
+            detail::lerp(a.elevation, b.elevation, tx),
+            detail::lerp(c.elevation, d.elevation, tx),
+            ty
+        ),
+        detail::lerp(
+            detail::lerp(a.influence, b.influence, tx),
+            detail::lerp(c.influence, d.influence, tx),
+            ty
+        )
     };
 }
 

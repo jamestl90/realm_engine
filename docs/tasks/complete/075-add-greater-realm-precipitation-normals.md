@@ -1,6 +1,6 @@
 # Add Greater-Realm Precipitation Normals
 
-Status: todo
+Status: complete
 Priority: high
 Area: Procgen / Greater Realm Climate
 
@@ -33,3 +33,23 @@ Biome variation needs a long-term wet-to-dry climate axis. Task 028's superseded
 ## Branch
 
 Use a dedicated branch. Whole-map moisture transport and rain-shadow behavior require algorithm evaluation, visual tuning, and careful regression testing against the established weather boundary.
+
+## Implementation Decisions
+
+- Extended `GreaterRealmClimateCell` with fixed-scale `precipitation_normal` and incremented the climate data version.
+- Added validated prevailing-wind and transport settings. Wind defaults west-to-east at `0` degrees; non-finite values restore defaults and directions wrap to `0..360`.
+- Used a deterministic wind-projection ordering with aligned eight-neighbor upwind blending. Defaults are ambient moisture `0.18`, ocean source `1.0`, inland-water source `0.65`, and map-unit retention `0.985`.
+- Converted transported moisture to background precipitation at `0.35`, added normalized-elevation lift at `1.50`, and carried lift-created rain shadow downwind with strength `0.70` and retention `0.92`.
+- Added a `1.0` global precipitation scale for deterministic dry/wet realm variation. Final values clamp to `0..1` without per-map normalization.
+- Kept the pass independent from drainage, channels, runtime rain, humidity, soil moisture, runoff, and discharge.
+- Split climate cache invalidation into temperature and precipitation stages. Terrain changes rebuild both; settings local to either field preserve the other byte-for-byte.
+- Added a `Precipitation normal` debug view with fixed dry/temperate/wet colours and combined temperature/precipitation summary statistics.
+
+## Verification
+
+- Extended `realm_climate_tests` for precipitation shape/range/determinism, setting validation, wind response, separate water-source strengths, orographic lift, downwind shadow, dry/wet scaling, hydrology independence, terrain immutability, and staged regeneration locality.
+- Focused greater-realm, climate, biome, and debug-panel tests passed, 4/4.
+- Full `ctest --test-dir out/build/debug-with-tests --output-on-failure` passed, 16/16.
+- Explicit Debug builds passed for all runtime and test targets.
+- `scripts/build.ps1 -Preset debug-no-tests` and `scripts/build.ps1 -Preset release-no-tests` passed.
+- `git diff --check` passed; Git reported only the repository's existing LF-to-CRLF conversion warnings.

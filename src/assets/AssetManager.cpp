@@ -4,8 +4,26 @@
 #include <algorithm>
 #include <array>
 #include <sstream>
+#include <type_traits>
 
 namespace assets {
+namespace {
+
+template<typename Asset, typename Cache, typename Handle>
+[[nodiscard]] auto find_cached_asset(Cache& cache, Handle handle) noexcept {
+    using Result = std::conditional_t<
+        std::is_const_v<std::remove_reference_t<Cache>>,
+        const Asset*,
+        Asset*
+    >;
+    auto it = cache.find(handle.id());
+    if (it == cache.end() || it->second.generation != handle.generation()) {
+        return Result{nullptr};
+    }
+    return static_cast<Result>(it->second.asset.get());
+}
+
+} // namespace
 
 AssetManager::AssetManager(
     rendering::TextureManager* texture_manager,
@@ -64,19 +82,13 @@ TextureHandle AssetManager::load_texture(const char* path, LoadPriority priority
 }
 
 TextureAsset* AssetManager::get_texture(TextureHandle handle) noexcept {
-    auto it = textures_.find(handle.id());
-    if (it == textures_.end() || it->second.generation != handle.generation()) {
-        return nullptr;
-    }
-    return it->second.asset.get();
+    return const_cast<TextureAsset*>(
+        static_cast<const AssetManager*>(this)->get_texture(handle)
+    );
 }
 
 const TextureAsset* AssetManager::get_texture(TextureHandle handle) const noexcept {
-    auto it = textures_.find(handle.id());
-    if (it == textures_.end() || it->second.generation != handle.generation()) {
-        return nullptr;
-    }
-    return it->second.asset.get();
+    return find_cached_asset<TextureAsset>(textures_, handle);
 }
 
 void AssetManager::unload_texture(TextureHandle handle) noexcept {
@@ -138,19 +150,13 @@ AudioHandle AssetManager::load_audio(const char* path, LoadPriority priority) {
 }
 
 AudioAsset* AssetManager::get_audio(AudioHandle handle) noexcept {
-    auto it = audio_clips_.find(handle.id());
-    if (it == audio_clips_.end() || it->second.generation != handle.generation()) {
-        return nullptr;
-    }
-    return it->second.asset.get();
+    return const_cast<AudioAsset*>(
+        static_cast<const AssetManager*>(this)->get_audio(handle)
+    );
 }
 
 const AudioAsset* AssetManager::get_audio(AudioHandle handle) const noexcept {
-    auto it = audio_clips_.find(handle.id());
-    if (it == audio_clips_.end() || it->second.generation != handle.generation()) {
-        return nullptr;
-    }
-    return it->second.asset.get();
+    return find_cached_asset<AudioAsset>(audio_clips_, handle);
 }
 
 void AssetManager::unload_audio(AudioHandle handle) noexcept {
@@ -214,19 +220,13 @@ FontHandle AssetManager::load_font(const char* path, float size, LoadPriority pr
 }
 
 FontAsset* AssetManager::get_font(FontHandle handle) noexcept {
-    auto it = fonts_.find(handle.id());
-    if (it == fonts_.end() || it->second.generation != handle.generation()) {
-        return nullptr;
-    }
-    return it->second.asset.get();
+    return const_cast<FontAsset*>(
+        static_cast<const AssetManager*>(this)->get_font(handle)
+    );
 }
 
 const FontAsset* AssetManager::get_font(FontHandle handle) const noexcept {
-    auto it = fonts_.find(handle.id());
-    if (it == fonts_.end() || it->second.generation != handle.generation()) {
-        return nullptr;
-    }
-    return it->second.asset.get();
+    return find_cached_asset<FontAsset>(fonts_, handle);
 }
 
 void AssetManager::unload_font(FontHandle handle) noexcept {
@@ -288,19 +288,13 @@ AnimationHandle AssetManager::load_animation(const char* path, LoadPriority prio
 }
 
 AnimationAsset* AssetManager::get_animation(AnimationHandle handle) noexcept {
-    auto it = animations_.find(handle.id());
-    if (it == animations_.end() || it->second.generation != handle.generation()) {
-        return nullptr;
-    }
-    return it->second.asset.get();
+    return const_cast<AnimationAsset*>(
+        static_cast<const AssetManager*>(this)->get_animation(handle)
+    );
 }
 
 const AnimationAsset* AssetManager::get_animation(AnimationHandle handle) const noexcept {
-    auto it = animations_.find(handle.id());
-    if (it == animations_.end() || it->second.generation != handle.generation()) {
-        return nullptr;
-    }
-    return it->second.asset.get();
+    return find_cached_asset<AnimationAsset>(animations_, handle);
 }
 
 void AssetManager::unload_animation(AnimationHandle handle) noexcept {
@@ -359,19 +353,13 @@ DataHandle AssetManager::load_data(const char* path, LoadPriority priority) {
 }
 
 DataAsset* AssetManager::get_data(DataHandle handle) noexcept {
-    auto it = data_assets_.find(handle.id());
-    if (it == data_assets_.end() || it->second.generation != handle.generation()) {
-        return nullptr;
-    }
-    return it->second.asset.get();
+    return const_cast<DataAsset*>(
+        static_cast<const AssetManager*>(this)->get_data(handle)
+    );
 }
 
 const DataAsset* AssetManager::get_data(DataHandle handle) const noexcept {
-    auto it = data_assets_.find(handle.id());
-    if (it == data_assets_.end() || it->second.generation != handle.generation()) {
-        return nullptr;
-    }
-    return it->second.asset.get();
+    return find_cached_asset<DataAsset>(data_assets_, handle);
 }
 
 void AssetManager::unload_data(DataHandle handle) noexcept {
@@ -430,19 +418,13 @@ TilesetHandle AssetManager::load_tileset(const char* path, LoadPriority priority
 }
 
 TilesetAsset* AssetManager::get_tileset(TilesetHandle handle) noexcept {
-    auto it = tilesets_.find(handle.id());
-    if (it == tilesets_.end() || it->second.generation != handle.generation()) {
-        return nullptr;
-    }
-    return it->second.asset.get();
+    return const_cast<TilesetAsset*>(
+        static_cast<const AssetManager*>(this)->get_tileset(handle)
+    );
 }
 
 const TilesetAsset* AssetManager::get_tileset(TilesetHandle handle) const noexcept {
-    auto it = tilesets_.find(handle.id());
-    if (it == tilesets_.end() || it->second.generation != handle.generation()) {
-        return nullptr;
-    }
-    return it->second.asset.get();
+    return find_cached_asset<TilesetAsset>(tilesets_, handle);
 }
 
 void AssetManager::unload_tileset(TilesetHandle handle) noexcept {
@@ -556,19 +538,13 @@ PipelineHandle AssetManager::load_pipeline_from_config(
 }
 
 PipelineAsset* AssetManager::get_pipeline(PipelineHandle handle) noexcept {
-    auto it = pipelines_.find(handle.id());
-    if (it == pipelines_.end() || it->second.generation != handle.generation()) {
-        return nullptr;
-    }
-    return it->second.asset.get();
+    return const_cast<PipelineAsset*>(
+        static_cast<const AssetManager*>(this)->get_pipeline(handle)
+    );
 }
 
 const PipelineAsset* AssetManager::get_pipeline(PipelineHandle handle) const noexcept {
-    auto it = pipelines_.find(handle.id());
-    if (it == pipelines_.end() || it->second.generation != handle.generation()) {
-        return nullptr;
-    }
-    return it->second.asset.get();
+    return find_cached_asset<PipelineAsset>(pipelines_, handle);
 }
 
 void AssetManager::unload_pipeline(PipelineHandle handle) noexcept {

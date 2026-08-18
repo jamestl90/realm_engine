@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Biome.hpp"
 #include "Climate.hpp"
 #include "GreaterRealm.hpp"
 #include <cstddef>
@@ -20,6 +21,8 @@ enum class GreaterRealmDebugView : std::uint8_t {
     CoastDistance,
     CatchmentArea,
     TemperatureNormal,
+    PrecipitationNormal,
+    Biome,
     Count
 };
 
@@ -50,6 +53,11 @@ struct DebugColour {
     [[nodiscard]] bool operator==(const DebugColour&) const noexcept = default;
 };
 
+struct BiomeDebugColour {
+    BiomeId biome_id{INVALID_BIOME_ID};
+    DebugColour colour;
+};
+
 struct DebugImage {
     std::uint32_t width{0};
     std::uint32_t height{0};
@@ -67,6 +75,11 @@ struct DebugImage {
     GreaterRealmDebugView view = GreaterRealmDebugView::Terrain,
     float scalar_maximum = 1.0f
 ) noexcept;
+void apply_greater_realm_debug_overlays(
+    DebugImage& image,
+    const GreaterRealmMap& map,
+    const GreaterRealmDebugOptions& options
+) noexcept;
 [[nodiscard]] DebugImage build_greater_realm_debug_image(
     const GreaterRealmMap& map,
     float sea_level
@@ -79,6 +92,14 @@ struct DebugImage {
 [[nodiscard]] DebugImage build_greater_realm_debug_image(
     const GreaterRealmMap& map,
     const GreaterRealmClimateMap& climate,
+    float sea_level,
+    const GreaterRealmDebugOptions& options
+);
+[[nodiscard]] DebugImage build_greater_realm_debug_image(
+    const GreaterRealmMap& map,
+    const GreaterRealmClimateMap& climate,
+    const GreaterRealmBiomeMap& biomes,
+    const std::vector<BiomeDebugColour>& biome_colours,
     float sea_level,
     const GreaterRealmDebugOptions& options
 );

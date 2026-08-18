@@ -1,6 +1,6 @@
 #include "../../include/procgen/MountainPeaks.hpp"
+#include "../../include/procgen/detail/GenerationUtility.hpp"
 #include <algorithm>
-#include <array>
 #include <cmath>
 #include <cstdint>
 #include <limits>
@@ -28,28 +28,6 @@ struct DistanceNodeGreater {
     }
 };
 
-constexpr std::array<std::array<std::int32_t, 2>, 8> NEIGHBORS{{
-    {{-1, -1}}, {{0, -1}}, {{1, -1}}, {{-1, 0}},
-    {{1, 0}}, {{-1, 1}}, {{0, 1}}, {{1, 1}}
-}};
-
-std::uint64_t hash_value(Seed seed, std::uint32_t a, std::uint32_t b, std::uint64_t salt) noexcept {
-    std::uint64_t value = seed ^ salt;
-    value ^= static_cast<std::uint64_t>(a) + 0x9e3779b97f4a7c15ull + (value << 6) + (value >> 2);
-    value ^= static_cast<std::uint64_t>(b) + 0xbf58476d1ce4e5b9ull + (value << 6) + (value >> 2);
-    value ^= value >> 30;
-    value *= 0xbf58476d1ce4e5b9ull;
-    value ^= value >> 27;
-    value *= 0x94d049bb133111ebull;
-    value ^= value >> 31;
-    return value;
-}
-
-float random01(Seed seed, std::uint32_t a, std::uint32_t b, std::uint64_t salt) noexcept {
-    return static_cast<float>((hash_value(seed, a, b, salt) >> 40) & 0xffffffu)
-        / static_cast<float>(0xffffffu);
-}
-
 float squared_distance(const GreaterRealmCell& a, const GreaterRealmCell& b) noexcept {
     const float dx = static_cast<float>(a.x - b.x);
     const float dy = static_cast<float>(a.y - b.y);
@@ -72,7 +50,7 @@ std::vector<PeakCandidate> build_candidates(const GreaterRealmMap& map) {
             const float boundary_weight = std::clamp(1.0f - square_distance, 0.0f, 1.0f) * 0.35f;
             candidates.push_back({
                 static_cast<std::uint32_t>(map.index(x, y)),
-                random01(map.seed, x, y, 0x4d4f554e5441494eull) + boundary_weight
+                detail::grid_random01(map.seed, x, y, 0x4d4f554e5441494eull) + boundary_weight
             });
         }
     }
@@ -155,7 +133,7 @@ void generate_mountain_peak_field(
         }
 
         const auto& current_cell = map.cells[current.index];
-        for (const auto& offset : NEIGHBORS) {
+        for (const auto& offset : detail::EIGHT_WAY_NEIGHBORS) {
             const std::int32_t neighbor_x = current_cell.x + offset[0];
             const std::int32_t neighbor_y = current_cell.y + offset[1];
             if (!map.contains(neighbor_x, neighbor_y)) {
@@ -168,8 +146,14 @@ void generate_mountain_peak_field(
             ));
             const std::uint32_t edge_a = std::min(current.index, neighbor_index);
             const std::uint32_t edge_b = std::max(current.index, neighbor_index);
-            const float base_cost = offset[0] != 0 && offset[1] != 0 ? 1.41421356f : 1.0f;
-            const float jitter = (random01(map.seed, edge_a, edge_b, 0x4a41474745444d54ull) * 2.0f - 1.0f) * jaggedness;
+            const float base_cost = offset[0] != 0 && offset[1] != 0
+                ? detail::SQRT_TWO
+                : 1.0f;
+            const float jitter = (
+                detail::grid_random01(map.seed, edge_a, edge_b, 0x4a41474745444d54ull)
+                    * 2.0f
+                - 1.0f
+            ) * jaggedness;
             const float next_distance = current.distance + base_cost * std::max(1.0f + jitter, 0.1f);
             auto& neighbor = map.cells[neighbor_index];
             if (next_distance < neighbor.mountain_distance) {

@@ -12,7 +12,6 @@
 #include <chrono>
 #endif
 #include <iomanip>
-#include <limits>
 #include <sstream>
 #include <utility>
 
@@ -73,14 +72,20 @@ std::string hydrology_text(const procgen::GreaterRealmMap& map) {
     return stream.str();
 }
 
-std::string temperature_text(const procgen::TemperatureNormalSummary& summary) {
-    if (summary.sample_count == 0) {
-        return "Temperature unavailable";
+std::string climate_text(
+    const procgen::TemperatureNormalSummary& temperature,
+    const procgen::PrecipitationNormalSummary& precipitation
+) {
+    if (temperature.sample_count == 0 || precipitation.sample_count == 0) {
+        return "Climate unavailable";
     }
     std::ostringstream stream;
-    stream << "Temperature mean " << format_float(summary.mean * 100.0f)
-           << "%  Range " << format_float(summary.minimum * 100.0f)
-           << "-" << format_float(summary.maximum * 100.0f) << "%";
+    stream << "Temp " << format_float(temperature.mean * 100.0f)
+           << "% (" << format_float(temperature.minimum * 100.0f)
+           << "-" << format_float(temperature.maximum * 100.0f)
+           << ")  Precip " << format_float(precipitation.mean * 100.0f)
+           << "% (" << format_float(precipitation.minimum * 100.0f)
+           << "-" << format_float(precipitation.maximum * 100.0f) << ")";
     return stream.str();
 }
 
@@ -215,19 +220,23 @@ std::unique_ptr<ui::StackPanel> make_slider_row(
 std::unique_ptr<ui::UIElement> GreaterRealmDebugPanel::build(
     procgen::GreaterRealmGeneratorSettings& settings,
     procgen::GreaterRealmDebugOptions& debug_options,
+    GreaterRealmInspectionSettings& inspection_settings,
     GreaterRealmPresentationSettings& presentation_settings,
     procgen::TerrainConstraintBrushSettings& brush_settings,
     const procgen::GreaterRealmMap& map,
     const procgen::TemperatureNormalSummary& temperature_summary,
+    const procgen::PrecipitationNormalSummary& precipitation_summary,
     RegenerateCallback on_regenerate,
     ToolChangedCallback on_tool_changed,
     BrushSettingsChangedCallback on_brush_settings_changed,
     ClearConstraintsCallback on_clear_constraints,
     ViewChangedCallback on_view_changed,
-    PresentationChangedCallback on_presentation_changed
+    PresentationChangedCallback on_presentation_changed,
+    ClimateTimeChangedCallback on_climate_time_changed
 ) {
     m_settings = &settings;
     m_debug_options = &debug_options;
+    m_inspection_settings = &inspection_settings;
     m_presentation_settings = &presentation_settings;
     brush_settings = procgen::clamp_terrain_constraint_brush_settings(brush_settings);
     m_brush_settings = &brush_settings;
@@ -237,6 +246,7 @@ std::unique_ptr<ui::UIElement> GreaterRealmDebugPanel::build(
     m_on_clear_constraints = std::move(on_clear_constraints);
     m_on_view_changed = std::move(on_view_changed);
     m_on_presentation_changed = std::move(on_presentation_changed);
+    m_on_climate_time_changed = std::move(on_climate_time_changed);
 
     auto root = std::make_unique<ui::StackPanel>(ui::Orientation::Vertical);
     root->setPadding(ui::Thickness(10.0f));
@@ -248,7 +258,7 @@ std::unique_ptr<ui::UIElement> GreaterRealmDebugPanel::build(
     root_constraints.min_width = GREATER_REALM_DEBUG_PANEL_WIDTH;
     root->setSizeConstraints(root_constraints);
 
-    auto title = make_text("Greater Realm Debug");
+    auto title = make_text("Greater Realm Inspector");
     title->setFontSize(20.0f);
     title->setColour(ui::Colour{10, 18, 24, 255});
     root->addChild(std::move(title));
@@ -296,11 +306,11 @@ std::unique_ptr<ui::UIElement> GreaterRealmDebugPanel::build(
 
     auto view_selector = std::make_unique<ui::ComboBox>();
     for (std::uint8_t index = 0;
-         index < static_cast<std::uint8_t>(procgen::GreaterRealmDebugView::Count);
+         index < static_cast<std::uint8_t>(GreaterRealmInspectionView::Count);
          ++index) {
-        view_selector->addItem(procgen::to_string(static_cast<procgen::GreaterRealmDebugView>(index)));
+        view_selector->addItem(to_string(static_cast<GreaterRealmInspectionView>(index)));
     }
-    view_selector->setSelectedIndex(static_cast<int>(debug_options.view));
+    view_selector->setSelectedIndex(static_cast<int>(inspection_settings.view));
     view_selector->setBackgroundColour(ui::Colour{250, 252, 250, 255});
     view_selector->setTextColour(ui::Colour{20, 24, 30, 255});
     view_selector->setBorderColour(ui::Colour{108, 122, 128, 255});
@@ -315,21 +325,53 @@ std::unique_ptr<ui::UIElement> GreaterRealmDebugPanel::build(
     view_constraints.min_height = 30.0f;
     view_selector->setSizeConstraints(view_constraints);
     view_selector->setOnSelectionChanged([this](const std::string& selected) {
-        if (!m_debug_options) {
+        if (!m_debug_options || !m_inspection_settings) {
             return;
         }
         for (std::uint8_t index = 0;
-             index < static_cast<std::uint8_t>(procgen::GreaterRealmDebugView::Count);
+             index < static_cast<std::uint8_t>(GreaterRealmInspectionView::Count);
              ++index) {
-            const auto view = static_cast<procgen::GreaterRealmDebugView>(index);
-            if (selected == procgen::to_string(view)) {
-                m_debug_options->view = view;
+            const auto view = static_cast<GreaterRealmInspectionView>(index);
+            if (selected == to_string(view)) {
+                m_inspection_settings->view = view;
+                procgen::GreaterRealmDebugView debug_view;
+                if (procgen_debug_view_for(view, debug_view)) {
+                    m_debug_options->view = debug_view;
+                }
                 notify_view_changed();
                 return;
             }
         }
     });
     root->addChild(std::move(view_selector));
+
+    auto climate_time_row = std::make_unique<ui::StackPanel>(ui::Orientation::Horizontal);
+    climate_time_row->setSpacing(10.0f);
+    climate_time_row->addChild(make_slider_row(
+        make_text(
+            setting_text("Year fraction", inspection_settings.year_fraction),
+            &m_year_fraction_text
+        ),
+        make_debug_slider(
+            inspection_settings.year_fraction,
+            0.0f,
+            1.0f,
+            0.01f,
+            [this](float adjusted) {
+                if (!m_inspection_settings
+                    || adjusted == m_inspection_settings->year_fraction) {
+                    return;
+                }
+                m_inspection_settings->year_fraction = adjusted;
+                if (m_year_fraction_text) {
+                    m_year_fraction_text->setText(setting_text("Year fraction", adjusted));
+                }
+                notify_climate_time_changed();
+            },
+            &m_year_fraction_slider
+        )
+    ));
+    root->addChild(std::move(climate_time_row));
 
     const auto toggle_overlay = [this](bool procgen::GreaterRealmDebugOptions::* member) {
         return [this, member]() {
@@ -565,13 +607,14 @@ std::unique_ptr<ui::UIElement> GreaterRealmDebugPanel::build(
     temperature->setSizeConstraints(summary_constraints);
     root->addChild(std::move(temperature));
 
-    update(map, temperature_summary);
+    update(map, temperature_summary, precipitation_summary);
     return root;
 }
 
 void GreaterRealmDebugPanel::update(
     const procgen::GreaterRealmMap& map,
-    const procgen::TemperatureNormalSummary& temperature_summary
+    const procgen::TemperatureNormalSummary& temperature_summary,
+    const procgen::PrecipitationNormalSummary& precipitation_summary
 ) {
     if (!m_settings) {
         return;
@@ -611,6 +654,17 @@ void GreaterRealmDebugPanel::update(
     if (m_elevation_scale_slider && m_presentation_settings) {
         m_elevation_scale_slider->setValue(m_presentation_settings->elevation_scale);
     }
+    if (m_inspection_settings) {
+        if (m_year_fraction_text) {
+            m_year_fraction_text->setText(setting_text(
+                "Year fraction",
+                m_inspection_settings->year_fraction
+            ));
+        }
+        if (m_year_fraction_slider) {
+            m_year_fraction_slider->setValue(m_inspection_settings->year_fraction);
+        }
+    }
     if (m_brush_settings) {
         *m_brush_settings = procgen::clamp_terrain_constraint_brush_settings(*m_brush_settings);
         if (m_brush_size_text) {
@@ -634,7 +688,7 @@ void GreaterRealmDebugPanel::update(
         if (m_hydrology_text) m_hydrology_text->setText(hydrology_text(map));
     }
     if (m_temperature_text) {
-        m_temperature_text->setText(temperature_text(temperature_summary));
+        m_temperature_text->setText(climate_text(temperature_summary, precipitation_summary));
     }
 }
 
@@ -665,6 +719,12 @@ void GreaterRealmDebugPanel::notify_view_changed() {
 void GreaterRealmDebugPanel::notify_presentation_changed() {
     if (m_on_presentation_changed) {
         m_on_presentation_changed();
+    }
+}
+
+void GreaterRealmDebugPanel::notify_climate_time_changed() {
+    if (m_on_climate_time_changed) {
+        m_on_climate_time_changed();
     }
 }
 

@@ -1,5 +1,6 @@
 #include "game/GreaterRealmDebugPanel.hpp"
 #include "ui/Button.hpp"
+#include "ui/ComboBox.hpp"
 #include "ui/InputSurface.hpp"
 #include "ui/Primitives.hpp"
 #include "ui/Slider.hpp"
@@ -72,6 +73,18 @@ void collect_buttons(ui::UIElement* element, std::vector<ui::Button*>& buttons) 
     }
 }
 
+void collect_combo_boxes(ui::UIElement* element, std::vector<ui::ComboBox*>& combo_boxes) {
+    if (!element) {
+        return;
+    }
+    if (auto* combo_box = dynamic_cast<ui::ComboBox*>(element)) {
+        combo_boxes.push_back(combo_box);
+    }
+    for (const auto& child : element->children()) {
+        collect_combo_boxes(child.get(), combo_boxes);
+    }
+}
+
 void collect_text_blocks(ui::UIElement* element, std::vector<ui::TextBlock*>& text_blocks) {
     if (!element) {
         return;
@@ -119,6 +132,7 @@ void click_slider_at(ui::Slider& slider, float localX) {
 bool test_panel_sliders_update_settings_and_callbacks() {
     procgen::GreaterRealmGeneratorSettings settings;
     procgen::GreaterRealmDebugOptions debugOptions;
+    game::GreaterRealmInspectionSettings inspectionSettings;
     game::GreaterRealmPresentationSettings presentation;
     procgen::TerrainConstraintBrushSettings brushSettings;
     const auto map = make_smoke_map();
@@ -127,34 +141,61 @@ bool test_panel_sliders_update_settings_and_callbacks() {
     temperatureSummary.maximum = 0.75f;
     temperatureSummary.mean = 0.50f;
     temperatureSummary.sample_count = map.cells.size();
+    procgen::PrecipitationNormalSummary precipitationSummary;
+    precipitationSummary.minimum = 0.20f;
+    precipitationSummary.maximum = 0.80f;
+    precipitationSummary.mean = 0.45f;
+    precipitationSummary.sample_count = map.cells.size();
 
     int regenerations = 0;
     int presentationChanges = 0;
     int brushChanges = 0;
+    int viewChanges = 0;
+    int climateTimeChanges = 0;
     game::GreaterRealmDebugPanel panel;
     auto root = panel.build(
         settings,
         debugOptions,
+        inspectionSettings,
         presentation,
         brushSettings,
         map,
         temperatureSummary,
+        precipitationSummary,
         [&regenerations](bool) { ++regenerations; },
         [](procgen::TerrainConstraintTool) {},
         [&brushChanges](procgen::TerrainConstraintBrushSettings) { ++brushChanges; },
         []() {},
-        []() {},
-        [&presentationChanges]() { ++presentationChanges; }
+        [&viewChanges]() { ++viewChanges; },
+        [&presentationChanges]() { ++presentationChanges; },
+        [&climateTimeChanges]() { ++climateTimeChanges; }
     );
 
     std::vector<ui::Slider*> sliders;
     collect_sliders(root.get(), sliders);
-    bool ok = require(sliders.size() >= 16, "debug panel builds reusable sliders for presentation, generator, and brush settings");
-    ok &= require(nearly_equal(sliders[2]->value(), 1.0f), "seed-variation slider defaults to full deterministic character");
-    ok &= require(nearly_equal(sliders[2]->minimum(), 0.0f) && nearly_equal(sliders[2]->maximum(), 1.0f), "seed-variation slider exposes neutral through full character");
-    ok &= require(nearly_equal(sliders[3]->value(), 0.01f), "coast-detail slider starts at Mapgen4's default");
-    ok &= require(nearly_equal(sliders[3]->minimum(), 0.0f), "coast-detail slider starts at zero");
-    ok &= require(nearly_equal(sliders[3]->maximum(), 0.10f), "coast-detail slider uses Mapgen4's upper bound");
+    bool ok = require(sliders.size() >= 17, "inspection panel builds reusable time, presentation, generator, and brush sliders");
+    ok &= require(nearly_equal(sliders[3]->value(), 1.0f), "seed-variation slider defaults to full deterministic character");
+    ok &= require(nearly_equal(sliders[3]->minimum(), 0.0f) && nearly_equal(sliders[3]->maximum(), 1.0f), "seed-variation slider exposes neutral through full character");
+    ok &= require(nearly_equal(sliders[4]->value(), 0.01f), "coast-detail slider starts at Mapgen4's default");
+    ok &= require(nearly_equal(sliders[4]->minimum(), 0.0f), "coast-detail slider starts at zero");
+    ok &= require(nearly_equal(sliders[4]->maximum(), 0.10f), "coast-detail slider uses Mapgen4's upper bound");
+
+    std::vector<ui::ComboBox*> comboBoxes;
+    collect_combo_boxes(root.get(), comboBoxes);
+    ok &= require(comboBoxes.size() == 1, "inspection panel exposes one unified layer selector");
+    ok &= require(
+        comboBoxes[0]->items().size()
+            == static_cast<std::size_t>(game::GreaterRealmInspectionView::Count),
+        "layer selector includes stable and seasonal climate views"
+    );
+    comboBoxes[0]->setSelectedIndex(
+        static_cast<int>(game::GreaterRealmInspectionView::SeasonalPrecipitation)
+    );
+    ok &= require(
+        inspectionSettings.view == game::GreaterRealmInspectionView::SeasonalPrecipitation
+            && viewChanges == 1,
+        "seasonal precipitation selection updates application-owned inspection state"
+    );
 
     std::vector<ui::Button*> buttons;
     collect_buttons(root.get(), buttons);
@@ -174,7 +215,7 @@ bool test_panel_sliders_update_settings_and_callbacks() {
         text_blocks.begin(),
         text_blocks.end(),
         [](const ui::TextBlock* text) {
-            return text->text() == "Temperature mean 50.00%  Range 25.00-75.00%";
+            return text->text() == "Temp 50.00% (25.00-75.00)  Precip 45.00% (20.00-80.00)";
         }
     );
     ok &= require(has_temperature_summary, "temperature summary reports fixed-scale mean and range");
@@ -191,7 +232,21 @@ bool test_panel_sliders_update_settings_and_callbacks() {
     ok &= require(presentationChanges == 2, "elevation slider emits presentation callback");
     ok &= require(regenerations == 0, "elevation slider does not regenerate procedural map");
 
-    click_slider_at(*sliders[1], 110.0f);
+    click_slider_at(*sliders[1], 55.0f);
+    ok &= require(
+        nearly_equal(inspectionSettings.year_fraction, 0.5f),
+        "year-fraction slider updates explicit seasonal input"
+    );
+    ok &= require(
+        climateTimeChanges == 1,
+        "year-fraction changes rebuild seasonal climate samples"
+    );
+    ok &= require(
+        regenerations == 0,
+        "seasonal controls do not regenerate stable procgen layers"
+    );
+
+    click_slider_at(*sliders[2], 110.0f);
     ok &= require(settings.island_bias == 1.0f, "first generator slider updates island bias");
     ok &= require(regenerations == 1, "generator slider emits regenerate callback");
 

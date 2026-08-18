@@ -7,11 +7,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(REALM_BUILD_TESTS "Create engine test targets" OFF)
 
-set(REALM_ENABLE_PROCGEN_DEBUG_VIEW_DEFAULT ON)
-if(CMAKE_BUILD_TYPE STREQUAL "Release")
-    set(REALM_ENABLE_PROCGEN_DEBUG_VIEW_DEFAULT OFF)
-endif()
-option(REALM_ENABLE_PROCGEN_DEBUG_VIEW "Build the procgen debug map view into the runtime executable" ${REALM_ENABLE_PROCGEN_DEBUG_VIEW_DEFAULT})
+option(REALM_ENABLE_PROCGEN_DEBUG_VIEW "Build procgen inspection views into the runtime executable" ON)
 option(REALM_OPTIMIZE_PROCGEN_DEBUG "Optimize procgen sources in Debug builds for interactive tooling" ON)
 
 # MSVC: Force synchronous PDB writes to avoid C1041 errors during parallel builds
@@ -46,11 +42,15 @@ set(REALM_FONT_ASSETS
 # Automatically find all .cpp files in src directory
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS "src/*.cpp")
 
-# Procgen visualization and its application panel are omitted from normal release builds.
+# Procgen visualization and its application panel remain optional, but all shipped presets enable them.
 set(REALM_PROCGEN_DEBUG_SOURCES
+    "${CMAKE_SOURCE_DIR}/src/game/GreaterRealmClimateWeatherInspection.cpp"
+    "${CMAKE_SOURCE_DIR}/src/game/GreaterRealmInspectionView.cpp"
+    "${CMAKE_SOURCE_DIR}/src/game/GreaterRealmDebugBiomes.cpp"
     "${CMAKE_SOURCE_DIR}/src/game/GreaterRealmDebugPanel.cpp"
 )
 set(REALM_PROCGEN_RUNTIME_SOURCES
+    "${CMAKE_SOURCE_DIR}/src/procgen/Biome.cpp"
     "${CMAKE_SOURCE_DIR}/src/procgen/Climate.cpp"
     "${CMAKE_SOURCE_DIR}/src/procgen/GreaterRealm.cpp"
     "${CMAKE_SOURCE_DIR}/src/procgen/GreaterRealmDebug.cpp"
@@ -120,6 +120,7 @@ if(REALM_BUILD_TESTS)
 
     add_executable(realm_engine_tests EXCLUDE_FROM_ALL
         tests/procgen/GreaterRealmTests.cpp
+        src/procgen/Biome.cpp
         src/procgen/Climate.cpp
         src/procgen/GreaterRealm.cpp
         src/procgen/GreaterRealmDebug.cpp
@@ -138,6 +139,9 @@ if(REALM_BUILD_TESTS)
 
     add_executable(realm_climate_tests EXCLUDE_FROM_ALL
         tests/procgen/ClimateTests.cpp
+        src/world/SeasonalClimate.cpp
+        src/world/Weather.cpp
+        src/procgen/Biome.cpp
         src/procgen/Climate.cpp
         src/procgen/GreaterRealm.cpp
         src/procgen/GreaterRealmDebug.cpp
@@ -153,6 +157,27 @@ if(REALM_BUILD_TESTS)
     target_compile_definitions(realm_climate_tests PRIVATE REALM_TEST_BUILD=1)
 
     add_test(NAME procgen_greater_realm_climate COMMAND realm_climate_tests)
+
+    add_executable(realm_biome_tests EXCLUDE_FROM_ALL
+        tests/procgen/BiomeTests.cpp
+        src/game/GreaterRealmDebugBiomes.cpp
+        src/procgen/Biome.cpp
+        src/procgen/Climate.cpp
+        src/procgen/GreaterRealm.cpp
+        src/procgen/GreaterRealmDebug.cpp
+        src/procgen/Hydrology.cpp
+        src/procgen/MountainPeaks.cpp
+        src/procgen/TerrainConstraints.cpp
+    )
+
+    target_include_directories(realm_biome_tests PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/src
+    )
+
+    target_compile_definitions(realm_biome_tests PRIVATE REALM_TEST_BUILD=1)
+
+    add_test(NAME procgen_greater_realm_biomes COMMAND realm_biome_tests)
 
     add_executable(realm_procgen_regeneration_tests EXCLUDE_FROM_ALL
         tests/procgen/GreaterRealmRegenerationTests.cpp
@@ -175,6 +200,7 @@ if(REALM_BUILD_TESTS)
 
     add_executable(realm_procgen_pipeline_tests EXCLUDE_FROM_ALL
         tests/procgen/HydrologyConstraintTests.cpp
+        src/procgen/Biome.cpp
         src/procgen/Climate.cpp
         src/procgen/GreaterRealm.cpp
         src/procgen/GreaterRealmDebug.cpp
@@ -207,6 +233,7 @@ if(REALM_BUILD_TESTS)
 
     add_executable(realm_mountain_peak_tests EXCLUDE_FROM_ALL
         tests/procgen/MountainPeakTests.cpp
+        src/procgen/Biome.cpp
         src/procgen/Climate.cpp
         src/procgen/GreaterRealm.cpp
         src/procgen/GreaterRealmDebug.cpp
@@ -340,6 +367,7 @@ if(REALM_BUILD_TESTS)
         tests/game/GreaterRealmDebugPanelTests.cpp
         tests/game/GreaterRealmDebugPanelProcgenStubs.cpp
         src/game/GreaterRealmDebugPanel.cpp
+        src/game/GreaterRealmInspectionView.cpp
         src/procgen/TerrainConstraintPainting.cpp
         src/ui/Button.cpp
         src/ui/ComboBox.cpp
@@ -363,6 +391,30 @@ if(REALM_BUILD_TESTS)
     target_compile_definitions(realm_greater_realm_debug_panel_tests PRIVATE REALM_TEST_BUILD=1)
 
     add_test(NAME ui_greater_realm_debug_panel COMMAND realm_greater_realm_debug_panel_tests)
+
+    add_executable(realm_climate_weather_inspection_tests EXCLUDE_FROM_ALL
+        tests/game/ClimateWeatherInspectionTests.cpp
+        src/game/GreaterRealmClimateWeatherInspection.cpp
+        src/game/GreaterRealmInspectionView.cpp
+        src/world/SeasonalClimate.cpp
+        src/world/Weather.cpp
+        src/procgen/Biome.cpp
+        src/procgen/Climate.cpp
+        src/procgen/GreaterRealm.cpp
+        src/procgen/GreaterRealmDebug.cpp
+        src/procgen/Hydrology.cpp
+        src/procgen/MountainPeaks.cpp
+        src/procgen/TerrainConstraints.cpp
+    )
+
+    target_include_directories(realm_climate_weather_inspection_tests PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/src
+    )
+
+    target_compile_definitions(realm_climate_weather_inspection_tests PRIVATE REALM_TEST_BUILD=1)
+
+    add_test(NAME game_climate_weather_inspection COMMAND realm_climate_weather_inspection_tests)
 
     add_executable(realm_terrain_mesh_tests EXCLUDE_FROM_ALL
         tests/rendering/TerrainMeshTests.cpp

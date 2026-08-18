@@ -49,14 +49,12 @@ function Run-Build {
     param(
         [bool]$AllowRetry = $true
     )
-    
-    # Ensure build folder and CMake config exist.
-    if (-not (Test-Path "$buildDir\CMakeCache.txt")) {
-        if (-not (Configure-CMake)) {
-            return $false
-        }
+
+    # Reapply the selected preset so changed cache variables take effect in existing build trees.
+    if (-not (Configure-CMake)) {
+        return $false
     }
-    
+
     # Run the build and capture output
     Write-Host "Building..." -ForegroundColor Cyan
     $buildOutput = Invoke-CMake @("--build", "--preset", $Preset) | Out-String

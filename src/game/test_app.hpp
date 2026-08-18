@@ -3,9 +3,11 @@
 #include "../../include/core/Game.hpp"
 #include "../../include/ecs/Entity.hpp"
 #include "../../include/rendering/Texture.hpp"
+#include <vector>
 
 #if defined(REALM_ENABLE_PROCGEN_DEBUG_VIEW)
 #include "GreaterRealmDebugPanel.hpp"
+#include "../../include/procgen/Biome.hpp"
 #include "../../include/procgen/Climate.hpp"
 #include "../../include/procgen/TerrainConstraintPainting.hpp"
 #include "../../include/procgen/TerrainConstraints.hpp"
@@ -27,6 +29,8 @@ public:
 private:
 #if defined(REALM_ENABLE_PROCGEN_DEBUG_VIEW)
     bool regenerate_procgen_debug_map(core::Engine& engine, bool force_full = false);
+    bool regenerate_climate_weather_inspection();
+    [[nodiscard]] procgen::DebugImage build_current_inspection_image() const;
     bool refresh_procgen_debug_view(core::Engine& engine);
     bool upload_procgen_debug_texture(core::Engine& engine, const procgen::DebugImage& image);
     bool refresh_procgen_terrain_mesh(core::Engine& engine, const procgen::DebugImage& image);
@@ -47,7 +51,18 @@ private:
     procgen::GreaterRealmClimateSettings m_procgen_climate_settings{};
     procgen::GreaterRealmClimateGenerationCache m_procgen_climate_generation_cache;
     procgen::GreaterRealmClimateMap m_procgen_climate_map;
+    procgen::GreaterRealmBiomeRuleSet m_procgen_biome_rules;
+    procgen::GreaterRealmBiomeGenerationCache m_procgen_biome_generation_cache;
+    procgen::GreaterRealmBiomeMap m_procgen_biome_map;
+    std::vector<procgen::BiomeDebugColour> m_procgen_biome_colours;
     procgen::GreaterRealmDebugOptions m_procgen_debug_options;
+    GreaterRealmInspectionSettings m_inspection_settings;
+    world::SeasonalTemperatureSettings m_seasonal_temperature_settings;
+    world::SeasonalPrecipitationSettings m_seasonal_precipitation_settings;
+    world::SeasonalTemperatureEvaluationCache m_seasonal_temperature_cache;
+    world::SeasonalPrecipitationEvaluationCache m_seasonal_precipitation_cache;
+    world::SeasonalTemperatureMap m_seasonal_temperature;
+    world::SeasonalPrecipitationMap m_seasonal_precipitation;
     GreaterRealmPresentationSettings m_procgen_presentation;
     procgen::TerrainConstraintBrushSettings m_procgen_brush_settings;
     procgen::TerrainConstraintPaintSession m_procgen_paint_session;
