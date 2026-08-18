@@ -71,19 +71,6 @@ bool test_climate_weather_inspection_views() {
         world::SeasonalPrecipitationSettings{},
         0.25f
     );
-    world::RuntimeWeatherSettings weather_settings;
-    weather_settings.weather_seed = 97531;
-    weather_settings.region_identity = 24680;
-    weather_settings.precipitation_threshold = 0.0f;
-    const auto weather = world::evolve_runtime_weather(
-        terrain,
-        climate,
-        seasonal_temperature,
-        seasonal_precipitation,
-        weather_settings,
-        17
-    );
-
     procgen::GreaterRealmDebugOptions overlays;
     overlays.show_coastline = false;
     overlays.show_mountain_peaks = false;
@@ -95,7 +82,7 @@ bool test_climate_weather_inspection_views() {
             game::GreaterRealmInspectionView::SeasonalTemperature
         );
          value <= static_cast<std::uint8_t>(
-            game::GreaterRealmInspectionView::ExperiencedPrecipitation
+            game::GreaterRealmInspectionView::SeasonalPrecipitation
          );
          ++value) {
         images.push_back(game::build_greater_realm_climate_weather_inspection_image(
@@ -103,7 +90,6 @@ bool test_climate_weather_inspection_views() {
             climate,
             seasonal_temperature,
             seasonal_precipitation,
-            weather,
             static_cast<game::GreaterRealmInspectionView>(value),
             overlays
         ));
@@ -116,38 +102,27 @@ bool test_climate_weather_inspection_views() {
     );
     if (!require(
             all_images_complete,
-            "every seasonal and runtime inspection layer produces a complete image"
+            "every seasonal inspection layer produces a complete image"
         )) {
         return false;
     }
     bool ok = true;
     ok &= require(
         !images_match(images.front(), images.back()),
-        "seasonal temperature and experienced precipitation use distinct visual fields"
+        "seasonal temperature and seasonal precipitation use distinct visual fields"
     );
 
-    const std::size_t wind_offset = static_cast<std::size_t>(
-        static_cast<std::uint8_t>(game::GreaterRealmInspectionView::RuntimeWind)
-            - static_cast<std::uint8_t>(game::GreaterRealmInspectionView::SeasonalTemperature)
-    );
-    ok &= require(
-        pixel_at(images[wind_offset], 6, 6)
-            == procgen::DebugColour{244, 248, 238, 255},
-        "runtime wind view draws sampled vector origins over wind-speed colour"
-    );
-
-    const auto wind_repeat = game::build_greater_realm_climate_weather_inspection_image(
+    const auto precipitation_repeat = game::build_greater_realm_climate_weather_inspection_image(
         terrain,
         climate,
         seasonal_temperature,
         seasonal_precipitation,
-        weather,
-        game::GreaterRealmInspectionView::RuntimeWind,
+        game::GreaterRealmInspectionView::SeasonalPrecipitation,
         overlays
     );
     ok &= require(
-        images_match(images[wind_offset], wind_repeat),
-        "inspection rendering is deterministic for explicit seasonal and weather inputs"
+        images_match(images.back(), precipitation_repeat),
+        "inspection rendering is deterministic for explicit seasonal inputs"
     );
 
     auto changed_climate = climate;
@@ -157,13 +132,12 @@ bool test_climate_weather_inspection_views() {
         changed_climate,
         seasonal_temperature,
         seasonal_precipitation,
-        weather,
-        game::GreaterRealmInspectionView::Humidity,
+        game::GreaterRealmInspectionView::SeasonalTemperature,
         overlays
     );
     ok &= require(
         !stale.has_expected_byte_count(),
-        "inspection rendering rejects seasonal and weather data from stale climate sources"
+        "inspection rendering rejects seasonal data from stale climate sources"
     );
 
     procgen::GreaterRealmDebugView stable_view;
@@ -174,10 +148,10 @@ bool test_climate_weather_inspection_views() {
         )
             && stable_view == procgen::GreaterRealmDebugView::PrecipitationNormal
             && !game::procgen_debug_view_for(
-                game::GreaterRealmInspectionView::RuntimeWind,
+                game::GreaterRealmInspectionView::SeasonalPrecipitation,
                 stable_view
             ),
-        "unified selector maps stable views to procgen without treating runtime wind as climate"
+        "unified selector maps only stable annual views to procgen"
     );
     return ok;
 }
@@ -201,14 +175,6 @@ bool test_greater_realm_resolution_rendering_is_interactive() {
         world::SeasonalPrecipitationSettings{},
         0.75f
     );
-    const auto weather = world::evolve_runtime_weather(
-        terrain,
-        climate,
-        seasonal_temperature,
-        seasonal_precipitation,
-        world::RuntimeWeatherSettings{},
-        23
-    );
     procgen::GreaterRealmDebugOptions overlays;
     overlays.show_coastline = false;
     overlays.show_mountain_peaks = false;
@@ -221,20 +187,19 @@ bool test_greater_realm_resolution_rendering_is_interactive() {
         climate,
         seasonal_temperature,
         seasonal_precipitation,
-        weather,
-        game::GreaterRealmInspectionView::ExperiencedPrecipitation,
+        game::GreaterRealmInspectionView::SeasonalPrecipitation,
         overlays
     );
     const auto elapsed = std::chrono::steady_clock::now() - started_at;
     const auto elapsed_milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(
         elapsed
     ).count();
-    std::cout << "Greater-realm weather inspection rendered in "
+    std::cout << "Greater-realm seasonal climate inspection rendered in "
               << elapsed_milliseconds << " ms.\n";
 
     bool ok = require(
         image.has_expected_byte_count(),
-        "greater-realm-resolution weather inspection produces a complete image"
+        "greater-realm-resolution seasonal inspection produces a complete image"
     );
     if (elapsed_milliseconds >= 2000) {
         std::cerr << "Greater-realm inspection render took "
@@ -242,7 +207,7 @@ bool test_greater_realm_resolution_rendering_is_interactive() {
     }
     ok &= require(
         elapsed_milliseconds < 2000,
-        "greater-realm-resolution weather inspection remains interactive"
+        "greater-realm-resolution seasonal inspection remains interactive"
     );
     return ok;
 }
@@ -286,22 +251,6 @@ bool test_all_world_inspection_views_are_continuous_at_equator() {
         0.0f
     );
 
-    world::RuntimeWeatherSettings weather_settings;
-    weather_settings.temperature_anomaly_strength = 0.0f;
-    weather_settings.pressure_variation_strength = 0.0f;
-    weather_settings.wind_speed_scale = 0.0f;
-    weather_settings.humidity_variation_strength = 0.0f;
-    weather_settings.cloud_variation_strength = 0.0f;
-    weather_settings.precipitation_threshold = 1.0f;
-    const auto weather = world::evolve_runtime_weather(
-        terrain,
-        climate,
-        seasonal_temperature,
-        seasonal_precipitation,
-        weather_settings,
-        0
-    );
-
     procgen::GreaterRealmDebugOptions overlays;
     overlays.show_coastline = false;
     overlays.show_mountain_peaks = false;
@@ -311,7 +260,7 @@ bool test_all_world_inspection_views_are_continuous_at_equator() {
             game::GreaterRealmInspectionView::SeasonalTemperature
         );
          value <= static_cast<std::uint8_t>(
-            game::GreaterRealmInspectionView::ExperiencedPrecipitation
+            game::GreaterRealmInspectionView::SeasonalPrecipitation
          );
          ++value) {
         const auto image = game::build_greater_realm_climate_weather_inspection_image(
@@ -319,13 +268,12 @@ bool test_all_world_inspection_views_are_continuous_at_equator() {
             climate,
             seasonal_temperature,
             seasonal_precipitation,
-            weather,
             static_cast<game::GreaterRealmInspectionView>(value),
             overlays
         );
         if (!require(
                 colour_distance(pixel_at(image, 1, 95), pixel_at(image, 1, 97)) < 64,
-                "seasonal and runtime inspection views do not introduce an equatorial seam"
+                "seasonal inspection views do not introduce an equatorial seam"
             )) {
             return false;
         }
@@ -345,6 +293,6 @@ int main() {
     if (!test_all_world_inspection_views_are_continuous_at_equator()) {
         return 1;
     }
-    std::cout << "Climate and weather inspection tests passed.\n";
+    std::cout << "Climate inspection tests passed.\n";
     return 0;
 }

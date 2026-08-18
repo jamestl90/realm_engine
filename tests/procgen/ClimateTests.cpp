@@ -903,43 +903,6 @@ bool test_seasonal_equatorial_transition_continuity() {
         "seasonal precipitation blends opposite wet phases smoothly across the equator"
     );
 
-    world::RuntimeWeatherSettings weather_settings;
-    weather_settings.temperature_anomaly_strength = 0.0f;
-    weather_settings.pressure_variation_strength = 0.0f;
-    weather_settings.wind_speed_scale = 0.0f;
-    weather_settings.humidity_variation_strength = 0.0f;
-    weather_settings.cloud_variation_strength = 0.0f;
-    weather_settings.precipitation_threshold = 1.0f;
-    const auto weather = world::evolve_runtime_weather(
-        terrain,
-        climate,
-        seasonal_temperature,
-        seasonal_precipitation,
-        weather_settings,
-        0
-    );
-    ok &= require(
-        weather.cells[adjacent_north].temperature_anomaly == 0.0f
-            && weather.cells[adjacent_south].temperature_anomaly == 0.0f
-            && weather.cells[adjacent_north].pressure_normal == 0.5f
-            && weather.cells[adjacent_south].pressure_normal == 0.5f
-            && weather.cells[adjacent_north].wind_x == 0.0f
-            && weather.cells[adjacent_south].wind_x == 0.0f,
-        "independent runtime anomaly, pressure, and wind fields add no equatorial seam"
-    );
-    ok &= require(
-        std::abs(
-            weather.cells[adjacent_north].humidity
-                - weather.cells[adjacent_south].humidity
-        ) < 0.04f
-            && std::abs(
-                weather.cells[adjacent_north].cloud_cover
-                    - weather.cells[adjacent_south].cloud_cover
-            ) < 0.04f
-            && weather.cells[adjacent_north].active_precipitation == 0.0f
-            && weather.cells[adjacent_south].active_precipitation == 0.0f,
-        "runtime humidity, cloud, and precipitation inherit the smooth seasonal transition"
-    );
     return ok;
 }
 
@@ -1216,240 +1179,6 @@ bool test_seasonal_precipitation_validation_cache_and_biome_immutability() {
     return ok;
 }
 
-bool test_runtime_weather_state_identity_evolution_and_bounds() {
-    auto terrain = make_flat_map(4, 2, 909);
-    auto climate = procgen::generate_greater_realm_climate(terrain);
-    for (auto& cell : climate.cells) {
-        cell.temperature_normal = 0.50f;
-        cell.precipitation_normal = 0.60f;
-    }
-    const auto seasonal_temperature = world::evaluate_seasonal_temperature(
-        terrain,
-        climate,
-        world::SeasonalTemperatureSettings{},
-        0.25f
-    );
-    const auto seasonal_precipitation = world::evaluate_seasonal_precipitation(
-        terrain,
-        climate,
-        world::SeasonalPrecipitationSettings{},
-        0.25f
-    );
-
-    world::RuntimeWeatherSettings settings;
-    settings.weather_seed = 1234;
-    settings.region_identity = 99;
-    settings.temperature_anomaly_strength = 0.30f;
-    const auto first = world::evolve_runtime_weather(
-        terrain, climate, seasonal_temperature, seasonal_precipitation, settings, 10
-    );
-    const auto replay = world::evolve_runtime_weather(
-        terrain, climate, seasonal_temperature, seasonal_precipitation, settings, 10
-    );
-    const auto continued = world::evolve_runtime_weather(
-        terrain,
-        climate,
-        seasonal_temperature,
-        seasonal_precipitation,
-        settings,
-        11,
-        &first
-    );
-    const auto loaded = first;
-    const auto continued_from_loaded = world::evolve_runtime_weather(
-        terrain,
-        climate,
-        seasonal_temperature,
-        seasonal_precipitation,
-        settings,
-        11,
-        &loaded
-    );
-
-    const auto later_seasonal_temperature = world::evaluate_seasonal_temperature(
-        terrain,
-        climate,
-        world::SeasonalTemperatureSettings{},
-        0.35f
-    );
-    const auto later_seasonal_precipitation = world::evaluate_seasonal_precipitation(
-        terrain,
-        climate,
-        world::SeasonalPrecipitationSettings{},
-        0.35f
-    );
-    auto continuity_settings = settings;
-    continuity_settings.state_memory = 1.0f;
-    const auto before_season_advance = world::evolve_runtime_weather(
-        terrain,
-        climate,
-        seasonal_temperature,
-        seasonal_precipitation,
-        continuity_settings,
-        20
-    );
-    const auto after_season_advance = world::evolve_runtime_weather(
-        terrain,
-        climate,
-        later_seasonal_temperature,
-        later_seasonal_precipitation,
-        continuity_settings,
-        21,
-        &before_season_advance
-    );
-
-    auto changed_climate = climate;
-    changed_climate.cells[0].temperature_normal += 0.01f;
-    const auto current_seasonal_precipitation = world::evaluate_seasonal_precipitation(
-        terrain,
-        changed_climate,
-        world::SeasonalPrecipitationSettings{},
-        0.25f
-    );
-    const auto rejected_stale_season = world::evolve_runtime_weather(
-        terrain,
-        changed_climate,
-        seasonal_temperature,
-        current_seasonal_precipitation,
-        settings,
-        12
-    );
-    auto changed_precipitation_climate = climate;
-    changed_precipitation_climate.cells[0].precipitation_normal += 0.01f;
-    const auto current_seasonal_temperature = world::evaluate_seasonal_temperature(
-        terrain,
-        changed_precipitation_climate,
-        world::SeasonalTemperatureSettings{},
-        0.25f
-    );
-    const auto rejected_stale_precipitation = world::evolve_runtime_weather(
-        terrain,
-        changed_precipitation_climate,
-        current_seasonal_temperature,
-        seasonal_precipitation,
-        settings,
-        12
-    );
-
-    bool ok = require(
-        first.source_matches(terrain, climate, seasonal_temperature, seasonal_precipitation, settings)
-            && first.has_expected_cell_count(),
-        "runtime atmospheric state records source, schema, seed, region, and seasonal identities"
-    );
-    ok &= require(
-        first.cells.size() == replay.cells.size()
-            && first.cells[0].pressure_normal == replay.cells[0].pressure_normal
-            && first.cells[0].humidity == replay.cells[0].humidity,
-        "runtime weather evolution is deterministic for explicit tick input"
-    );
-    ok &= require(
-        continued.cells[0].humidity == continued_from_loaded.cells[0].humidity
-            && continued.cells[0].cloud_cover == continued_from_loaded.cells[0].cloud_cover,
-        "runtime weather continuity survives a save/load-style state copy"
-    );
-    ok &= require(
-        world::seasonal_temperature_provenance_fingerprint(seasonal_temperature)
-                == world::seasonal_temperature_provenance_fingerprint(
-                    later_seasonal_temperature
-                )
-            && world::seasonal_temperature_fingerprint(seasonal_temperature)
-                != world::seasonal_temperature_fingerprint(later_seasonal_temperature)
-            && world::seasonal_precipitation_provenance_fingerprint(
-                seasonal_precipitation
-            ) == world::seasonal_precipitation_provenance_fingerprint(
-                later_seasonal_precipitation
-            )
-            && world::seasonal_precipitation_fingerprint(seasonal_precipitation)
-                != world::seasonal_precipitation_fingerprint(later_seasonal_precipitation)
-            && before_season_advance.cells[0].pressure_normal
-                == after_season_advance.cells[0].pressure_normal
-            && before_season_advance.cells[0].humidity
-                == after_season_advance.cells[0].humidity,
-        "ordinary seasonal calendar advancement preserves compatible weather continuity"
-    );
-    ok &= require(
-        rejected_stale_season.cells.empty()
-            && rejected_stale_precipitation.cells.empty(),
-        "runtime weather rejects temperature or precipitation seasons from stale annual normals"
-    );
-    ok &= require(
-        std::all_of(continued.cells.begin(), continued.cells.end(), [](const auto& cell) {
-            return std::isfinite(cell.temperature_anomaly)
-                && cell.pressure_normal >= 0.0f
-                && cell.pressure_normal <= 1.0f
-                && cell.humidity >= 0.0f
-                && cell.humidity <= 1.0f
-                && cell.cloud_cover >= 0.0f
-                && cell.cloud_cover <= 1.0f
-                && cell.active_precipitation >= 0.0f
-                && cell.active_precipitation <= 1.0f;
-        }),
-        "runtime atmospheric fields remain within plausible normalized bounds"
-    );
-    return ok;
-}
-
-bool test_runtime_weather_allows_transient_heat_and_cold_without_biome_changes() {
-    auto terrain = make_flat_map(2, 1, 1001);
-    auto climate = procgen::generate_greater_realm_climate(terrain);
-    climate.cells[0].temperature_normal = 0.80f;
-    climate.cells[1].temperature_normal = 0.20f;
-    climate.cells[0].precipitation_normal = 0.50f;
-    climate.cells[1].precipitation_normal = 0.50f;
-
-    const auto seasonal_temperature = world::evaluate_seasonal_temperature(
-        terrain,
-        climate,
-        world::SeasonalTemperatureSettings{},
-        0.0f
-    );
-    const auto seasonal_precipitation = world::evaluate_seasonal_precipitation(
-        terrain,
-        climate,
-        world::SeasonalPrecipitationSettings{},
-        0.0f
-    );
-    procgen::GreaterRealmBiomeRuleSet rules;
-    rules.identity = 99;
-    rules.fallback_biome_id = 9;
-    procgen::GreaterRealmBiomeRule hot;
-    hot.biome_id = 1;
-    hot.priority = 10;
-    hot.temperature_normal = procgen::BiomeValueRange{0.60f, 1.0f};
-    rules.rules.push_back(hot);
-    const auto biomes = procgen::generate_greater_realm_biomes(terrain, climate, rules);
-
-    world::RuntimeWeatherSettings settings;
-    settings.weather_seed = 777;
-    settings.temperature_anomaly_strength = 0.50f;
-    bool warm_region_cold_snap = false;
-    bool cool_region_heatwave = false;
-    for (std::uint64_t tick = 1; tick <= 128; ++tick) {
-        const auto weather = world::evolve_runtime_weather(
-            terrain,
-            climate,
-            seasonal_temperature,
-            seasonal_precipitation,
-            settings,
-            tick
-        );
-        warm_region_cold_snap |= weather.cells[0].temperature_anomaly < -0.05f;
-        cool_region_heatwave |= weather.cells[1].temperature_anomaly > 0.05f;
-    }
-
-    bool ok = require(
-        warm_region_cold_snap && cool_region_heatwave,
-        "runtime weather can create cold snaps in warm regions and heatwaves in cool regions"
-    );
-    ok &= require(
-        biomes.cells[0].biome_id == 1
-            && biomes.cells[1].biome_id == 9
-            && biomes.sources_match(terrain, climate, rules),
-        "runtime weather does not regenerate or relabel stable biomes"
-    );
-    return ok;
-}
-
 bool test_climate_weather_query_composition_and_fallbacks() {
     auto terrain = make_flat_map(1, 1, 1101);
     auto climate = procgen::generate_greater_realm_climate(terrain);
@@ -1474,31 +1203,18 @@ bool test_climate_weather_query_composition_and_fallbacks() {
         precipitation_settings,
         0.0f
     );
-    world::RuntimeWeatherSettings weather_settings;
-    weather_settings.weather_seed = 42;
-    weather_settings.precipitation_threshold = 0.0f;
-    const auto weather = world::evolve_runtime_weather(
-        terrain,
-        climate,
-        seasonal_temperature,
-        seasonal_precipitation,
-        weather_settings,
-        5
-    );
-
     procgen::GreaterRealmBiomeRuleSet rules;
     rules.identity = 101;
     rules.fallback_biome_id = 7;
     const auto biomes = procgen::generate_greater_realm_biomes(terrain, climate, rules);
     const auto stable_only = world::sample_climate_weather_cell(
-        terrain, climate, nullptr, nullptr, nullptr, nullptr, 0, 0
+        terrain, climate, nullptr, nullptr, nullptr, 0, 0
     );
     const auto composed = world::sample_climate_weather_cell(
         terrain,
         climate,
         &seasonal_temperature,
         &seasonal_precipitation,
-        &weather,
         &biomes,
         0,
         0
@@ -1509,7 +1225,7 @@ bool test_climate_weather_query_composition_and_fallbacks() {
             && nearly_equal(stable_only.seasonal_temperature_normal, 0.50f)
             && nearly_equal(stable_only.seasonal_precipitation_normal, 0.40f)
             && stable_only.biome_id == procgen::INVALID_BIOME_ID,
-        "query API falls back cleanly to stable annual climate when seasonal/weather data is absent"
+        "query API falls back cleanly to stable annual climate when seasonal data is absent"
     );
     ok &= require(
         composed.valid
@@ -1517,13 +1233,8 @@ bool test_climate_weather_query_composition_and_fallbacks() {
             && composed.seasonal_temperature_normal
                 == seasonal_temperature.cells[0].seasonal_temperature_normal
             && composed.seasonal_precipitation_normal
-                == seasonal_precipitation.cells[0].seasonal_precipitation_normal
-            && composed.active_precipitation == weather.cells[0].active_precipitation
-            && composed.experienced_temperature_normal >= 0.0f
-            && composed.experienced_temperature_normal <= 1.0f
-            && composed.experienced_precipitation_normal >= 0.0f
-            && composed.experienced_precipitation_normal <= 1.0f,
-        "query API composes seasonal and runtime fields without hiding time inputs"
+                == seasonal_precipitation.cells[0].seasonal_precipitation_normal,
+        "query API composes stable annual, seasonal, and biome fields without hiding time inputs"
     );
     return ok;
 }
@@ -1556,8 +1267,6 @@ int main() {
     ok &= test_seasonal_temperature_does_not_relabel_biomes();
     ok &= test_seasonal_precipitation_determinism_calendar_and_wet_phase();
     ok &= test_seasonal_precipitation_validation_cache_and_biome_immutability();
-    ok &= test_runtime_weather_state_identity_evolution_and_bounds();
-    ok &= test_runtime_weather_allows_transient_heat_and_cold_without_biome_changes();
     ok &= test_climate_weather_query_composition_and_fallbacks();
     if (!ok) {
         return 1;

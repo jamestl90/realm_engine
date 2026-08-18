@@ -1,4 +1,5 @@
 #include "../../include/procgen/GreaterRealm.hpp"
+#include "../../include/procgen/detail/GenerationUtility.hpp"
 #include "../../include/procgen/Hydrology.hpp"
 #include "../../include/procgen/MountainPeaks.hpp"
 #include "../../include/procgen/TerrainConstraints.hpp"
@@ -24,39 +25,10 @@ constexpr float VALLEY_RELIEF_SCALE = 0.12f;
 constexpr float TERRAIN_NOISE_RELIEF_SCALE = 0.10f;
 constexpr float COASTLINE_DETAIL_SUPPORT = 0.20f;
 
-[[nodiscard]] float clamp01(float value) noexcept {
-    return std::clamp(value, 0.0f, 1.0f);
-}
-
-[[nodiscard]] float smoothstep(float edge0, float edge1, float value) noexcept {
-    if (edge0 == edge1) {
-        return value < edge0 ? 0.0f : 1.0f;
-    }
-
-    const float t = clamp01((value - edge0) / (edge1 - edge0));
-    return t * t * (3.0f - 2.0f * t);
-}
-
-[[nodiscard]] float lerp(float a, float b, float t) noexcept {
-    return a + (b - a) * t;
-}
-
-[[nodiscard]] std::uint64_t hash_coords(Seed seed, std::int32_t x, std::int32_t y, std::uint64_t salt) noexcept {
-    std::uint64_t value = seed ^ salt;
-    value ^= static_cast<std::uint64_t>(static_cast<std::uint32_t>(x)) + 0x9e3779b97f4a7c15ull + (value << 6) + (value >> 2);
-    value ^= static_cast<std::uint64_t>(static_cast<std::uint32_t>(y)) + 0xbf58476d1ce4e5b9ull + (value << 6) + (value >> 2);
-    value ^= value >> 30;
-    value *= 0xbf58476d1ce4e5b9ull;
-    value ^= value >> 27;
-    value *= 0x94d049bb133111ebull;
-    value ^= value >> 31;
-    return value;
-}
-
-[[nodiscard]] float random01(Seed seed, std::int32_t x, std::int32_t y, std::uint64_t salt) noexcept {
-    const std::uint64_t value = hash_coords(seed, x, y, salt);
-    return static_cast<float>((value >> 40) & 0xffffffu) / static_cast<float>(0xffffffu);
-}
+using detail::clamp01;
+using detail::grid_random01;
+using detail::lerp;
+using detail::smoothstep;
 
 [[nodiscard]] float value_noise(Seed seed, float x, float y, float frequency, std::uint64_t salt) noexcept {
     const float sample_x = x * frequency;
@@ -68,10 +40,10 @@ constexpr float COASTLINE_DETAIL_SUPPORT = 0.20f;
     const float sx = smoothstep(0.0f, 1.0f, tx);
     const float sy = smoothstep(0.0f, 1.0f, ty);
 
-    const float v00 = random01(seed, x0, y0, salt);
-    const float v10 = random01(seed, x0 + 1, y0, salt);
-    const float v01 = random01(seed, x0, y0 + 1, salt);
-    const float v11 = random01(seed, x0 + 1, y0 + 1, salt);
+    const float v00 = grid_random01(seed, x0, y0, salt);
+    const float v10 = grid_random01(seed, x0 + 1, y0, salt);
+    const float v01 = grid_random01(seed, x0, y0 + 1, salt);
+    const float v11 = grid_random01(seed, x0 + 1, y0 + 1, salt);
 
     const float vx0 = lerp(v00, v10, sx);
     const float vx1 = lerp(v01, v11, sx);
@@ -197,8 +169,8 @@ void compute_coast_distance(GreaterRealmMap& map) {
         for (std::uint32_t x = 0; x < map.width; ++x) {
             relax(x, y, -1, 0, 1.0f);
             relax(x, y, 0, -1, 1.0f);
-            relax(x, y, -1, -1, 1.41421356f);
-            relax(x, y, 1, -1, 1.41421356f);
+            relax(x, y, -1, -1, detail::SQRT_TWO);
+            relax(x, y, 1, -1, detail::SQRT_TWO);
         }
     }
 
@@ -208,8 +180,8 @@ void compute_coast_distance(GreaterRealmMap& map) {
             const auto uy = static_cast<std::uint32_t>(y);
             relax(ux, uy, 1, 0, 1.0f);
             relax(ux, uy, 0, 1, 1.0f);
-            relax(ux, uy, 1, 1, 1.41421356f);
-            relax(ux, uy, -1, 1, 1.41421356f);
+            relax(ux, uy, 1, 1, detail::SQRT_TWO);
+            relax(ux, uy, -1, 1, detail::SQRT_TWO);
         }
     }
 
@@ -292,7 +264,7 @@ GreaterRealmTerrainCharacter derive_greater_realm_terrain_character(
         return {};
     }
 
-    const float sample = random01(
+    const float sample = grid_random01(
         settings.seed,
         0,
         0,

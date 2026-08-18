@@ -1,12 +1,8 @@
 #include "../../include/world/SeasonalClimate.hpp"
+#include "../../include/procgen/detail/GreaterRealmUtility.hpp"
 #include <algorithm>
-#include <array>
 #include <bit>
 #include <cmath>
-#include <functional>
-#include <limits>
-#include <queue>
-#include <utility>
 
 namespace world {
 namespace {
@@ -14,18 +10,11 @@ namespace {
 constexpr std::uint64_t SEASONAL_TEMPERATURE_REGIONAL_DOMAIN = 0x736561736f6e7465ull;
 constexpr std::uint64_t SEASONAL_PRECIPITATION_REGIONAL_DOMAIN = 0x736561736f6e7072ull;
 
-[[nodiscard]] float clamp01(float value) noexcept {
-    return std::clamp(value, 0.0f, 1.0f);
-}
-
-[[nodiscard]] float lerp(float from, float to, float amount) noexcept {
-    return from + (to - from) * amount;
-}
-
-[[nodiscard]] float smoothstep01(float value) noexcept {
-    const float clamped = clamp01(value);
-    return clamped * clamped * (3.0f - 2.0f * clamped);
-}
+using procgen::detail::clamp01;
+using procgen::detail::lerp;
+using procgen::detail::mix_hash;
+using procgen::detail::mixed_value_noise;
+using procgen::detail::smoothstep01;
 
 [[nodiscard]] float blended_hemisphere_wave(
     float normalized_year,
@@ -50,123 +39,6 @@ constexpr std::uint64_t SEASONAL_PRECIPITATION_REGIONAL_DOMAIN = 0x736561736f6e7
         (latitude + transition_degrees) / (2.0f * transition_degrees)
     );
     return lerp(southern_wave, northern_wave, northern_weight);
-}
-
-[[nodiscard]] std::uint64_t mix_hash(std::uint64_t hash, std::uint64_t value) noexcept {
-    hash ^= value + 0x9e3779b97f4a7c15ull + (hash << 6) + (hash >> 2);
-    hash ^= hash >> 30;
-    hash *= 0xbf58476d1ce4e5b9ull;
-    hash ^= hash >> 27;
-    hash *= 0x94d049bb133111ebull;
-    return hash ^ (hash >> 31);
-}
-
-[[nodiscard]] std::uint64_t hash_coords(
-    procgen::Seed seed,
-    std::int32_t x,
-    std::int32_t y,
-    std::uint64_t salt
-) noexcept {
-    std::uint64_t hash = mix_hash(seed, salt);
-    hash = mix_hash(hash, static_cast<std::uint32_t>(x));
-    return mix_hash(hash, static_cast<std::uint32_t>(y));
-}
-
-[[nodiscard]] float random01(
-    procgen::Seed seed,
-    std::int32_t x,
-    std::int32_t y,
-    std::uint64_t salt
-) noexcept {
-    return static_cast<float>((hash_coords(seed, x, y, salt) >> 40) & 0xffffffu)
-        / static_cast<float>(0xffffffu);
-}
-
-[[nodiscard]] float value_noise(
-    procgen::Seed seed,
-    float x,
-    float y,
-    float frequency,
-    std::uint64_t salt
-) noexcept {
-    const float sample_x = x * frequency;
-    const float sample_y = y * frequency;
-    const auto x0 = static_cast<std::int32_t>(std::floor(sample_x));
-    const auto y0 = static_cast<std::int32_t>(std::floor(sample_y));
-    const float tx = smoothstep01(sample_x - static_cast<float>(x0));
-    const float ty = smoothstep01(sample_y - static_cast<float>(y0));
-    const float low = lerp(
-        random01(seed, x0, y0, salt),
-        random01(seed, x0 + 1, y0, salt),
-        tx
-    );
-    const float high = lerp(
-        random01(seed, x0, y0 + 1, salt),
-        random01(seed, x0 + 1, y0 + 1, salt),
-        tx
-    );
-    return lerp(low, high, ty);
-}
-
-[[nodiscard]] float normalized_land_height(const procgen::GreaterRealmCell& cell) noexcept {
-    if (cell.is_water) {
-        return 0.0f;
-    }
-    return clamp01(
-        (cell.elevation - procgen::NORMALIZED_WATERLINE)
-            / (1.0f - procgen::NORMALIZED_WATERLINE)
-    );
-}
-
-[[nodiscard]] std::vector<float> distance_to_water(const procgen::GreaterRealmMap& terrain) {
-    constexpr float SQRT_TWO = 1.41421356237f;
-    constexpr std::array<std::array<std::int32_t, 2>, 8> NEIGHBORS{{
-        {{-1, -1}}, {{0, -1}}, {{1, -1}}, {{-1, 0}},
-        {{1, 0}}, {{-1, 1}}, {{0, 1}}, {{1, 1}}
-    }};
-    using QueueEntry = std::pair<float, std::uint32_t>;
-
-    std::vector<float> distances(
-        terrain.cells.size(),
-        std::numeric_limits<float>::infinity()
-    );
-    std::priority_queue<QueueEntry, std::vector<QueueEntry>, std::greater<>> open;
-    for (std::uint32_t index = 0; index < terrain.cells.size(); ++index) {
-        if (terrain.cells[index].is_water) {
-            distances[index] = 0.0f;
-            open.emplace(0.0f, index);
-        }
-    }
-
-    const float cell_size = terrain.cell_size > 0.0f ? terrain.cell_size : 1.0f;
-    while (!open.empty()) {
-        const auto [distance, index] = open.top();
-        open.pop();
-        if (distance > distances[index]) {
-            continue;
-        }
-
-        const std::int32_t x = static_cast<std::int32_t>(index % terrain.width);
-        const std::int32_t y = static_cast<std::int32_t>(index / terrain.width);
-        for (const auto& offset : NEIGHBORS) {
-            const std::int32_t neighbor_x = x + offset[0];
-            const std::int32_t neighbor_y = y + offset[1];
-            if (!terrain.contains(neighbor_x, neighbor_y)) {
-                continue;
-            }
-            const auto neighbor_index = static_cast<std::uint32_t>(terrain.index(
-                static_cast<std::uint32_t>(neighbor_x),
-                static_cast<std::uint32_t>(neighbor_y)
-            ));
-            const bool diagonal = offset[0] != 0 && offset[1] != 0;
-            const float candidate = distance + cell_size * (diagonal ? SQRT_TWO : 1.0f);
-            if (candidate < distances[neighbor_index]) {
-                distances[neighbor_index] = candidate;
-                open.emplace(candidate, neighbor_index);
-            }
-        }
-    }
-    return distances;
 }
 
 void initialize_seasonal_temperature_map(
@@ -611,7 +483,7 @@ SeasonalTemperatureMap evaluate_seasonal_temperature(
     }
 
     const float normalized_year = normalize_year_fraction(year_fraction);
-    const auto water_distances = distance_to_water(terrain);
+    const auto water_distances = procgen::detail::distance_to_water(terrain);
     for (std::uint32_t y = 0; y < terrain.height; ++y) {
         const float latitude = seasonal_temperature_latitude_for_row(clamped, y, terrain.height);
         const float latitude_strength = std::abs(latitude) / 90.0f;
@@ -626,7 +498,7 @@ SeasonalTemperatureMap evaluate_seasonal_temperature(
             float phase_variation = 0.0f;
             if (clamped.regional_phase_variation > 0.0f) {
                 phase_variation = (
-                    value_noise(
+                    mixed_value_noise(
                         clamped.profile_seed,
                         normalized_x,
                         normalized_y,
@@ -638,7 +510,8 @@ SeasonalTemperatureMap evaluate_seasonal_temperature(
 
             float amplitude = clamped.base_amplitude
                 + latitude_strength * clamped.latitude_amplitude
-                + normalized_land_height(terrain.cells[index]) * clamped.elevation_amplitude;
+                + procgen::detail::normalized_land_height(terrain.cells[index])
+                    * clamped.elevation_amplitude;
             if (clamped.maritime_influence_distance > 0.0f
                 && std::isfinite(water_distances[index])) {
                 const float maritime_influence = 1.0f - smoothstep01(
@@ -647,7 +520,7 @@ SeasonalTemperatureMap evaluate_seasonal_temperature(
                 amplitude *= 1.0f - maritime_influence * clamped.maritime_damping;
             }
             if (clamped.regional_amplitude_variation > 0.0f) {
-                const float noise = value_noise(
+                const float noise = mixed_value_noise(
                     clamped.profile_seed,
                     normalized_x,
                     normalized_y,
@@ -718,7 +591,7 @@ SeasonalPrecipitationMap evaluate_seasonal_precipitation(
             float phase_variation = 0.0f;
             if (clamped.regional_phase_variation > 0.0f) {
                 phase_variation = (
-                    value_noise(
+                    mixed_value_noise(
                         clamped.profile_seed,
                         normalized_x,
                         normalized_y,
@@ -730,10 +603,11 @@ SeasonalPrecipitationMap evaluate_seasonal_precipitation(
 
             float amplitude = clamped.base_amplitude
                 + latitude_strength * clamped.latitude_amplitude;
-            amplitude *= 1.0f - normalized_land_height(terrain.cells[index])
-                * clamped.inland_damping;
+            amplitude *= 1.0f
+                - procgen::detail::normalized_land_height(terrain.cells[index])
+                    * clamped.inland_damping;
             if (clamped.regional_amplitude_variation > 0.0f) {
-                const float noise = value_noise(
+                const float noise = mixed_value_noise(
                     clamped.profile_seed,
                     normalized_x,
                     normalized_y,

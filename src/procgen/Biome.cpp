@@ -1,4 +1,5 @@
 #include "../../include/procgen/Biome.hpp"
+#include "../../include/procgen/detail/GenerationUtility.hpp"
 #include <algorithm>
 #include <bit>
 #include <cmath>
@@ -7,14 +8,7 @@
 namespace procgen {
 namespace {
 
-[[nodiscard]] std::uint64_t mix_hash(std::uint64_t hash, std::uint64_t value) noexcept {
-    hash ^= value + 0x9e3779b97f4a7c15ull + (hash << 6) + (hash >> 2);
-    hash ^= hash >> 30;
-    hash *= 0xbf58476d1ce4e5b9ull;
-    hash ^= hash >> 27;
-    hash *= 0x94d049bb133111ebull;
-    return hash ^ (hash >> 31);
-}
+using detail::mix_hash;
 
 [[nodiscard]] bool valid_terrain_form(TerrainForm form) noexcept {
     switch (form) {

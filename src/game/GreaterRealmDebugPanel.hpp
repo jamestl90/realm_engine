@@ -38,7 +38,7 @@ public:
     using ClearConstraintsCallback = std::function<void()>;
     using ViewChangedCallback = std::function<void()>;
     using PresentationChangedCallback = std::function<void()>;
-    using ClimateTimeChangedCallback = std::function<void(bool)>;
+    using ClimateTimeChangedCallback = std::function<void()>;
 
     [[nodiscard]] std::unique_ptr<ui::UIElement> build(
         procgen::GreaterRealmGeneratorSettings& settings,
@@ -68,7 +68,7 @@ private:
     void regenerate(bool force_full = false);
     void notify_view_changed();
     void notify_presentation_changed();
-    void notify_climate_time_changed(bool preserve_previous_weather);
+    void notify_climate_time_changed();
     void update_overlay_buttons();
     void select_presentation_mode(GreaterRealmPresentationMode mode);
     void update_presentation_buttons();
@@ -105,7 +105,6 @@ private:
     ui::TextBlock* m_channel_threshold_text{nullptr};
     ui::TextBlock* m_elevation_scale_text{nullptr};
     ui::TextBlock* m_year_fraction_text{nullptr};
-    ui::TextBlock* m_weather_tick_text{nullptr};
     ui::TextBlock* m_coverage_text{nullptr};
     ui::TextBlock* m_terrain_text{nullptr};
     ui::TextBlock* m_hydrology_text{nullptr};

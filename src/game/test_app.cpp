@@ -27,11 +27,9 @@
 namespace game {
 
 #if defined(REALM_ENABLE_PROCGEN_DEBUG_VIEW)
-bool TestApp::regenerate_climate_weather_inspection(bool preserve_previous_weather) {
+bool TestApp::regenerate_climate_weather_inspection() {
     m_seasonal_temperature_settings.profile_seed = m_procgen_map.seed;
     m_seasonal_precipitation_settings.profile_seed = m_procgen_map.seed;
-    m_runtime_weather_settings.weather_seed = m_procgen_map.seed;
-    m_runtime_weather_settings.region_identity = m_procgen_map.seed;
 
     (void)m_seasonal_temperature_cache.regenerate(
         m_seasonal_temperature,
@@ -61,30 +59,6 @@ bool TestApp::regenerate_climate_weather_inspection(bool preserve_previous_weath
         )) {
         return false;
     }
-
-    const world::RuntimeAtmosphericState* previous_weather = preserve_previous_weather
-        && m_runtime_weather.has_expected_cell_count()
-        ? &m_runtime_weather
-        : nullptr;
-    auto next_weather = world::evolve_runtime_weather(
-        m_procgen_map,
-        m_procgen_climate_map,
-        m_seasonal_temperature,
-        m_seasonal_precipitation,
-        m_runtime_weather_settings,
-        m_inspection_settings.weather_tick,
-        previous_weather
-    );
-    if (!next_weather.source_matches(
-            m_procgen_map,
-            m_procgen_climate_map,
-            m_seasonal_temperature,
-            m_seasonal_precipitation,
-            m_runtime_weather_settings
-        )) {
-        return false;
-    }
-    m_runtime_weather = std::move(next_weather);
     return true;
 }
 
@@ -107,7 +81,6 @@ procgen::DebugImage TestApp::build_current_inspection_image() const {
         m_procgen_climate_map,
         m_seasonal_temperature,
         m_seasonal_precipitation,
-        m_runtime_weather,
         m_inspection_settings.view,
         m_procgen_debug_options
     );
@@ -148,7 +121,7 @@ bool TestApp::regenerate_procgen_debug_map(core::Engine& engine, bool force_full
         m_procgen_climate_map,
         m_procgen_biome_rules
     );
-    if (!regenerate_climate_weather_inspection(false)) {
+    if (!regenerate_climate_weather_inspection()) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to regenerate climate inspection data");
         return false;
     }
@@ -466,7 +439,7 @@ void TestApp::on_startup(core::Engine& engine) {
         m_procgen_climate_map,
         m_procgen_biome_rules
     );
-    if (!regenerate_climate_weather_inspection(false)) {
+    if (!regenerate_climate_weather_inspection()) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to initialize climate inspection data");
         return;
     }
@@ -560,8 +533,8 @@ void TestApp::on_startup(core::Engine& engine) {
         },
         [this, &engine]() { refresh_procgen_debug_view(engine); },
         [this, &engine]() { apply_procgen_presentation(engine); },
-        [this, &engine](bool preserve_previous_weather) {
-            if (regenerate_climate_weather_inspection(preserve_previous_weather)) {
+        [this, &engine]() {
+            if (regenerate_climate_weather_inspection()) {
                 refresh_procgen_debug_view(engine);
             }
         }

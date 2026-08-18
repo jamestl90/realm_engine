@@ -12,7 +12,6 @@
 #include <chrono>
 #endif
 #include <iomanip>
-#include <limits>
 #include <sstream>
 #include <utility>
 
@@ -70,12 +69,6 @@ std::string hydrology_text(const procgen::GreaterRealmMap& map) {
     std::ostringstream stream;
     stream << "Peaks " << map.mountain_peaks.size() << "  Channels " << map.rivers.size()
            << "  Drainage " << map.drainage_order.size();
-    return stream.str();
-}
-
-std::string weather_tick_text(std::uint64_t tick) {
-    std::ostringstream stream;
-    stream << "Weather tick: " << tick;
     return stream.str();
 }
 
@@ -373,41 +366,10 @@ std::unique_ptr<ui::UIElement> GreaterRealmDebugPanel::build(
                 if (m_year_fraction_text) {
                     m_year_fraction_text->setText(setting_text("Year fraction", adjusted));
                 }
-                notify_climate_time_changed(false);
+                notify_climate_time_changed();
             },
             &m_year_fraction_slider
         )
-    ));
-    climate_time_row->addChild(make_control_row(
-        make_text(weather_tick_text(inspection_settings.weather_tick), &m_weather_tick_text),
-        [this]() {
-            if (!m_inspection_settings || m_inspection_settings->weather_tick == 0) {
-                return false;
-            }
-            --m_inspection_settings->weather_tick;
-            if (m_weather_tick_text) {
-                m_weather_tick_text->setText(weather_tick_text(
-                    m_inspection_settings->weather_tick
-                ));
-            }
-            notify_climate_time_changed(false);
-            return true;
-        },
-        [this]() {
-            if (!m_inspection_settings
-                || m_inspection_settings->weather_tick
-                    == std::numeric_limits<std::uint64_t>::max()) {
-                return false;
-            }
-            ++m_inspection_settings->weather_tick;
-            if (m_weather_tick_text) {
-                m_weather_tick_text->setText(weather_tick_text(
-                    m_inspection_settings->weather_tick
-                ));
-            }
-            notify_climate_time_changed(true);
-            return true;
-        }
     ));
     root->addChild(std::move(climate_time_row));
 
@@ -699,11 +661,6 @@ void GreaterRealmDebugPanel::update(
                 m_inspection_settings->year_fraction
             ));
         }
-        if (m_weather_tick_text) {
-            m_weather_tick_text->setText(weather_tick_text(
-                m_inspection_settings->weather_tick
-            ));
-        }
         if (m_year_fraction_slider) {
             m_year_fraction_slider->setValue(m_inspection_settings->year_fraction);
         }
@@ -765,9 +722,9 @@ void GreaterRealmDebugPanel::notify_presentation_changed() {
     }
 }
 
-void GreaterRealmDebugPanel::notify_climate_time_changed(bool preserve_previous_weather) {
+void GreaterRealmDebugPanel::notify_climate_time_changed() {
     if (m_on_climate_time_changed) {
-        m_on_climate_time_changed(preserve_previous_weather);
+        m_on_climate_time_changed();
     }
 }
 

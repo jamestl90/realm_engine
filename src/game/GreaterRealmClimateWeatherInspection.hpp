@@ -22,21 +22,12 @@ enum class GreaterRealmInspectionView : std::uint8_t {
     Biome,
     SeasonalTemperature,
     SeasonalPrecipitation,
-    TemperatureAnomaly,
-    Pressure,
-    RuntimeWind,
-    Humidity,
-    CloudCover,
-    ActivePrecipitation,
-    ExperiencedTemperature,
-    ExperiencedPrecipitation,
     Count
 };
 
 struct GreaterRealmInspectionSettings {
     GreaterRealmInspectionView view{GreaterRealmInspectionView::Terrain};
     float year_fraction{0.0f};
-    std::uint64_t weather_tick{0};
 };
 
 [[nodiscard]] const char* to_string(GreaterRealmInspectionView view) noexcept;
@@ -49,7 +40,6 @@ struct GreaterRealmInspectionSettings {
     const procgen::GreaterRealmClimateMap& climate,
     const world::SeasonalTemperatureMap& seasonal_temperature,
     const world::SeasonalPrecipitationMap& seasonal_precipitation,
-    const world::RuntimeAtmosphericState& weather,
     GreaterRealmInspectionView view,
     const procgen::GreaterRealmDebugOptions& overlay_options
 );

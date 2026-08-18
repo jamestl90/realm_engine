@@ -1,6 +1,6 @@
 #include "../../include/procgen/Hydrology.hpp"
+#include "../../include/procgen/detail/GenerationUtility.hpp"
 #include <algorithm>
-#include <array>
 #include <cmath>
 #include <functional>
 #include <queue>
@@ -21,11 +21,6 @@ struct DrainageNodeGreater {
             : left.elevation > right.elevation;
     }
 };
-
-constexpr std::array<std::array<std::int32_t, 2>, 8> NEIGHBORS{{
-    {{-1, -1}}, {{0, -1}}, {{1, -1}}, {{-1, 0}},
-    {{1, 0}}, {{-1, 1}}, {{0, 1}}, {{1, 1}}
-}};
 
 constexpr float COASTAL_RIVER_APPROACH_DISTANCE = 3.0f;
 
@@ -82,7 +77,7 @@ void build_greater_realm_drainage(GreaterRealmMap& map) {
         map.drainage_order.push_back(current.index);
         const auto& current_cell = map.cells[current.index];
 
-        for (const auto& offset : NEIGHBORS) {
+        for (const auto& offset : detail::EIGHT_WAY_NEIGHBORS) {
             const std::int32_t neighbor_x = current_cell.x + offset[0];
             const std::int32_t neighbor_y = current_cell.y + offset[1];
             if (!map.contains(neighbor_x, neighbor_y)) {

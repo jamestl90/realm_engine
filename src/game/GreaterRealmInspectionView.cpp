@@ -19,15 +19,6 @@ const char* to_string(GreaterRealmInspectionView view) noexcept {
         case GreaterRealmInspectionView::Biome: return "Biome";
         case GreaterRealmInspectionView::SeasonalTemperature: return "Seasonal temperature";
         case GreaterRealmInspectionView::SeasonalPrecipitation: return "Seasonal precipitation";
-        case GreaterRealmInspectionView::TemperatureAnomaly: return "Temperature anomaly";
-        case GreaterRealmInspectionView::Pressure: return "Pressure";
-        case GreaterRealmInspectionView::RuntimeWind: return "Runtime wind";
-        case GreaterRealmInspectionView::Humidity: return "Humidity";
-        case GreaterRealmInspectionView::CloudCover: return "Cloud cover";
-        case GreaterRealmInspectionView::ActivePrecipitation: return "Active precipitation";
-        case GreaterRealmInspectionView::ExperiencedTemperature: return "Experienced temperature";
-        case GreaterRealmInspectionView::ExperiencedPrecipitation:
-            return "Experienced precipitation";
         case GreaterRealmInspectionView::Count: break;
     }
     return "Unknown";

@@ -152,7 +152,6 @@ bool test_panel_sliders_update_settings_and_callbacks() {
     int brushChanges = 0;
     int viewChanges = 0;
     int climateTimeChanges = 0;
-    bool preservedPreviousWeather = false;
     game::GreaterRealmDebugPanel panel;
     auto root = panel.build(
         settings,
@@ -169,10 +168,7 @@ bool test_panel_sliders_update_settings_and_callbacks() {
         []() {},
         [&viewChanges]() { ++viewChanges; },
         [&presentationChanges]() { ++presentationChanges; },
-        [&climateTimeChanges, &preservedPreviousWeather](bool preserve) {
-            ++climateTimeChanges;
-            preservedPreviousWeather = preserve;
-        }
+        [&climateTimeChanges]() { ++climateTimeChanges; }
     );
 
     std::vector<ui::Slider*> sliders;
@@ -190,15 +186,15 @@ bool test_panel_sliders_update_settings_and_callbacks() {
     ok &= require(
         comboBoxes[0]->items().size()
             == static_cast<std::size_t>(game::GreaterRealmInspectionView::Count),
-        "layer selector includes stable, seasonal, and runtime weather views"
+        "layer selector includes stable and seasonal climate views"
     );
     comboBoxes[0]->setSelectedIndex(
-        static_cast<int>(game::GreaterRealmInspectionView::RuntimeWind)
+        static_cast<int>(game::GreaterRealmInspectionView::SeasonalPrecipitation)
     );
     ok &= require(
-        inspectionSettings.view == game::GreaterRealmInspectionView::RuntimeWind
+        inspectionSettings.view == game::GreaterRealmInspectionView::SeasonalPrecipitation
             && viewChanges == 1,
-        "runtime wind selection updates application-owned inspection state"
+        "seasonal precipitation selection updates application-owned inspection state"
     );
 
     std::vector<ui::Button*> buttons;
@@ -242,22 +238,12 @@ bool test_panel_sliders_update_settings_and_callbacks() {
         "year-fraction slider updates explicit seasonal input"
     );
     ok &= require(
-        climateTimeChanges == 1 && !preservedPreviousWeather,
-        "year-fraction changes rebuild weather without advancing prior state"
-    );
-
-    click_button(*buttons[3]);
-    ok &= require(
-        inspectionSettings.weather_tick == 1,
-        "weather tick increment updates explicit deterministic time"
-    );
-    ok &= require(
-        climateTimeChanges == 2 && preservedPreviousWeather,
-        "forward weather ticks preserve compatible prior atmospheric state"
+        climateTimeChanges == 1,
+        "year-fraction changes rebuild seasonal climate samples"
     );
     ok &= require(
         regenerations == 0,
-        "seasonal and weather controls do not regenerate stable procgen layers"
+        "seasonal controls do not regenerate stable procgen layers"
     );
 
     click_slider_at(*sliders[2], 110.0f);

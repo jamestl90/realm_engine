@@ -1,13 +1,11 @@
 #include "../../include/procgen/Climate.hpp"
+#include "../../include/procgen/detail/GreaterRealmUtility.hpp"
 #include <algorithm>
 #include <array>
 #include <bit>
 #include <cmath>
-#include <functional>
 #include <limits>
 #include <numeric>
-#include <queue>
-#include <utility>
 
 namespace procgen {
 namespace {
@@ -17,74 +15,12 @@ constexpr std::uint64_t PRECIPITATION_CHARACTER_DOMAIN = 0x7072656369706368ull;
 constexpr std::uint64_t WIND_CHARACTER_DOMAIN = 0x77696e6463686172ull;
 constexpr std::uint64_t REGIONAL_WIND_DOMAIN = 0x726567696f6e7764ull;
 
-[[nodiscard]] float clamp01(float value) noexcept {
-    return std::clamp(value, 0.0f, 1.0f);
-}
-
-[[nodiscard]] float lerp(float from, float to, float amount) noexcept {
-    return from + (to - from) * amount;
-}
-
-[[nodiscard]] float smoothstep01(float value) noexcept {
-    const float clamped = clamp01(value);
-    return clamped * clamped * (3.0f - 2.0f * clamped);
-}
-
-[[nodiscard]] std::uint64_t mix_hash(std::uint64_t hash, std::uint64_t value) noexcept {
-    hash ^= value + 0x9e3779b97f4a7c15ull + (hash << 6) + (hash >> 2);
-    hash ^= hash >> 30;
-    hash *= 0xbf58476d1ce4e5b9ull;
-    hash ^= hash >> 27;
-    hash *= 0x94d049bb133111ebull;
-    return hash ^ (hash >> 31);
-}
-
-[[nodiscard]] std::uint64_t hash_coords(
-    Seed seed,
-    std::int32_t x,
-    std::int32_t y,
-    std::uint64_t salt
-) noexcept {
-    std::uint64_t hash = mix_hash(seed, salt);
-    hash = mix_hash(hash, static_cast<std::uint32_t>(x));
-    return mix_hash(hash, static_cast<std::uint32_t>(y));
-}
-
-[[nodiscard]] float random01(
-    Seed seed,
-    std::int32_t x,
-    std::int32_t y,
-    std::uint64_t salt
-) noexcept {
-    return static_cast<float>((hash_coords(seed, x, y, salt) >> 40) & 0xffffffu)
-        / static_cast<float>(0xffffffu);
-}
-
-[[nodiscard]] float value_noise(
-    Seed seed,
-    float x,
-    float y,
-    float frequency,
-    std::uint64_t salt
-) noexcept {
-    const float sample_x = x * frequency;
-    const float sample_y = y * frequency;
-    const auto x0 = static_cast<std::int32_t>(std::floor(sample_x));
-    const auto y0 = static_cast<std::int32_t>(std::floor(sample_y));
-    const float tx = smoothstep01(sample_x - static_cast<float>(x0));
-    const float ty = smoothstep01(sample_y - static_cast<float>(y0));
-    const float low = lerp(
-        random01(seed, x0, y0, salt),
-        random01(seed, x0 + 1, y0, salt),
-        tx
-    );
-    const float high = lerp(
-        random01(seed, x0, y0 + 1, salt),
-        random01(seed, x0 + 1, y0 + 1, salt),
-        tx
-    );
-    return lerp(low, high, ty);
-}
+using detail::clamp01;
+using detail::lerp;
+using detail::mix_hash;
+using detail::mixed_grid_random01;
+using detail::mixed_value_noise;
+using detail::smoothstep01;
 
 [[nodiscard]] float broad_temperature_noise(
     Seed seed,
@@ -96,7 +32,7 @@ constexpr std::uint64_t REGIONAL_WIND_DOMAIN = 0x726567696f6e7764ull;
     float amplitude = 1.0f;
     float amplitude_sum = 0.0f;
     for (std::uint32_t octave = 0; octave < 3; ++octave) {
-        total += value_noise(
+        total += mixed_value_noise(
             seed,
             x,
             y,
@@ -108,66 +44,6 @@ constexpr std::uint64_t REGIONAL_WIND_DOMAIN = 0x726567696f6e7764ull;
         amplitude *= 0.5f;
     }
     return amplitude_sum > 0.0f ? total / amplitude_sum : 0.5f;
-}
-
-[[nodiscard]] std::vector<float> distance_to_water(const GreaterRealmMap& terrain) {
-    constexpr float SQRT_TWO = 1.41421356237f;
-    constexpr std::array<std::array<std::int32_t, 2>, 8> NEIGHBORS{{
-        {{-1, -1}}, {{0, -1}}, {{1, -1}}, {{-1, 0}},
-        {{1, 0}}, {{-1, 1}}, {{0, 1}}, {{1, 1}}
-    }};
-    using QueueEntry = std::pair<float, std::uint32_t>;
-
-    std::vector<float> distances(
-        terrain.cells.size(),
-        std::numeric_limits<float>::infinity()
-    );
-    std::priority_queue<QueueEntry, std::vector<QueueEntry>, std::greater<>> open;
-    for (std::uint32_t index = 0; index < terrain.cells.size(); ++index) {
-        if (terrain.cells[index].is_water) {
-            distances[index] = 0.0f;
-            open.emplace(0.0f, index);
-        }
-    }
-
-    const float cell_size = terrain.cell_size > 0.0f ? terrain.cell_size : 1.0f;
-    while (!open.empty()) {
-        const auto [distance, index] = open.top();
-        open.pop();
-        if (distance > distances[index]) {
-            continue;
-        }
-
-        const std::int32_t x = static_cast<std::int32_t>(index % terrain.width);
-        const std::int32_t y = static_cast<std::int32_t>(index / terrain.width);
-        for (const auto& offset : NEIGHBORS) {
-            const std::int32_t neighbor_x = x + offset[0];
-            const std::int32_t neighbor_y = y + offset[1];
-            if (!terrain.contains(neighbor_x, neighbor_y)) {
-                continue;
-            }
-            const auto neighbor_index = static_cast<std::uint32_t>(terrain.index(
-                static_cast<std::uint32_t>(neighbor_x),
-                static_cast<std::uint32_t>(neighbor_y)
-            ));
-            const bool diagonal = offset[0] != 0 && offset[1] != 0;
-            const float candidate = distance + cell_size * (diagonal ? SQRT_TWO : 1.0f);
-            if (candidate < distances[neighbor_index]) {
-                distances[neighbor_index] = candidate;
-                open.emplace(candidate, neighbor_index);
-            }
-        }
-    }
-    return distances;
-}
-
-[[nodiscard]] float normalized_land_height(const GreaterRealmCell& cell) noexcept {
-    if (cell.is_water) {
-        return 0.0f;
-    }
-    return clamp01(
-        (cell.elevation - NORMALIZED_WATERLINE) / (1.0f - NORMALIZED_WATERLINE)
-    );
 }
 
 void initialize_climate_map(
@@ -190,7 +66,7 @@ void generate_temperature_normals(
     const GreaterRealmMap& terrain,
     const GreaterRealmClimateSettings& settings
 ) {
-    const auto water_distances = distance_to_water(terrain);
+    const auto water_distances = detail::distance_to_water(terrain);
     for (std::uint32_t y = 0; y < terrain.height; ++y) {
         const float latitude = greater_realm_latitude_for_row(settings, y, terrain.height);
         const float latitude_temperature = 1.0f - std::abs(latitude) / 90.0f;
@@ -210,7 +86,7 @@ void generate_temperature_normals(
             ) * 2.0f - 1.0f;
             float temperature = latitude_temperature
                 + noise * settings.temperature_variation;
-            temperature -= normalized_land_height(terrain.cells[index])
+            temperature -= detail::normalized_land_height(terrain.cells[index])
                 * settings.elevation_cooling;
 
             float maritime_influence = 0.0f;
@@ -236,10 +112,6 @@ void generate_temperature_normals(
     float wind_degrees
 ) {
     constexpr float PI = 3.14159265358979323846f;
-    constexpr std::array<std::array<std::int32_t, 2>, 8> NEIGHBORS{{
-        {{-1, -1}}, {{0, -1}}, {{1, -1}}, {{-1, 0}},
-        {{1, 0}}, {{-1, 1}}, {{0, 1}}, {{1, 1}}
-    }};
     const float radians = wind_degrees * PI / 180.0f;
     const float wind_x = std::cos(radians);
     const float wind_y = std::sin(radians);
@@ -272,7 +144,7 @@ void generate_temperature_normals(
         float elevation_sum = 0.0f;
         float weight_sum = 0.0f;
 
-        for (const auto& offset : NEIGHBORS) {
+        for (const auto& offset : detail::EIGHT_WAY_NEIGHBORS) {
             const float upwind_alignment = -(
                 static_cast<float>(offset[0]) * wind_x
                 + static_cast<float>(offset[1]) * wind_y
@@ -290,10 +162,12 @@ void generate_temperature_normals(
                 static_cast<std::uint32_t>(neighbor_y)
             );
             const bool diagonal = offset[0] != 0 && offset[1] != 0;
-            const float weight = upwind_alignment / (diagonal ? 1.41421356237f : 1.0f);
+            const float weight = upwind_alignment
+                / (diagonal ? detail::SQRT_TWO : 1.0f);
             moisture_sum += outgoing_moisture[neighbor_index] * weight;
             shadow_sum += outgoing_shadow[neighbor_index] * weight;
-            elevation_sum += normalized_land_height(terrain.cells[neighbor_index]) * weight;
+            elevation_sum += detail::normalized_land_height(terrain.cells[neighbor_index])
+                * weight;
             weight_sum += weight;
         }
 
@@ -316,7 +190,7 @@ void generate_temperature_normals(
             shadow = 0.0f;
         }
 
-        const float elevation = normalized_land_height(terrain_cell);
+        const float elevation = detail::normalized_land_height(terrain_cell);
         const float rise = std::max(elevation - upwind_elevation, 0.0f);
         const float lift_rain = std::min(
             moisture,
@@ -491,7 +365,7 @@ void generate_temperature_normals(
             const float normalized_y = terrain.height > 1
                 ? static_cast<float>(y) / static_cast<float>(terrain.height - 1)
                 : 0.5f;
-            const float regional_noise = value_noise(
+            const float regional_noise = mixed_value_noise(
                 terrain.seed,
                 normalized_x,
                 normalized_y,
@@ -767,7 +641,7 @@ GreaterRealmPrecipitationCharacter derive_greater_realm_precipitation_character(
         return {};
     }
 
-    const float wetness = random01(seed, 0, 0, PRECIPITATION_CHARACTER_DOMAIN);
+    const float wetness = mixed_grid_random01(seed, 0, 0, PRECIPITATION_CHARACTER_DOMAIN);
     GreaterRealmPrecipitationCharacter character;
     character.wetness_scale = lerp(1.0f, lerp(0.70f, 1.75f, wetness), amount);
     character.retention_scale = lerp(1.0f, lerp(1.35f, 0.50f, wetness), amount);
@@ -784,7 +658,9 @@ GreaterRealmWindCharacter derive_greater_realm_wind_character(
     }
 
     const auto sample = [seed](std::int32_t coordinate) {
-        return random01(seed, coordinate, 0, WIND_CHARACTER_DOMAIN) * 2.0f - 1.0f;
+        return mixed_grid_random01(seed, coordinate, 0, WIND_CHARACTER_DOMAIN)
+            * 2.0f
+            - 1.0f;
     };
     GreaterRealmWindCharacter character;
     character.global_rotation_degrees = sample(0) * 180.0f * amount;
