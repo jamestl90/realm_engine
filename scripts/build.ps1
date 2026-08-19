@@ -5,7 +5,40 @@ param(
 )
 
 $buildDir = "out\build\$Preset"
-$vsDevCmd = "${env:ProgramFiles}\Microsoft Visual Studio\2022\Community\Common7\Tools\VsDevCmd.bat"
+
+function Find-VsDevCmd {
+    $vswhereCandidates = @(
+        "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe",
+        "${env:ProgramFiles}\Microsoft Visual Studio\Installer\vswhere.exe"
+    ) | Where-Object { $_ -and (Test-Path -LiteralPath $_) }
+
+    foreach ($vswhere in $vswhereCandidates) {
+        $installationPath = & $vswhere `
+            -latest `
+            -products * `
+            -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
+            -property installationPath
+
+        if ($LASTEXITCODE -eq 0 -and $installationPath) {
+            $candidate = Join-Path ($installationPath | Select-Object -First 1) "Common7\Tools\VsDevCmd.bat"
+            if (Test-Path -LiteralPath $candidate) {
+                return $candidate
+            }
+        }
+    }
+
+    # Fallbacks for machines where vswhere is unavailable.
+    $fallbacks = @(
+        "${env:ProgramFiles}\Microsoft Visual Studio\2022\Community\Common7\Tools\VsDevCmd.bat",
+        "${env:ProgramFiles}\Microsoft Visual Studio\2022\Professional\Common7\Tools\VsDevCmd.bat",
+        "${env:ProgramFiles}\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat",
+        "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat"
+    )
+
+    return $fallbacks | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1
+}
+
+$vsDevCmd = Find-VsDevCmd
 
 function Invoke-CMake {
     param(
@@ -13,8 +46,9 @@ function Invoke-CMake {
         [string[]]$Arguments
     )
 
-    if (-not (Test-Path $vsDevCmd)) {
-        Write-Host "Visual Studio build environment was not found at $vsDevCmd" -ForegroundColor Red
+    if (-not $vsDevCmd) {
+        Write-Host "A Visual Studio installation with the C++ build tools was not found." -ForegroundColor Red
+        Write-Host "Install the 'Desktop development with C++' workload and retry." -ForegroundColor Red
         $script:CMakeExitCode = 1
         return @()
     }
