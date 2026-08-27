@@ -60,7 +60,7 @@ This is a planning task. Do not implement world management here unless the break
 - Confirmed the breakdown covers region/chunk identity, active-area tracking, generation hooks, loading/unloading lifecycle, persistence, top-down presentation, and runtime entity/collision activation.
 - Confirmed Tasks 067-073 have unique IDs, valid folder/status metadata, resolvable task references, explicit dependencies, and branch guidance proportional to their scope.
 - Updated Task 066 so the spatial contract is its world-region prerequisite and parked Task 065 remains optional.
-- Updated parked Task 040 to depend on the concrete lifecycle, persistence, and climate/biome records.
+- Removed the obsolete parked runtime-weather/runoff dependency from the world-management breakdown.
 - `git diff --check` passed; targeted trailing-whitespace checks found no issues.
 - No build or runtime tests were required because this task changes planning and documentation only.
 

@@ -18,7 +18,6 @@ The intended world should support generally warm or cool regions while still all
 
 - Task 066: climate and biome ownership boundary.
 - Tasks 074-077: stable temperature, precipitation, biome, circulation, and aridity generation.
-- Task 040: parked runtime weather and runoff proposal, whose eventual implementation should consume this contract.
 
 ## Acceptance Criteria
 
@@ -31,9 +30,9 @@ The intended world should support generally warm or cool regions while still all
 - Define deterministic seed and time inputs so seasonal and weather behavior can be reproduced without coupling it to frame rate.
 - Identify boundaries with hydrology: active rainfall may feed future runoff and discharge, but must not rewrite terrain-only drainage topology or annual precipitation normals.
 - Describe how warm regions can experience seasonal or transient cold and cool regions can experience heatwaves without destroying their baseline climate identity.
-- Produce an ordered implementation breakdown for seasonal temperature, seasonal precipitation, runtime atmospheric state, weather evolution, and gameplay-facing queries.
+- Produce an ordered implementation breakdown for seasonal temperature, seasonal precipitation, and gameplay-facing queries.
 - Preserve current greater-realm generation and biome output behavior exactly; this task introduces no weather simulation or biome retuning.
-- Update the canonical architecture/procgen documentation and verify it remains consistent with Task 040 and the existing climate contracts.
+- Update the canonical architecture/procgen documentation and verify it remains consistent with the existing climate contracts.
 
 ## Out Of Scope
 
@@ -67,19 +66,17 @@ This is an architecture and task-breakdown change. A dedicated branch is not req
 
 - Task 079 adds deterministic seasonal temperature evaluation over annual temperature normals.
 - Task 080 adds deterministic seasonal precipitation evaluation over annual precipitation normals.
-- Task 081 defines runtime atmospheric state, persistence identity, and query resolution without evolving weather yet.
-- Task 082 implements deterministic weather evolution from explicit seeds, time steps, seasonal tendencies, and atmospheric state.
-- Task 083 adds gameplay-facing climate/weather query helpers so consumers ask for stable climate, seasonal tendency, experienced conditions, or active precipitation without reaching through ownership boundaries.
+- Task 083 adds gameplay-facing climate/weather query helpers so consumers ask for stable climate and seasonal tendency without reaching through ownership boundaries.
 
-Task 040 remains the parked runoff/discharge idea. It now depends on this layer contract and the follow-up weather tasks, but its runoff, soil moisture, river discharge, flooding, and erosion-adjacent scope is not implemented or deleted by Task 078.
+The runtime-weather follow-up records originally created from this planning task were later removed by the climate simplification. Runtime runoff, soil moisture, river discharge, flooding, and erosion-adjacent scope remain unsupported.
 
 ## Verification
 
 - Inspected `git status --short` and `git status --short --untracked-files=all` before editing; Git reported only the existing permission warning for `C:\Users\James/.config/git/ignore` and no worktree changes.
-- Read the requested architecture, procgen, task workflow, Task 078, Task 066, Tasks 074-077, and Task 040 documents. `docs/PROJECT_BRIEF.md` was requested but does not exist in the repository; `rg --files docs` found no project brief under `docs`.
+- Read the requested architecture, procgen, task workflow, Task 078, Task 066, and Tasks 074-077 documents. `docs/PROJECT_BRIEF.md` was requested but does not exist in the repository; `rg --files docs` found no project brief under `docs`.
 - Updated `docs/ARCHITECTURE.md` and `docs/PROCGEN.md` with the annual-normal, seasonal-evaluation, and transient-weather ownership boundary, including fields, versioning, invalidation, persistence, deterministic seed/time inputs, spatial resolution, update cadence, biome immutability, hydrology boundaries, and Task 077 climatological-transport wording.
-- Updated parked Task 040 to depend on this contract and the follow-up weather foundation while preserving its deferred runoff/discharge scope.
-- Created concrete todo follow-up tasks 079-083 for seasonal temperature, seasonal precipitation, runtime atmospheric state, deterministic weather evolution, and gameplay-facing climate/weather queries.
+- Removed the obsolete parked runtime-weather/runoff dependency while preserving the unsupported runoff/discharge scope as future non-procgen work.
+- Created concrete follow-up tasks 079, 080, and 083 for seasonal temperature, seasonal precipitation, and gameplay-facing climate/weather queries. The runtime-weather follow-ups were later removed by the climate simplification.
 - Confirmed no production types, simulation code, terrain generation behavior, climate-normal algorithms, precipitation behavior, or biome generation behavior were changed.
 - `git diff --check` passed; Git reported only the repository's existing LF-to-CRLF warnings for touched Markdown files.
 - No build or runtime tests were required because this task changes architecture documentation and backlog records only.

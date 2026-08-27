@@ -18,7 +18,7 @@ Seasonal evaluation currently chooses the northern or southern phase with a bina
 - Apply the same continuity rule to seasonal temperature and seasonal precipitation.
 - Keep clear opposite-season behavior outside the transition band.
 - Version and fingerprint the changed seasonal data contract and settings.
-- Preserve terrain, annual climate normals, hydrology, biomes, and runtime-weather ownership boundaries.
+- Preserve terrain, annual climate normals, hydrology, biomes, and seasonal-climate ownership boundaries.
 - Add focused tests for equatorial continuity, deterministic output, setting validation, and hemisphere opposition.
 - Update canonical architecture/procgen documentation.
 - Verify the focused tests, full suite, and Debug and Release builds.
@@ -34,14 +34,15 @@ Seasonal evaluation currently chooses the northern or southern phase with a bina
 - Added `equatorial_transition_degrees` to both seasonal settings structures. It is the latitude half-width of the handoff, defaults to `15` degrees, and clamps to `1..90` degrees.
 - Each evaluator computes both hemisphere phase waves. A smoothstep latitude weight selects the full northern wave at and above the positive transition edge, the full southern wave at and below the negative edge, and a continuous interpolation between them.
 - Regional phase variation shifts both hemisphere waves equally, preserving their configured opposition while retaining deterministic regional character.
-- Bumped seasonal temperature and precipitation map versions from `1` to `2` and included transition width in settings fingerprints. Runtime weather already fingerprints exact seasonal provenance and samples, so it rejects old seasonal state without a separate runtime schema change.
-- Added data-level continuity coverage at 193 rows and rendered-pixel coverage for every inspector view from `Seasonal Temperature` through `Experienced Precipitation`. Controlled runtime fields verify that pressure, temperature anomaly, and runtime wind introduce no separate equatorial seam, while humidity, cloud, and precipitation inherit the smoothed seasonal input.
+- Bumped seasonal temperature and precipitation map versions from `1` to `2` and included transition width in settings fingerprints.
+- Added data-level continuity coverage at 193 rows and rendered-pixel coverage for the seasonal temperature and seasonal precipitation inspector views.
 
 ## Verification
 
 - Focused `ctest --test-dir out/build/debug-with-tests -R climate --output-on-failure` passed, 2/2.
 - Data-level tests confirmed opposite northern/southern phases, a neutral equatorial midpoint, and bounded changes between immediately adjacent north/south rows for temperature and precipitation.
-- Rendered-pixel tests passed for every inspector view from `Seasonal Temperature` through `Experienced Precipitation`, including controlled independent runtime fields.
+- Rendered-pixel tests passed for the seasonal temperature and seasonal precipitation inspector views.
+- Runtime-weather inspection coverage from the original implementation was removed by the later climate simplification.
 - Full `ctest --test-dir out/build/debug-with-tests --output-on-failure` passed, 17/17.
 - `scripts/build.ps1 -Preset debug-no-tests` passed.
 - `scripts/build.ps1 -Preset release-no-tests` passed.

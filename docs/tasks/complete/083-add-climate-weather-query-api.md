@@ -6,31 +6,29 @@ Area: World Simulation / Gameplay Queries
 
 ## Goal
 
-Provide a clear query surface for stable climate, seasonal tendency, experienced conditions, and active precipitation so gameplay systems do not reach through procgen, seasonal, and weather ownership boundaries.
+Provide a clear query surface for stable climate and seasonal tendency so gameplay systems do not reach through procgen and seasonal ownership boundaries.
 
 ## Context
 
-Task 078 defines three distinct environmental layers. Once seasonal evaluation and runtime weather exist, consumers need explicit APIs that distinguish long-term biome-driving climate from current weather and from composed experienced conditions.
+Task 078 originally defined climate, seasonal, and runtime-weather layers. Runtime weather has since been removed from the active engine; the remaining useful query contract distinguishes long-term biome-driving climate from deterministic seasonal tendencies.
 
 ## Dependencies
 
 - Task 079: seasonal temperature evaluation.
 - Task 080: seasonal precipitation evaluation.
-- Task 081: runtime atmospheric state contract.
-- Task 082: deterministic weather evolution.
 
 ## Acceptance Criteria
 
-- Add query helpers or interfaces for annual climate normals, seasonal temperature/precipitation tendency, runtime atmospheric state, experienced temperature, experienced precipitation, and active precipitation.
+- Add query helpers or interfaces for annual climate normals and seasonal temperature/precipitation tendency.
 - Make each query's determinism, time input, coordinate space, spatial interpolation, and ownership boundary explicit.
 - Ensure biome generation and biome queries continue to use only stable terrain and annual climate normals unless an application deliberately adds a separate temporary overlay outside biome identity.
 - Keep query composition free of hidden global time and frame-rate coupling.
-- Add tests for coordinate sampling, deterministic time input, composition order, missing-weather fallback behavior, and biome/procgen immutability.
+- Add tests for coordinate sampling, deterministic time input, composition order, missing-seasonal fallback behavior, and biome/procgen immutability.
 - Update canonical architecture/procgen documentation with the gameplay-facing query contract.
 
 ## Out Of Scope
 
-- New weather simulation behavior beyond the state/evolution tasks.
+- Runtime weather simulation behavior.
 - Runtime runoff, discharge, flooding, erosion, or terrain mutation.
 - Weather rendering, particles, audio, or presentation.
 - Dynamic biome regeneration or biome relabeling.
@@ -38,9 +36,9 @@ Task 078 defines three distinct environmental layers. Once seasonal evaluation a
 ## Implementation Decisions
 
 - Added `world::ClimateWeatherSample` and `sample_climate_weather_cell`.
-- Query samples expose stable annual temperature/precipitation normals, seasonal temperature offset, seasonal temperature normal, seasonal precipitation multiplier, seasonal precipitation tendency, runtime atmospheric fields, active precipitation intensity/type, composed experienced temperature/precipitation, and stable biome ID.
-- Missing seasonal or weather inputs fall back to annual normals and calm/currently dry runtime conditions.
-- Query composition is explicit: annual climate remains stable, seasonal maps are deterministic calendar inputs, runtime weather provides current anomalies/events, and biome ID is read from the stable biome map only.
+- Query samples expose stable annual temperature/precipitation normals, seasonal temperature offset, seasonal temperature normal, seasonal precipitation multiplier, seasonal precipitation tendency, and stable biome ID.
+- Missing seasonal inputs fall back to annual normals.
+- Query composition is explicit: annual climate remains stable, seasonal maps are deterministic calendar inputs, and biome ID is read from the stable biome map only.
 - The query API does not read hidden global time, mutate any layer, or regenerate/relabel biomes.
 
 ## Commit Message
@@ -49,7 +47,8 @@ Task 078 defines three distinct environmental layers. Once seasonal evaluation a
 
 ## Verification
 
-- Added climate/weather tests for annual-only fallback sampling, seasonal composition, runtime weather composition, active precipitation exposure, stable biome ID sampling, and normalized experienced-condition bounds.
+- Added climate/weather tests for annual-only fallback sampling, seasonal composition, stable biome ID sampling, and biome/procgen immutability.
+- Runtime-weather query fields from the original implementation were removed by the later climate simplification.
 - `ctest --test-dir out/build/debug-with-tests -R procgen_greater_realm_climate --output-on-failure` passed, 1/1.
 - Full `ctest --test-dir out/build/debug-with-tests --output-on-failure` passed, 16/16.
 - `scripts/build.ps1 -Preset release-no-tests` passed.

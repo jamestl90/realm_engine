@@ -26,10 +26,10 @@ This document tracks the procedural generation capabilities currently present in
 - Treats coastline proximity independently from terrain form so coastal relief is not replaced by a generic beach classification.
 - Accepts an optional, lower-resolution authored constraint field with ocean, shallow-water, valley, and mountain tools.
 - Bilinearly samples authored constraints and blends them once into the automatic signed terrain field. The resulting signed field controls water/land topology, coastline perturbation, and positive-land relief selection; painted values are not reapplied later as direct final-relief targets.
-- Builds a deterministic priority drainage topology with a downslope target or outlet for every cell.
+- Builds a deterministic priority drainage topology with a downslope target or outlet for every cell. Ocean and inland-water cells are drainage terminals.
 - Exports a hydrologically conditioned elevation so drainage remains acyclic and downhill through depressions without changing visual terrain elevation.
-- Accumulates terrain-only contributing area downstream and exports renderer-independent potential river channels with catchment area and a derived display width. Channels may terminate near the coast, but coastal land cells are not exported as river segment endpoints, and near-coast exported segments must move toward the coastline rather than along it.
-- Does not generate rainfall, humidity, soil moisture, runoff, or current river discharge. Those values belong to future runtime weather and world simulation.
+- Accumulates terrain-only contributing area downstream and exports renderer-independent potential river channels with catchment area and a derived display width. Channels may terminate near the coast or at inland water. Coastal land cells are not exported as river segment endpoints except for the final adjacent approach into an inland-water terminal, and near-coast exported segments must move toward the coastline rather than along it.
+- Does not generate current rainfall, humidity, soil moisture, runoff, or current river discharge. Those values belong to future world simulation only if gameplay needs them.
 
 ## Climate And Biome Ownership
 
@@ -38,31 +38,29 @@ This document tracks the procedural generation capabilities currently present in
 - The implemented `temperature_normal` and `precipitation_normal` use a fixed `0..1` scale whose meaning is retained across maps; observed per-map ranges are never renormalized.
 - Temperature normal consumes explicit latitude context, elevation, maritime moderation from ocean or inland-water proximity, and optional broad deterministic variation.
 - Precipitation normal is a long-term climatological tendency derived from ocean and inland-water sources, latitude-dependent circulation, elevation, orographic lift, and carried rain shadow without representing a specific rain event.
-- Humidity, soil moisture, current rainfall, runoff, and active river discharge remain runtime simulation state and are not climate-normal aliases.
+- Humidity, soil moisture, current rainfall, runoff, and active river discharge are not climate-normal aliases and are not generated procgen fields.
 - Applications own biome definitions and IDs. The reusable classifier consumes application-supplied rules and produces a separate `GreaterRealmBiomeMap`; it does not add hard-coded biome labels to `GreaterRealmCell`.
 - Biome rules may inspect stable terrain and climate inputs. Applications separately own biome names, colours, art, resources, and gameplay behavior.
 - Generated climate and biome arrays are regenerated from versioned inputs by default. Terrain changes invalidate climate and biome output, climate changes invalidate climate and biome output, and biome-rule changes invalidate biome output only.
 - Tasks 074-076 implement temperature normals, precipitation normals, and application-driven biome classification without requiring local-region generation or runtime weather.
 
-## Climate, Seasons, And Weather Layers
+## Climate And Seasons
 
-Greater-realm climate is intentionally split into three layers with separate owners, clocks, invalidation rules, and persistence behavior.
+Greater-realm climate is intentionally split into stable annual normals and deterministic seasonal evaluation with separate owners, clocks, invalidation rules, and persistence behavior.
 
 | Layer | Owner | Core fields | Resolution | Cadence | Persistence |
 |---|---|---|---|---|---|
 | Annual climate normals | Procgen derived data | `temperature_normal`, `precipitation_normal`, source terrain identity, climate data/settings versions, effective climatological transport and aridity character | One climate cell per canonical greater-realm terrain cell | Rebuilt only when terrain source identity or climate-normal settings change | Regenerated from versioned inputs by default |
 | Seasonal climate evaluation | World simulation/application climate layer | Temperature amplitude/phase, precipitation amplitude/phase, optional profile IDs and seasonal modifiers sampled from annual normals and deterministic calendar input | Implemented seasonal maps use one sample per greater-realm cell; later layers may cache or aggregate by region | Calendar-scale tick or on-demand deterministic evaluation, never render-frame driven | Derived/cacheable; profile/settings are persisted, samples usually are not |
-| Transient runtime weather | World simulation state | Current temperature anomaly, pressure, runtime wind vector, humidity, cloud cover, active precipitation intensity/type, schema identity, weather seed, region identity, simulation tick | Implemented foundation uses one sample per greater-realm cell; later region systems may use coarser weather cells and interpolation | Fixed simulation tick or explicit event schedule independent from frame rate | Mutable state carries schema, source, seed, region, and timestamp identity; durable region persistence remains future work |
 
 - Annual normals describe what a place is generally like across long time spans. They are the only climate values biome generation may inspect.
 - Seasonal evaluation describes predictable calendar-scale departures from annual normals, such as winter cooling or wet seasons. It consumes explicit deterministic time inputs such as normalized year fraction or calendar tick, a world/profile seed, stable coordinates, and seasonal profile versions.
-- Runtime weather describes what is happening now. It consumes explicit weather seed/domain identity, fixed simulation tick or timestamp, region/weather-cell identity, prior persisted state when continuity is required, annual normals, and seasonal tendencies.
 - Task 077's circulation settings are climatological moisture-transport settings used to derive annual `precipitation_normal`. They are not persistent runtime wind, pressure gradients, storm tracks, or current airflow. A later compatibility task may rename or alias public settings, but current behavior and serialized climate identity must remain stable until such a task exists.
-- Experienced temperature is composed from calibrated annual temperature normal plus seasonal offset, transient weather anomaly, and local runtime modifiers such as exposure, shelter, nearby water, or gameplay effects. This lets a warm region have cold seasons or cold snaps without losing its long-term climate identity.
-- Experienced precipitation is composed from annual precipitation normal as a long-term probability/intensity tendency, seasonal wet/dry modulation, active precipitation, and local runtime modifiers. Active rainfall may feed future runoff, soil moisture, snowpack, flooding, and discharge, but it cannot rewrite annual precipitation normal or terrain-only drainage data.
-- Biome assignment depends only on stable terrain and long-term climate normals. Seasons, storms, droughts, snow cover, active rainfall, heatwaves, and cold snaps may drive separate overlays or gameplay state, but must not regenerate or relabel `GreaterRealmBiomeMap`.
-- Annual climate invalidates from terrain or climate-normal setting/version changes. Seasonal caches invalidate from annual-normal identity, seasonal profile/version changes, and deterministic calendar inputs. Runtime weather invalidates or migrates from weather schema/algorithm changes, region identity changes, explicit resets, or incompatible persisted timestamps/seeds.
-- Terrain-only drainage, conditioned elevation, catchment area, and potential channel geometry remain stable procgen/hydrology data. Runtime runoff and discharge may later route over that topology, but cannot feed back into generated terrain, climate normals, or current river debug geometry.
+- Seasonal temperature is annual temperature plus a deterministic seasonal offset. This lets a warm region have cool seasons without losing its long-term climate identity.
+- Seasonal precipitation is annual precipitation multiplied by a deterministic wet/dry seasonal tendency. It is not current rainfall and cannot rewrite annual precipitation normal or terrain-only drainage data.
+- Biome assignment depends only on stable terrain and long-term climate normals. Seasonal offsets and future gameplay overlays must not regenerate or relabel `GreaterRealmBiomeMap`.
+- Annual climate invalidates from terrain or climate-normal setting/version changes. Seasonal caches invalidate from annual-normal identity, seasonal profile/version changes, and deterministic calendar inputs.
+- Terrain-only drainage, conditioned elevation, catchment area, and potential channel geometry remain stable procgen/hydrology data. Future runoff or discharge, if added for gameplay, may route over that topology but cannot feed back into generated terrain, climate normals, or current river debug geometry.
 
 ### Temperature Normals
 
@@ -89,7 +87,7 @@ Greater-realm climate is intentionally split into three layers with separate own
 - Seasonal precipitation consumes annual `precipitation_normal`, terrain coordinates, explicit normalized year fraction, and profile identity. It never reads frame time and does not use Task 077 climatological transport as runtime wind.
 - `SeasonalPrecipitationMap` stores version `1`, source terrain identity, an annual-precipitation fingerprint, a seasonal-settings fingerprint, normalized year fraction, and one `SeasonalPrecipitationCell` per greater-realm cell. Each cell stores annual precipitation, seasonal multiplier, and clamped composed seasonal precipitation tendency.
 - The seasonal precipitation cache rebuilds only when terrain identity, annual precipitation normals, seasonal settings/profile identity, or normalized year fraction changes. It does not dirty terrain, annual climate normals, potential river channels, debug source data, or biome assignment.
-- Seasonal precipitation is a tendency/probability input for runtime weather. It is not current rain, humidity, runoff, soil moisture, or river discharge.
+- Seasonal precipitation is a deterministic wet/dry tendency. It is not current rain, humidity, runoff, soil moisture, or river discharge.
 
 ### Precipitation Normals
 
@@ -134,7 +132,7 @@ Greater-realm climate is intentionally split into three layers with separate own
 10. Assemble normalized final elevation without changing land/water topology.
 11. Classify boundary-connected water as ocean.
 12. Compute coast distance, slope, and terrain forms.
-13. Build priority drainage and condition depressions for downhill routing.
+13. Build priority drainage, treating ocean and inland-water cells as terminals, and condition depressions for downhill routing.
 14. Accumulate contributing terrain area and export potential river channels.
 15. Derive separate temperature and precipitation climate normals from finalized terrain, latitude, and transport settings.
 16. Optionally evaluate application-supplied biome rules into a separate biome map.
@@ -159,13 +157,11 @@ Any generated-map change also dirties the debug image and texture upload. Author
 
 `GreaterRealmClimateGenerationCache` is a separate derived-map cache. Changes to terrain fields, peaks, relief, or classification invalidate both normals; temperature-setting changes rebuild only temperature; precipitation, circulation, or seed-character setting changes rebuild only precipitation. `GreaterRealmBiomeGenerationCache` rebuilds assignment when terrain, either climate field, stored climate character, or ordered rule data changes. Debug base-view and overlay changes rebuild only the retained RGBA visualization and texture.
 
-Seasonal climate evaluation and runtime weather are separate caches/state, not extensions of `GreaterRealmClimateGenerationCache`. The implemented seasonal-temperature cache may invalidate seasonal samples and gameplay-facing composed-condition queries, but it does not dirty terrain, annual climate normals, or biome assignment. Runtime weather ticks may invalidate runtime atmospheric queries, runoff, soil moisture, or active discharge once those systems exist, but they do not dirty procgen output.
+Seasonal climate evaluation is a separate cache, not an extension of `GreaterRealmClimateGenerationCache`. Seasonal cache invalidation may rebuild seasonal samples and gameplay-facing climate queries, but it does not dirty terrain, annual climate normals, or biome assignment.
 
-Seasonal temperature and precipitation maps use version `2`. Their northern and southern phase waves remain opposite outside the tropics and blend with a smoothstep handoff across the configured equatorial transition half-width, which defaults to `15` degrees. This prevents adjacent cells around zero latitude from receiving abruptly opposite seasonal values. The transition setting participates in seasonal settings fingerprints; changed seasonal versions or fingerprints invalidate dependent runtime-weather continuity without affecting annual climate or biome identity.
+Seasonal temperature and precipitation maps use version `2`. Their northern and southern phase waves remain opposite outside the tropics and blend with a smoothstep handoff across the configured equatorial transition half-width, which defaults to `15` degrees. This prevents adjacent cells around zero latitude from receiving abruptly opposite seasonal values. The transition setting participates in seasonal settings fingerprints without affecting annual climate or biome identity.
 
-`RuntimeAtmosphericState` is mutable world-simulation state. Its versioned identity includes schema version, weather seed, region identity, source terrain/climate fingerprints, stable seasonal-provenance fingerprints, exact seasonal-sample fingerprints, settings fingerprint, and simulation tick. Evolution rejects seasonal maps derived from incompatible annual normals. Ordinary calendar advancement changes exact seasonal-sample identity without discarding compatible prior atmospheric state; climate-normal or seasonal-profile changes still invalidate continuity. Deterministic evolution updates current temperature anomaly, pressure, runtime wind, humidity, cloud cover, and active precipitation from explicit tick input, stable annual climate, seasonal maps, and optional prior state. It does not mutate terrain, climate normals, seasonal samples, hydrology, potential channels, or biome maps.
-
-`ClimateWeatherSample` is the gameplay-facing query contract for this foundation. A query can expose stable annual normals, seasonal offsets/multipliers, runtime atmospheric fields, composed experienced temperature and precipitation, active precipitation type/intensity, and the stable biome ID. Missing seasonal or weather data falls back to annual normals and calm/currently dry conditions.
+`ClimateWeatherSample` is the gameplay-facing query contract for this foundation. A query can expose stable annual normals, seasonal offsets/multipliers, and the stable biome ID. Missing seasonal data falls back to annual normals.
 
 ## Mapgen4 Alignment Boundary
 
@@ -179,7 +175,7 @@ Mapgen4 is the reference for the generator's layered terrain behavior, not a req
 - Seed-driven terrain character is an engine extension beyond Mapgen4. Existing relief and peak controls remain explicit base values, effective ruggedness is exported on the generated map, and setting seed variation to zero restores scale factors of exactly one. Representative flat, ordinary, and rugged seed evaluation retained full variation as the generator default because it adds useful realm-scale character without changing land/water topology or committing gameplay to 2.5D terrain (tasks 060 and 063).
 - Ridge, valley, and terrain-noise layers remain engine extensions after the signed-constraint, low-hill, and peak-distance terrain composition and preserve control locality.
 - Terrain forms, explicit coastline metadata, coast distance, and slope are engine data contracts beyond Mapgen4's elevation output (tasks 016 and 025).
-- Drainage uses conditioned terrain and terrain-only catchment area. Generated rainfall, humidity, moisture, and current river discharge are deliberately excluded in favor of future runtime weather (tasks 027 and 039).
+- Drainage uses conditioned terrain and terrain-only catchment area. Inland water can terminate incoming potential river channels, but hydrology does not synthesize lake outlets, through-lake channels, or downstream continuations. Generated rainfall, humidity, moisture, and current river discharge are deliberately excluded (tasks 027, 039, and 084).
 - The 2.5D view derives a continuous regular-grid heightfield and does not adopt Mapgen4's irregular folded render mesh (tasks 032 and 033).
 
 Task 049 records the alignment audit. Differences not listed above require an explicit decision or remediation before they can be treated as intentional.
@@ -187,14 +183,14 @@ Task 049 records the alignment audit. Differences not listed above require an ex
 ## Debugging And Tests
 
 - The build-configurable `GreaterRealmDebug` inspection module is enabled by the shipped Debug and Release presets. It counts terrain forms and coastal land independently, converts map data into an engine-neutral RGBA image, overlays exported rivers, and marks explicit peak cells.
-- The default terrain view maps normalized land elevation through a continuous nonlinear lowland-to-summit colour ramp with fixed anchors at `0.50, 0.54, 0.59, 0.65, 0.75, 0.86, 1.00`. Closely spaced lowland and hill anchors emphasize the range occupied by most generated terrain while fixed rock and summit anchors preserve cross-map height meaning. A restrained terrain-form tint remains secondary; this is geography visualization only and does not assign biomes or consume runtime weather fields.
+- The default terrain view maps normalized land elevation through a continuous nonlinear lowland-to-summit colour ramp with fixed anchors at `0.50, 0.54, 0.59, 0.65, 0.75, 0.86, 1.00`. Closely spaced lowland and hill anchors emphasize the range occupied by most generated terrain while fixed rock and summit anchors preserve cross-map height meaning. A restrained terrain-form tint remains secondary; this is geography visualization only and does not assign biomes or consume mutable world-simulation fields.
 - The debug image preserves relative water-depth shading, distinguishes ocean from inland water, and retains a one-cell dark coastline accent. A separate `Terrain forms` base view retains the categorical water and land-form palette.
-- The unified application inspection selector exposes terrain forms, elevation, signed landmass, hill relief, mountain relief, mountain influence, slope, coast distance, catchment area, annual temperature, annual precipitation, biome assignment, seasonal temperature, seasonal precipitation, runtime temperature anomaly, pressure, runtime wind, humidity, cloud cover, active precipitation, experienced temperature, and experienced precipitation. Fixed climate palettes and application-supplied biome colours are shared by flat and `3D` previews; the panel reports annual climate means and observed ranges without using those statistics to alter generation.
+- The unified application inspection selector exposes terrain forms, elevation, signed landmass, hill relief, mountain relief, mountain influence, slope, coast distance, catchment area, annual temperature, annual precipitation, biome assignment, seasonal temperature, and seasonal precipitation. Fixed climate palettes and application-supplied biome colours are shared by flat and `3D` previews; the panel reports annual climate means and observed ranges without using those statistics to alter generation.
 - Coastlines, mountain peaks, rivers, and sampled drainage directions are independent overlays. Terrain with coastlines, peaks, and rivers enabled remains the default view.
 - Changing a base view or overlay rebuilds only the RGBA image and preview texture from the retained map; it does not regenerate procedural data.
 - The application can switch between the flat debug texture and a lit oblique `3D` heightfield. The heightfield reuses the active debug colours and overlays, and its elevation scale is presentation-only.
-- `game::GreaterRealmClimateWeatherInspection` composes seasonal and runtime weather colours outside procgen, then reuses procgen's geographic overlays. Runtime wind is shown as sampled atmospheric vectors over wind-speed colour; it is not Task 077 climatological moisture transport.
-- The inspector owns an explicit normalized year-fraction slider and stepped weather-tick control. Neither advances from frame time. Year changes recompute seasonal samples and the deterministic weather target; forward weather ticks may preserve compatible prior atmospheric state. These controls do not invoke terrain, annual-climate, hydrology, or biome regeneration.
+- `game::GreaterRealmClimateWeatherInspection` composes seasonal climate colours outside procgen, then reuses procgen's geographic overlays.
+- The inspector owns an explicit normalized year-fraction slider that never advances from frame time. Year changes recompute seasonal samples only and do not invoke terrain, annual-climate, hydrology, or biome regeneration.
 - `TextureManager` uploads the RGBA output without requiring procgen code to depend on SDL or GPU APIs. Same-sized debug images update the existing texture and preserve its `TextureID` without a global GPU-idle wait; only dimension changes allocate and swap a texture.
 - The application-level `GreaterRealmDebugPanel` owns the debug UI, active settings, selected constraint tool, brush settings, and regeneration callbacks; `TestApp` owns preview placement, the editable constraint field, and composition. Controls expose island bias, seed variation with effective ruggedness summary, coastline detail, land relief controls, peak spacing/radius/jaggedness, ocean depth, potential-channel catchment threshold, a mutually exclusive Ocean/Shallow/Valley/Mountain paint-type row, brush size, and brush strength. Seed variation remains a normal debug tuning control; `0` is the exact neutral comparison mode and `1` is the default generator contract.
 - Primary-button input over the visible preview maps directly to normalized constraint coordinates and paints continuously while dragged. Each paint sample carries the selected brush radius and strength into `TerrainConstraintField::paint`; these are stroke policy values and are not serialized into the constraint field. UI-consumed input and positions outside the preview cannot paint, and generated output is rebuilt at most once per frame while a stroke is active.
@@ -208,8 +204,8 @@ Task 049 records the alignment audit. Differences not listed above require an ex
 
 ## Not Yet Supported
 
-- Lake retention, shared water-surface levels, river erosion, deltas, or watershed metadata. Enclosed water is classified as inland water without implying those hydrological behaviors.
-- Runtime runoff, soil moisture, snowpack, active river discharge, flooding, erosion, weather fronts, storm entities, long-duration drought events, gameplay weather rendering, particles, or audio. Parked task 040 tracks later runoff and discharge through generated drainage data; inspection-only weather visualization is available.
+- Lake retention, shared water-surface levels, automatic lake outlets, through-lake channels, river erosion, deltas, or watershed metadata. Enclosed water is classified as inland water and can terminate incoming potential river channels without implying those additional hydrological behaviors.
+- Runtime runoff, soil moisture, snowpack, active river discharge, flooding, erosion, weather fronts, storm entities, long-duration drought events, gameplay weather rendering, particles, or audio.
 - Product biome catalogues, biome asset formats, names, art, resource tables, spawn rules, or gameplay effects. The engine implementation intentionally stops at opaque application IDs and in-memory rules.
 - Resources, settlements, factions, or object placement.
 - Local tile generation or world-region streaming; queued Tasks 067-073 retain that future roadmap while current procgen work remains at greater-realm scale.

@@ -43,6 +43,8 @@ Visual review shows an established river diverting around a newly painted lake. 
 - First determine whether seeding inland-water cells as drainage terminals is sufficient to preserve the expected approach.
 - Prefer a hydrological terminal rule over retaining a stale renderer-only river overlay.
 - If exact upstream preservation cannot be derived from the final terrain and constraints alone, document the required stable-channel or edit-history ownership before adding mutable state to procgen.
+- Reopened after implementation attempt: seeding inland-water cells as drainage terminals is insufficient by itself. Painting shallows changes terrain classification/conditioning enough to alter the upstream drainage graph, so the original river path can disappear before it reaches the new lake terminal.
+- Next attempt should explicitly choose an ownership model for preserved river geometry, such as a stable pre-edit channel overlay clipped by edited water, a drainage-lock constraint for river corridors, or a separate lake-paint layer that does not perturb terrain conditioning outside the intended water mask.
 
 ## Out Of Scope
 
