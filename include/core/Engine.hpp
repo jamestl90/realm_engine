@@ -111,8 +111,8 @@ private:
 
 public:
     // Logical resolution constants
-    static constexpr int LOGICAL_W = 1920;
-    static constexpr int LOGICAL_H = 1080;
+    static constexpr int LOGICAL_W = 1760;
+    static constexpr int LOGICAL_H = 990;
 
     // Handle window resize
     void on_resize(int pixel_w, int pixel_h);

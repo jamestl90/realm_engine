@@ -10,7 +10,10 @@ int main(int argc, char* argv[]) {
 
     core::Engine engine;
 
-    if (!engine.initialize("test_app", 1920, 1080)) {
+    if (!engine.initialize(
+            "test_app",
+            core::Engine::LOGICAL_W,
+            core::Engine::LOGICAL_H)) {
         return 1;
     }
 

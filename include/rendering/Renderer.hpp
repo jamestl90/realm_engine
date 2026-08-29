@@ -140,8 +140,8 @@ private:
     float camera_y_{0.0f};
     float camera_zoom_{1.0f};
 
-    int logical_width_{1920};
-    int logical_height_{1080};
+    int logical_width_{1760};
+    int logical_height_{990};
 };
 
 } // namespace rendering
