@@ -4,7 +4,9 @@ param(
     [switch]$Clean
 )
 
-$buildDir = "out\build\$Preset"
+$repositoryRoot = Split-Path -Parent $PSScriptRoot
+$buildDir = Join-Path $repositoryRoot "out\build\$Preset"
+$shaderBuildScript = Join-Path $repositoryRoot "shaders\compile_shaders.ps1"
 
 function Find-VsDevCmd {
     $vswhereCandidates = @(
@@ -54,7 +56,7 @@ function Invoke-CMake {
     }
 
     $cmakeArguments = $Arguments -join " "
-    $command = "call `"$vsDevCmd`" -arch=x64 -host_arch=x64 >nul && cmake $cmakeArguments"
+    $command = "call `"$vsDevCmd`" -arch=x64 -host_arch=x64 >nul && cd /d `"$repositoryRoot`" && cmake $cmakeArguments"
     $output = cmd /d /s /c $command 2>&1
     $script:CMakeExitCode = $LASTEXITCODE
     return $output
@@ -74,6 +76,15 @@ function Configure-CMake {
     
     if ($configExitCode -ne 0) {
         Write-Host $configOutput -ForegroundColor Red
+        return $false
+    }
+    return $true
+}
+
+function Build-Shaders {
+    Write-Host "Checking shaders..." -ForegroundColor Cyan
+    & $shaderBuildScript
+    if ($LASTEXITCODE -ne 0) {
         return $false
     }
     return $true
@@ -129,8 +140,12 @@ if ($Clean) {
     exit 0
 }
 
-# Run the build
-$success = Run-Build
+# Verify that the committed runtime shader assets are present. Developers can
+# regenerate them explicitly with shaders/compile_shaders.ps1 -Force.
+$success = Build-Shaders
+if ($success) {
+    $success = Run-Build
+}
 
 if (-not $success) {
     Write-Host "--- BUILD FAILED ---" -ForegroundColor Red

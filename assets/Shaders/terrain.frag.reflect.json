@@ -1,0 +1,48 @@
+{
+    "entryPoints" : [
+        {
+            "name" : "main",
+            "mode" : "frag"
+        }
+    ],
+    "types" : {
+        "_6" : {
+            "name" : "type.ConstantBuffer.TerrainLightData",
+            "members" : [
+                {
+                    "name" : "directionAndAmbient",
+                    "type" : "vec4",
+                    "offset" : 0
+                }
+            ]
+        }
+    },
+    "inputs" : [
+        {
+            "type" : "vec3",
+            "name" : "in.var.TEXCOORD0",
+            "location" : 0
+        },
+        {
+            "type" : "vec4",
+            "name" : "in.var.TEXCOORD1",
+            "location" : 1
+        }
+    ],
+    "outputs" : [
+        {
+            "type" : "vec4",
+            "name" : "out.var.SV_Target0",
+            "location" : 0
+        }
+    ],
+    "ubos" : [
+        {
+            "type" : "_6",
+            "name" : "type.ConstantBuffer.TerrainLightData",
+            "block_size" : 16,
+            "set" : 3,
+            "binding" : 0
+        }
+    ]
+}
