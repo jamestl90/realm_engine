@@ -90,9 +90,12 @@ public:
     void unregisterControl(FocusableControl* control);
 
 private:
+    friend class UIManager;
+
     FocusableControl* m_focused{nullptr};
     std::vector<FocusableControl*> m_focusableControls;
 
+    void discardFocus() noexcept;
     void collectFocusableControls(UIElement* root, std::vector<FocusableControl*>& controls);
     FocusableControl* findNextFocusable(FocusDirection direction);
 };

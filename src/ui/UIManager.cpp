@@ -4,6 +4,7 @@
 #include "../../include/ui/ComboBox.hpp"
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_keyboard.h>
+#include <cstring>
 
 namespace ui {
 
@@ -44,14 +45,16 @@ void UIManager::setScreenSize(float width, float height) noexcept {
 }
 
 void UIManager::setRoot(std::unique_ptr<UIElement> root) {
+    validateTrackedElements();
     cancelActivePointerInteraction();
+    m_focusManager.clearFocus();
+    updateTextInputState(nullptr);
+
     m_root = std::move(root);
     m_layoutDirty = true;
     m_hoveredElement = nullptr;
     m_lastHoveredSurface = nullptr;
     m_capturedElement = nullptr;
-    m_focusManager.clearFocus();
-    updateTextInputState(nullptr);
 
     // Configure text measurement on new UI tree
     if (m_root) {
@@ -60,6 +63,8 @@ void UIManager::setRoot(std::unique_ptr<UIElement> root) {
 }
 
 void UIManager::update(float dt) {
+    validateTrackedElements();
+
     // Update animations
     m_animationManager.update(dt);
     m_animationManager.removeCompleted();
@@ -94,6 +99,7 @@ bool UIManager::handleEvent(const SDL_Event& event) {
     if (!m_root) {
         return false;
     }
+    validateTrackedElements();
 
     // Perform layout if dirty before handling events
     // This ensures bounds are up-to-date for hit testing
@@ -473,6 +479,62 @@ void UIManager::findOpenComboBoxes(UIElement* element, std::vector<ComboBox*>& o
         if (child) {
             findOpenComboBoxes(child.get(), outComboBoxes);
         }
+    }
+}
+
+bool UIManager::containsElement(const UIElement* root, const UIElement* target) const noexcept {
+    if (!root || !target) {
+        return false;
+    }
+    if (root == target) {
+        return true;
+    }
+
+    for (const auto& child : root->children()) {
+        if (child && containsElement(child.get(), target)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void UIManager::validateTrackedElements() noexcept {
+    if (!m_root) {
+        m_hoveredElement = nullptr;
+        m_capturedElement = nullptr;
+        m_pressedSurface = nullptr;
+        m_lastHoveredSurface = nullptr;
+        if (m_focusManager.focusedElement()) {
+            m_focusManager.discardFocus();
+            updateTextInputState(nullptr);
+        }
+        return;
+    }
+
+    const auto isInTree = [this](const UIElement* element) {
+        return element && containsElement(m_root.get(), element);
+    };
+
+    if (m_hoveredElement && !isInTree(m_hoveredElement)) {
+        m_hoveredElement = nullptr;
+    }
+    if (m_capturedElement && !isInTree(m_capturedElement)) {
+        m_capturedElement = nullptr;
+    }
+    if (m_pressedSurface && !isInTree(m_pressedSurface)) {
+        m_pressedSurface = nullptr;
+    }
+    if (m_lastHoveredSurface && !isInTree(m_lastHoveredSurface)) {
+        m_lastHoveredSurface = nullptr;
+    }
+
+    FocusableControl* focused = m_focusManager.focusedElement();
+    if (focused && !isInTree(focused)) {
+        m_focusManager.discardFocus();
+        updateTextInputState(nullptr);
+    } else if (focused && !focused->isFocusable()) {
+        m_focusManager.clearFocus();
+        updateTextInputState(nullptr);
     }
 }
 

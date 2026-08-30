@@ -168,9 +168,7 @@ void ComboBox::measure(float availableWidth, float availableHeight) {
 }
 
 void ComboBox::arrange(const Rect& finalRect) {
-    setBounds(finalRect);
-    setLocalBounds(Rect{0.0f, 0.0f, finalRect.width, finalRect.height});
-    markLayoutClean();
+    UIElement::arrange(finalRect);
     //SDL_Log("ComboBox::arrange - bounds updated: x=%.2f, y=%.2f, w=%.2f, h=%.2f, isOpen=%d",
     //        finalRect.x, finalRect.y, finalRect.width, finalRect.height, m_isOpen);
 }

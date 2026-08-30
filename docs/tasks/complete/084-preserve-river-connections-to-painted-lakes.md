@@ -1,6 +1,6 @@
 # Preserve River Connections To Painted Lakes
 
-Status: todo
+Status: complete
 Priority: high
 Area: Procgen / Hydrology / Terrain Editing
 
@@ -10,7 +10,7 @@ When an authored ocean or shallow-water stroke creates an enclosed inland water 
 
 ## Context
 
-Authored terrain painting invalidates terrain fields and rebuilds downstream classification, drainage, and potential river channels. Inland water is classified separately from ocean, but the priority-drainage topology currently seeds ocean cells as outlets and does not give painted inland water an explicit river-terminal contract.
+Authored terrain painting invalidates terrain fields and rebuilds downstream classification, drainage, and potential river channels. Inland water is classified separately from ocean, but before this task the priority-drainage topology seeded ocean cells as outlets and did not give painted inland water an explicit river-terminal contract.
 
 Visual review shows an established river diverting around a newly painted lake. For the editing workflow, the expected result is that the river continues along its unaffected upstream path until it meets the lake. This task treats the lake as a terminal water body; automatic lake outlets or through-flow are separate future hydrology behavior.
 
@@ -56,3 +56,20 @@ Visual review shows an established river diverting around a newly painted lake. 
 ## Notes
 
 The task should remain narrowly focused on river-to-lake contact. Do not solve the visual symptom by preventing required terrain or hydrology invalidation globally.
+
+## Implementation
+
+- Chose deterministic final-terrain hydrology ownership instead of retaining edit-history river overlays or adding manual channel locks.
+- Priority drainage now seeds every water cell as a drainage outlet. Boundary fallback still applies only to maps with no water.
+- Potential river export keeps the existing ocean/coast anti-speck behavior, with a narrow exception for the final approach into an inland-water terminal and the immediately upstream shore approach needed to keep that final edge connected.
+- Inland-water terminal segments may end in water, but water cells never export as river sources, so channels are clipped at first lake contact and no outlet or through-lake path is synthesized.
+
+## Verification
+
+- Built `realm_procgen_pipeline_tests`.
+- Ran `realm_procgen_pipeline_tests.exe`.
+- Built focused targets: `realm_engine_tests`, `realm_procgen_pipeline_tests`, `realm_procgen_regeneration_tests`, `realm_procgen_paint_tests`, and `realm_terrain_mesh_tests`.
+- Ran focused executables: `realm_engine_tests.exe`, `realm_procgen_pipeline_tests.exe`, `realm_procgen_regeneration_tests.exe`, `realm_procgen_paint_tests.exe`, and `realm_terrain_mesh_tests.exe`.
+- Ran `ctest --test-dir out\build\debug-with-tests --output-on-failure`; all 17 tests passed.
+- Ran `scripts\build.ps1 -Preset debug-no-tests`.
+- Ran `scripts\build.ps1 -Preset release-no-tests`.

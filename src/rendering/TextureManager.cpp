@@ -313,23 +313,33 @@ bool TextureManager::update_rgba_pixels(
 }
 
 
-TextureID TextureManager::create_from_texture(SDL_Texture* texture) {
-    if (!texture) {
-        SDL_Log("Invalid texture passed to create_from_texture");
+TextureID TextureManager::adopt_gpu_texture(
+    SDL_GPUTexture* texture,
+    std::uint32_t width,
+    std::uint32_t height
+) {
+    if (!device_ || !device_->is_valid()) {
+        SDL_Log("No valid device in TextureManager");
         return INVALID_TEXTURE_ID;
     }
-
-    float width_f = 0.0f;
-    float height_f = 0.0f;
-    if (!SDL_GetTextureSize(texture, &width_f, &height_f)) {
-        SDL_Log("Failed to query texture size: %s", SDL_GetError());
+    if (!texture) {
+        SDL_Log("Invalid GPU texture passed to adopt_gpu_texture");
+        return INVALID_TEXTURE_ID;
+    }
+    if (width == 0 || height == 0) {
+        SDL_Log("Cannot adopt a zero-sized texture");
+        return INVALID_TEXTURE_ID;
+    }
+    if (width > std::numeric_limits<std::uint16_t>::max()
+        || height > std::numeric_limits<std::uint16_t>::max()) {
+        SDL_Log("Texture dimensions exceed the Texture wrapper limit: %ux%u", width, height);
         return INVALID_TEXTURE_ID;
     }
 
     auto tex = std::make_unique<Texture>();
-    tex->gpu_texture = reinterpret_cast<SDL_GPUTexture*>(texture);
-    tex->width = static_cast<std::uint16_t>(width_f);
-    tex->height = static_cast<std::uint16_t>(height_f);
+    tex->gpu_texture = texture;
+    tex->width = static_cast<std::uint16_t>(width);
+    tex->height = static_cast<std::uint16_t>(height);
     tex->id = next_id_++;
 
     TextureID new_id = tex->id;

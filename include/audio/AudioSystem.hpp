@@ -5,6 +5,7 @@
 #include <string>
 #include <unordered_map>
 #include <memory>
+#include <vector>
 
 namespace audio {
 
@@ -19,6 +20,8 @@ struct AudioClip {
     std::uint32_t length{0};
     AudioClipID id{INVALID_AUDIO_CLIP_ID};
 };
+
+struct PlaybackInstance;
 
 // Audio system - manages playback via SDL3
 class AudioSystem {
@@ -58,9 +61,11 @@ private:
     SDL_AudioDeviceID device_id_{0};
     std::unordered_map<AudioClipID, std::unique_ptr<AudioClip>> clips_;
     std::unordered_map<std::string, AudioClipID> path_to_id_;
+    std::vector<std::unique_ptr<PlaybackInstance>> active_streams_;
     AudioClipID next_id_{1};
     float master_volume_{1.0f};
     bool initialized_{false};
+    bool owns_audio_subsystem_{false};
 };
 
 } // namespace audio

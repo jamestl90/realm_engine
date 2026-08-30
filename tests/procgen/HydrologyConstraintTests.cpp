@@ -113,7 +113,6 @@ bool river_export_candidate(
 
     const auto& source = map.cells[source_index];
     if (source.is_water
-        || source.is_coastal
         || source.downslope_index == procgen::INVALID_CELL_INDEX
         || source.downslope_index >= map.cells.size()
         || source.drainage_area < minimum_area) {
@@ -121,11 +120,21 @@ bool river_export_candidate(
     }
 
     const auto& destination = map.cells[source.downslope_index];
-    if (destination.is_coastal
+    const bool is_lake_terminal_segment = destination.is_water
+        && !destination.is_ocean
+        && destination.is_drainage_outlet;
+    const bool is_lake_approach_segment =
+        destination.downslope_index < map.cells.size()
+        && map.cells[destination.downslope_index].is_water
+        && !map.cells[destination.downslope_index].is_ocean
+        && map.cells[destination.downslope_index].is_drainage_outlet;
+    if ((source.is_coastal && !is_lake_terminal_segment)
+        || (destination.is_coastal && !is_lake_approach_segment)
         || destination.drainage_elevation > source.drainage_elevation) {
         return false;
     }
-    if (source.distance_to_coast <= 3.0f
+    if (!is_lake_terminal_segment
+        && source.distance_to_coast <= 3.0f
         && destination.distance_to_coast >= source.distance_to_coast) {
         return false;
     }
@@ -144,6 +153,24 @@ bool has_upstream_river_candidate(
         }
     }
     return false;
+}
+
+bool has_river_segment(
+    const procgen::GreaterRealmMap& map,
+    std::uint32_t source_index,
+    std::uint32_t destination_index
+) {
+    return std::any_of(map.rivers.begin(), map.rivers.end(), [&](const auto& river) {
+        return river.source_index == source_index && river.destination_index == destination_index;
+    });
+}
+
+bool debug_pixel_is_river(const procgen::DebugImage& image, std::uint32_t cell_index) {
+    const std::size_t pixel = static_cast<std::size_t>(cell_index) * 4;
+    return pixel + 2 < image.rgba.size()
+        && image.rgba[pixel] == 40
+        && image.rgba[pixel + 1] == 156
+        && image.rgba[pixel + 2] == 224;
 }
 
 bool test_constraint_tools_sampling_and_serialization() {
@@ -460,9 +487,20 @@ bool test_default_rivers_do_not_export_coastal_land_segments() {
         if (!valid) {
             break;
         }
-        valid &= !map.cells[river.source_index].is_coastal;
-        valid &= !map.cells[river.destination_index].is_coastal;
-        if (map.cells[river.source_index].distance_to_coast <= 3.0f) {
+        const auto& source = map.cells[river.source_index];
+        const auto& destination = map.cells[river.destination_index];
+        const bool is_lake_terminal_segment = destination.is_water
+            && !destination.is_ocean
+            && destination.is_drainage_outlet;
+        const bool is_lake_approach_segment =
+            destination.downslope_index < map.cells.size()
+            && map.cells[destination.downslope_index].is_water
+            && !map.cells[destination.downslope_index].is_ocean
+            && map.cells[destination.downslope_index].is_drainage_outlet;
+
+        valid &= !source.is_coastal || is_lake_terminal_segment;
+        valid &= !destination.is_coastal || is_lake_approach_segment;
+        if (!is_lake_terminal_segment && source.distance_to_coast <= 3.0f) {
             valid &= map.cells[river.destination_index].distance_to_coast
                 < map.cells[river.source_index].distance_to_coast;
         }
@@ -474,6 +512,108 @@ bool test_default_rivers_do_not_export_coastal_land_segments() {
     }
 
     return require(valid, "default river overlay does not export coastal specks or isolated starts");
+}
+
+bool test_painted_inland_water_terminates_contacted_river() {
+    procgen::GreaterRealmGeneratorSettings settings;
+    settings.seed = 173205;
+    settings.width = 128;
+    settings.height = 96;
+    settings.river_min_drainage_area = 1.0f;
+    const auto baseline = procgen::generate_greater_realm(settings);
+
+    bool found_fixture = false;
+    bool ok = true;
+    for (const auto& river : baseline.rivers) {
+        auto upstream = std::find_if(baseline.rivers.begin(), baseline.rivers.end(), [&](const auto& candidate) {
+            return candidate.destination_index == river.source_index;
+        });
+        if (upstream == baseline.rivers.end()) {
+            continue;
+        }
+
+        const auto& upstream_source = baseline.cells[upstream->source_index];
+        const auto& source = baseline.cells[river.source_index];
+        const auto& destination = baseline.cells[river.destination_index];
+        const bool is_interior = destination.x > 4
+            && destination.y > 4
+            && destination.x + 5 < static_cast<std::int32_t>(baseline.width)
+            && destination.y + 5 < static_cast<std::int32_t>(baseline.height);
+        if (!is_interior
+            || source.is_coastal
+            || destination.is_coastal
+            || upstream_source.is_coastal
+            || source.is_water
+            || destination.is_water
+            || upstream_source.is_water) {
+            continue;
+        }
+
+        procgen::TerrainConstraintField constraints(settings.width, settings.height);
+        constraints.paint(
+            procgen::TerrainConstraintTool::ShallowWater,
+            normalized_coord(static_cast<std::uint32_t>(destination.x), settings.width),
+            normalized_coord(static_cast<std::uint32_t>(destination.y), settings.height),
+            0.004f
+        );
+        const auto edited = procgen::generate_greater_realm(settings, constraints);
+        const auto repeated = procgen::generate_greater_realm(settings, constraints);
+
+        const auto& edited_upstream_source = edited.cells[upstream->source_index];
+        const auto& edited_source = edited.cells[river.source_index];
+        const auto& edited_destination = edited.cells[river.destination_index];
+        if (!edited_destination.is_water
+            || edited_destination.is_ocean
+            || !edited_destination.is_drainage_outlet
+            || edited_source.is_water
+            || edited_source.downslope_index != river.destination_index
+            || edited_upstream_source.downslope_index != river.source_index) {
+            continue;
+        }
+
+        procgen::GreaterRealmDebugOptions options;
+        options.show_coastline = false;
+        options.show_mountain_peaks = false;
+        options.show_drainage_directions = false;
+        const auto image = procgen::build_greater_realm_debug_image(
+            edited,
+            settings.sea_level,
+            options
+        );
+
+        bool no_shoreline_detour = true;
+        for (const auto& edited_river : edited.rivers) {
+            const auto& edited_river_source = edited.cells[edited_river.source_index];
+            const auto& edited_river_destination = edited.cells[edited_river.destination_index];
+            if (edited_river_source.is_coastal && !edited_river_destination.is_water) {
+                no_shoreline_detour = false;
+                break;
+            }
+        }
+
+        found_fixture = true;
+        ok &= require(
+            edited_upstream_source.landmass_elevation == upstream_source.landmass_elevation
+                && edited_upstream_source.elevation == upstream_source.elevation
+                && edited_source.landmass_elevation == source.landmass_elevation
+                && edited_source.elevation == source.elevation,
+            "small lake paint leaves selected upstream terrain inputs unchanged"
+        );
+        ok &= require(!edited_destination.is_ocean, "painted contacted water remains inland water");
+        ok &= require(has_river_segment(edited, upstream->source_index, river.source_index), "unaffected upstream river segment remains exported to the lake approach");
+        ok &= require(has_river_segment(edited, river.source_index, river.destination_index), "river approach exports a final segment into the painted inland-water terminal");
+        ok &= require(no_shoreline_detour, "painted-lake export does not route coastal river segments around the shoreline");
+        ok &= require(complete_maps_match(edited, repeated), "painted lake river contact is deterministic across clean generations");
+        ok &= require(image.has_expected_byte_count(), "painted lake river debug image has valid storage");
+        if (image.has_expected_byte_count()) {
+            ok &= require(debug_pixel_is_river(image, river.source_index), "flat debug overlay shows the river reaching the lake shore");
+            ok &= require(debug_pixel_is_river(image, river.destination_index), "flat debug overlay shows the river contact inside the lake terminal");
+        }
+        break;
+    }
+
+    ok &= require(found_fixture, "painted-lake regression fixture found a visible interior river approach");
+    return ok;
 }
 
 bool test_rivers_reach_debug_visualization() {
@@ -515,6 +655,7 @@ int main() {
         test_catchment_area_accumulates_without_weather,
         test_river_accumulation_connectivity_and_thresholding,
         test_default_rivers_do_not_export_coastal_land_segments,
+        test_painted_inland_water_terminates_contacted_river,
         test_rivers_reach_debug_visualization
     };
 

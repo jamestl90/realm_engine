@@ -1,10 +1,11 @@
 #pragma once
 
 #include "../ecs/Entity.hpp"
-#include "../rendering/Sprite.hpp"
+#include "../ecs/System.hpp"
 #include "Collision.hpp"
-#include <vector>
 #include <cstdint>
+#include <utility>
+#include <vector>
 
 namespace physics {
 

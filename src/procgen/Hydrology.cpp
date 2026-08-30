@@ -24,6 +24,24 @@ struct DrainageNodeGreater {
 
 constexpr float COASTAL_RIVER_APPROACH_DISTANCE = 3.0f;
 
+[[nodiscard]] bool is_inland_water_terminal(const GreaterRealmCell& cell) noexcept {
+    return cell.is_water && !cell.is_ocean && cell.is_drainage_outlet;
+}
+
+[[nodiscard]] bool is_inland_water_terminal(
+    const GreaterRealmMap& map,
+    std::uint32_t index
+) noexcept {
+    return index < map.cells.size() && is_inland_water_terminal(map.cells[index]);
+}
+
+[[nodiscard]] bool drains_to_inland_water_terminal(
+    const GreaterRealmMap& map,
+    const GreaterRealmCell& cell
+) noexcept {
+    return is_inland_water_terminal(map, cell.downslope_index);
+}
+
 } // namespace
 
 void build_greater_realm_drainage(GreaterRealmMap& map) {
@@ -54,7 +72,7 @@ void build_greater_realm_drainage(GreaterRealmMap& map) {
         cell.is_drainage_outlet = false;
         cell.drainage_elevation = cell.elevation;
         cell.drainage_area = 0.0f;
-        if (cell.is_ocean) {
+        if (cell.is_water) {
             seed_outlet(index);
         }
     }
@@ -129,18 +147,21 @@ void build_greater_realm_river_channels(
     const auto is_export_candidate = [&map, minimum_area](std::uint32_t source_index) {
         const auto& source = map.cells[source_index];
         if (source.is_water
-            || source.is_coastal
             || source.downslope_index == INVALID_CELL_INDEX
             || source.drainage_area < minimum_area) {
             return false;
         }
 
         const auto& destination = map.cells[source.downslope_index];
-        if (destination.is_coastal
+        const bool is_lake_terminal_segment = is_inland_water_terminal(destination);
+        const bool is_lake_approach_segment = drains_to_inland_water_terminal(map, destination);
+        if ((source.is_coastal && !is_lake_terminal_segment)
+            || (destination.is_coastal && !is_lake_approach_segment)
             || destination.drainage_elevation > source.drainage_elevation) {
             return false;
         }
-        if (source.distance_to_coast <= COASTAL_RIVER_APPROACH_DISTANCE
+        if (!is_lake_terminal_segment
+            && source.distance_to_coast <= COASTAL_RIVER_APPROACH_DISTANCE
             && destination.distance_to_coast >= source.distance_to_coast) {
             return false;
         }

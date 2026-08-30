@@ -2,9 +2,20 @@ $sourceFolder = $PSScriptRoot
 $repositoryRoot = Split-Path -Parent $sourceFolder
 $outputFolder = Join-Path $repositoryRoot "assets\Shaders"
 
+function Assert-CommandAvailable {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Command
+    )
+
+    if (-not (Get-Command $Command -ErrorAction SilentlyContinue)) {
+        throw "Required shader tool '$Command' was not found on PATH."
+    }
+}
+
 # Make sure output folder exists
 if (-not (Test-Path $outputFolder)) {
-    New-Item -ItemType Directory -Force -Path $outputFolder
+    New-Item -ItemType Directory -Force -Path $outputFolder | Out-Null
 }
 
 # Helper function to compile HLSL to SPIR-V and reflect
@@ -22,12 +33,20 @@ function Compile-And-Reflect($filePath, $stage) {
 
     Write-Host "Compiling $filePath -> $spvOutput"
     dxc $filePath -T $target -E main -Fo $spvOutput -spirv
+    if ($LASTEXITCODE -ne 0) {
+        throw "Shader compilation failed for '$filePath'."
+    }
 
     # Generate reflection JSON
     Write-Host "Reflecting $spvOutput -> $reflectOutput"
     spirv-cross $spvOutput --reflect --output $reflectOutput
-
+    if ($LASTEXITCODE -ne 0) {
+        throw "Shader reflection failed for '$spvOutput'."
+    }
 }
+
+Assert-CommandAvailable "dxc"
+Assert-CommandAvailable "spirv-cross"
 
 # Compile vertex shaders
 Get-ChildItem -Path $sourceFolder -Filter "*.vert.hlsl" | ForEach-Object {

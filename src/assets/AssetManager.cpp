@@ -50,10 +50,29 @@ TextureHandle AssetManager::load_texture(const char* path, LoadPriority priority
 
     auto it = texture_path_to_handle_.find(normalised);
     if (it != texture_path_to_handle_.end()) {
-        auto& entry = textures_[it->second.id()];
-        if (entry.generation == it->second.generation() && entry.state == AssetState::Loaded) {
-            ++entry.ref_count;
-            return it->second;
+        auto entry_it = textures_.find(it->second.id());
+        if (entry_it != textures_.end() && entry_it->second.generation == it->second.generation()) {
+            auto& entry = entry_it->second;
+            if (entry.state == AssetState::Loaded) {
+                ++entry.ref_count;
+                return it->second;
+            }
+            if (entry.state == AssetState::Failed) {
+                entry.asset = std::make_unique<TextureAsset>();
+                entry.ref_count = 1;
+                entry.state = AssetState::Loading;
+
+                const std::string full_path = resolve_path(normalised.c_str());
+                entry.last_modified = get_file_modified_time(full_path);
+                if (load_texture_internal(full_path, *entry.asset)) {
+                    entry.state = AssetState::Loaded;
+                    entry.asset->source_path = normalised;
+                } else {
+                    entry.state = AssetState::Failed;
+                    SDL_Log("Failed to load texture: %s", full_path.c_str());
+                }
+                return it->second;
+            }
         }
     }
 
@@ -118,10 +137,29 @@ AudioHandle AssetManager::load_audio(const char* path, LoadPriority priority) {
 
     auto it = audio_path_to_handle_.find(normalised);
     if (it != audio_path_to_handle_.end()) {
-        auto& entry = audio_clips_[it->second.id()];
-        if (entry.generation == it->second.generation() && entry.state == AssetState::Loaded) {
-            ++entry.ref_count;
-            return it->second;
+        auto entry_it = audio_clips_.find(it->second.id());
+        if (entry_it != audio_clips_.end() && entry_it->second.generation == it->second.generation()) {
+            auto& entry = entry_it->second;
+            if (entry.state == AssetState::Loaded) {
+                ++entry.ref_count;
+                return it->second;
+            }
+            if (entry.state == AssetState::Failed) {
+                entry.asset = std::make_unique<AudioAsset>();
+                entry.ref_count = 1;
+                entry.state = AssetState::Loading;
+
+                const std::string full_path = resolve_path(normalised.c_str());
+                entry.last_modified = get_file_modified_time(full_path);
+                if (load_audio_internal(full_path, *entry.asset)) {
+                    entry.state = AssetState::Loaded;
+                    entry.asset->source_path = normalised;
+                } else {
+                    entry.state = AssetState::Failed;
+                    SDL_Log("Failed to load audio: %s", full_path.c_str());
+                }
+                return it->second;
+            }
         }
     }
 
@@ -188,10 +226,29 @@ FontHandle AssetManager::load_font(const char* path, float size, LoadPriority pr
 
     auto it = font_path_to_handle_.find(cache_key);
     if (it != font_path_to_handle_.end()) {
-        auto& entry = fonts_[it->second.id()];
-        if (entry.generation == it->second.generation() && entry.state == AssetState::Loaded) {
-            ++entry.ref_count;
-            return it->second;
+        auto entry_it = fonts_.find(it->second.id());
+        if (entry_it != fonts_.end() && entry_it->second.generation == it->second.generation()) {
+            auto& entry = entry_it->second;
+            if (entry.state == AssetState::Loaded) {
+                ++entry.ref_count;
+                return it->second;
+            }
+            if (entry.state == AssetState::Failed) {
+                entry.asset = std::make_unique<FontAsset>();
+                entry.ref_count = 1;
+                entry.state = AssetState::Loading;
+
+                const std::string full_path = resolve_path(normalised.c_str());
+                entry.last_modified = get_file_modified_time(full_path);
+                if (load_font_internal(full_path, size, *entry.asset)) {
+                    entry.state = AssetState::Loaded;
+                    entry.asset->source_path = normalised;
+                } else {
+                    entry.state = AssetState::Failed;
+                    SDL_Log("Failed to load font: %s", full_path.c_str());
+                }
+                return it->second;
+            }
         }
     }
 
@@ -256,10 +313,29 @@ AnimationHandle AssetManager::load_animation(const char* path, LoadPriority prio
 
     auto it = animation_path_to_handle_.find(normalised);
     if (it != animation_path_to_handle_.end()) {
-        auto& entry = animations_[it->second.id()];
-        if (entry.generation == it->second.generation() && entry.state == AssetState::Loaded) {
-            ++entry.ref_count;
-            return it->second;
+        auto entry_it = animations_.find(it->second.id());
+        if (entry_it != animations_.end() && entry_it->second.generation == it->second.generation()) {
+            auto& entry = entry_it->second;
+            if (entry.state == AssetState::Loaded) {
+                ++entry.ref_count;
+                return it->second;
+            }
+            if (entry.state == AssetState::Failed) {
+                entry.asset = std::make_unique<AnimationAsset>();
+                entry.ref_count = 1;
+                entry.state = AssetState::Loading;
+
+                const std::string full_path = resolve_path(normalised.c_str());
+                entry.last_modified = get_file_modified_time(full_path);
+                if (load_animation_internal(full_path, *entry.asset)) {
+                    entry.state = AssetState::Loaded;
+                    entry.asset->source_path = normalised;
+                } else {
+                    entry.state = AssetState::Failed;
+                    SDL_Log("Failed to load animation: %s", full_path.c_str());
+                }
+                return it->second;
+            }
         }
     }
 
@@ -321,10 +397,29 @@ DataHandle AssetManager::load_data(const char* path, LoadPriority priority) {
 
     auto it = data_path_to_handle_.find(normalised);
     if (it != data_path_to_handle_.end()) {
-        auto& entry = data_assets_[it->second.id()];
-        if (entry.generation == it->second.generation() && entry.state == AssetState::Loaded) {
-            ++entry.ref_count;
-            return it->second;
+        auto entry_it = data_assets_.find(it->second.id());
+        if (entry_it != data_assets_.end() && entry_it->second.generation == it->second.generation()) {
+            auto& entry = entry_it->second;
+            if (entry.state == AssetState::Loaded) {
+                ++entry.ref_count;
+                return it->second;
+            }
+            if (entry.state == AssetState::Failed) {
+                entry.asset = std::make_unique<DataAsset>();
+                entry.ref_count = 1;
+                entry.state = AssetState::Loading;
+
+                const std::string full_path = resolve_path(normalised.c_str());
+                entry.last_modified = get_file_modified_time(full_path);
+                if (load_data_internal(full_path, *entry.asset)) {
+                    entry.state = AssetState::Loaded;
+                    entry.asset->source_path = normalised;
+                } else {
+                    entry.state = AssetState::Failed;
+                    SDL_Log("Failed to load data: %s", full_path.c_str());
+                }
+                return it->second;
+            }
         }
     }
 
@@ -386,10 +481,29 @@ TilesetHandle AssetManager::load_tileset(const char* path, LoadPriority priority
 
     auto it = tileset_path_to_handle_.find(normalised);
     if (it != tileset_path_to_handle_.end()) {
-        auto& entry = tilesets_[it->second.id()];
-        if (entry.generation == it->second.generation() && entry.state == AssetState::Loaded) {
-            ++entry.ref_count;
-            return it->second;
+        auto entry_it = tilesets_.find(it->second.id());
+        if (entry_it != tilesets_.end() && entry_it->second.generation == it->second.generation()) {
+            auto& entry = entry_it->second;
+            if (entry.state == AssetState::Loaded) {
+                ++entry.ref_count;
+                return it->second;
+            }
+            if (entry.state == AssetState::Failed) {
+                entry.asset = std::make_unique<TilesetAsset>();
+                entry.ref_count = 1;
+                entry.state = AssetState::Loading;
+
+                const std::string full_path = resolve_path(normalised.c_str());
+                entry.last_modified = get_file_modified_time(full_path);
+                if (load_tileset_internal(full_path, *entry.asset)) {
+                    entry.state = AssetState::Loaded;
+                    entry.asset->source_path = normalised;
+                } else {
+                    entry.state = AssetState::Failed;
+                    SDL_Log("Failed to load tileset: %s", full_path.c_str());
+                }
+                return it->second;
+            }
         }
     }
 
@@ -459,10 +573,29 @@ PipelineHandle AssetManager::load_pipeline(const char* path, LoadPriority priori
 
     auto it = pipeline_path_to_handle_.find(normalised);
     if (it != pipeline_path_to_handle_.end()) {
-        auto& entry = pipelines_[it->second.id()];
-        if (entry.generation == it->second.generation() && entry.state == AssetState::Loaded) {
-            ++entry.ref_count;
-            return it->second;
+        auto entry_it = pipelines_.find(it->second.id());
+        if (entry_it != pipelines_.end() && entry_it->second.generation == it->second.generation()) {
+            auto& entry = entry_it->second;
+            if (entry.state == AssetState::Loaded) {
+                ++entry.ref_count;
+                return it->second;
+            }
+            if (entry.state == AssetState::Failed) {
+                entry.asset = std::make_unique<PipelineAsset>();
+                entry.ref_count = 1;
+                entry.state = AssetState::Loading;
+
+                const std::string full_path = resolve_path(normalised.c_str());
+                entry.last_modified = get_file_modified_time(full_path);
+                if (load_pipeline_internal(full_path, *entry.asset)) {
+                    entry.state = AssetState::Loaded;
+                    entry.asset->source_path = normalised;
+                } else {
+                    entry.state = AssetState::Failed;
+                    SDL_Log("Failed to load pipeline: %s", full_path.c_str());
+                }
+                return it->second;
+            }
         }
     }
 
@@ -504,10 +637,31 @@ PipelineHandle AssetManager::load_pipeline_from_config(
 
     auto it = pipeline_path_to_handle_.find(cache_key);
     if (it != pipeline_path_to_handle_.end()) {
-        auto& entry = pipelines_[it->second.id()];
-        if (entry.generation == it->second.generation() && entry.state == AssetState::Loaded) {
-            ++entry.ref_count;
-            return it->second;
+        auto entry_it = pipelines_.find(it->second.id());
+        if (entry_it != pipelines_.end() && entry_it->second.generation == it->second.generation()) {
+            auto& entry = entry_it->second;
+            if (entry.state == AssetState::Loaded) {
+                ++entry.ref_count;
+                return it->second;
+            }
+            if (entry.state == AssetState::Failed) {
+                entry.asset = std::make_unique<PipelineAsset>();
+                entry.ref_count = 1;
+                entry.state = AssetState::Loading;
+                entry.last_modified = 0;
+                entry.asset->base_type = base_type;
+                entry.asset->config = config;
+                entry.asset->pipeline_handle = pipeline_manager_->get_or_create_pipeline(base_type, config);
+
+                if (entry.asset->pipeline_handle != rendering::INVALID_PIPELINE_HANDLE) {
+                    entry.state = AssetState::Loaded;
+                    entry.asset->source_path = cache_key;
+                } else {
+                    entry.state = AssetState::Failed;
+                    SDL_Log("Failed to create pipeline from config: %s", name);
+                }
+                return it->second;
+            }
         }
     }
 
@@ -695,29 +849,31 @@ void AssetManager::load_batch(const std::vector<std::string>& paths, LoadCallbac
 
         if (ext == ".png" || ext == ".jpg" || ext == ".bmp") {
             auto handle = load_texture(path.c_str());
-            if (get_state(handle) == AssetState::Failed) {
+            if (get_state(handle) != AssetState::Loaded) {
                 all_success = false;
             }
         } else if (ext == ".wav" || ext == ".ogg" || ext == ".mp3") {
             auto handle = load_audio(path.c_str());
-            if (get_state(handle) == AssetState::Failed) {
+            if (get_state(handle) != AssetState::Loaded) {
                 all_success = false;
             }
         } else if (ext == ".ttf" || ext == ".otf") {
             auto handle = load_font(path.c_str());
-            if (get_state(handle) == AssetState::Failed) {
+            if (get_state(handle) != AssetState::Loaded) {
                 all_success = false;
             }
         } else if (ext == ".json") {
             auto handle = load_data(path.c_str());
-            if (get_state(handle) == AssetState::Failed) {
+            if (get_state(handle) != AssetState::Loaded) {
                 all_success = false;
             }
         } else if (ext == ".pipeline") {
             auto handle = load_pipeline(path.c_str());
-            if (get_state(handle) == AssetState::Failed) {
+            if (get_state(handle) != AssetState::Loaded) {
                 all_success = false;
             }
+        } else {
+            all_success = false;
         }
     }
 
@@ -744,12 +900,17 @@ void AssetManager::poll_hot_reload() {
         if (has_file_changed(full_path, entry.last_modified)) {
             entry.last_modified = get_file_modified_time(full_path);
 
-            if (entry.asset->texture_id != rendering::INVALID_TEXTURE_ID) {
-                texture_manager_->unload(entry.asset->texture_id);
-            }
-
-            bool success = load_texture_internal(full_path, *entry.asset);
-            if (success) {
+            TextureAsset replacement = *entry.asset;
+            const bool success = load_texture_internal(full_path, replacement);
+            if (success && entry.asset) {
+                const rendering::TextureID old_texture_id = entry.asset->texture_id;
+                replacement.source_path = entry.asset->source_path.empty()
+                    ? entry.path
+                    : entry.asset->source_path;
+                *entry.asset = std::move(replacement);
+                if (old_texture_id != rendering::INVALID_TEXTURE_ID) {
+                    texture_manager_->unload(old_texture_id);
+                }
                 for (const auto& callback : reload_callbacks_) {
                     callback(entry.path);
                 }
@@ -808,12 +969,18 @@ void AssetManager::force_reload(TextureHandle handle) {
     auto& entry = it->second;
     const std::string full_path = resolve_path(entry.path.c_str());
 
-    if (entry.asset->texture_id != rendering::INVALID_TEXTURE_ID) {
-        texture_manager_->unload(entry.asset->texture_id);
+    TextureAsset replacement = *entry.asset;
+    if (load_texture_internal(full_path, replacement) && entry.asset) {
+        const rendering::TextureID old_texture_id = entry.asset->texture_id;
+        replacement.source_path = entry.asset->source_path.empty()
+            ? entry.path
+            : entry.asset->source_path;
+        *entry.asset = std::move(replacement);
+        if (old_texture_id != rendering::INVALID_TEXTURE_ID) {
+            texture_manager_->unload(old_texture_id);
+        }
+        entry.last_modified = get_file_modified_time(full_path);
     }
-
-    (void)load_texture_internal(full_path, *entry.asset);
-    entry.last_modified = get_file_modified_time(full_path);
 }
 
 template<>

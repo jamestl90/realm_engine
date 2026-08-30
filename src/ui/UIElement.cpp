@@ -68,6 +68,12 @@ UIElement& UIElement::operator=(UIElement&& other) noexcept {
 void UIElement::setTextMeasurer(TextMeasureCallback callback) {
     m_textMeasurer = std::move(callback);
     invalidateLayout();
+
+    for (auto& child : m_children) {
+        if (child) {
+            child->setTextMeasurer(m_textMeasurer);
+        }
+    }
 }
 
 TextMetrics UIElement::measureText(const std::string& text, float fontSize) const {
@@ -92,6 +98,9 @@ void UIElement::addChild(std::unique_ptr<UIElement> child) {
     }
 
     child->setParent(this);
+    if (m_textMeasurer) {
+        child->setTextMeasurer(m_textMeasurer);
+    }
     m_children.push_back(std::move(child));
     invalidateLayout();
 }

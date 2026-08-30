@@ -90,6 +90,40 @@ bool test_combo_box_dropdown_does_not_change_layout_size() {
         );
 }
 
+bool test_late_added_child_inherits_text_measurement() {
+    ui::UIElement root;
+    int measureCalls = 0;
+    root.setTextMeasurer([&measureCalls](const std::string&, float) {
+        ++measureCalls;
+        return ui::TextMetrics{123.0f, 19.0f};
+    });
+
+    auto button = std::make_unique<ui::Button>("Late child");
+    ui::Button* buttonPtr = button.get();
+    root.addChild(std::move(button));
+
+    buttonPtr->measure(500.0f, 500.0f);
+    return require(measureCalls > 0, "late-added children inherit parent text measurement")
+        && require(nearly_equal(buttonPtr->measuredWidth(), 147.0f), "late-added child uses inherited measured width");
+}
+
+bool test_combo_box_arranges_relative_to_parent() {
+    ui::UIElement root;
+    auto combo = std::make_unique<ui::ComboBox>();
+    ui::ComboBox* comboPtr = combo.get();
+    comboPtr->addItem("One");
+    comboPtr->setTextMeasurer([](const std::string&, float) {
+        return ui::TextMetrics{50.0f, 20.0f};
+    });
+    root.addChild(std::move(combo));
+
+    root.measure(500.0f, 500.0f);
+    root.arrange(ui::Rect{25.0f, 35.0f, 500.0f, 500.0f});
+
+    return require(nearly_equal(comboPtr->bounds().x, 25.0f), "ComboBox x position is parent-relative")
+        && require(nearly_equal(comboPtr->bounds().y, 35.0f), "ComboBox y position is parent-relative");
+}
+
 } // namespace
 
 int main() {
@@ -98,6 +132,8 @@ int main() {
     ok &= test_button_includes_measured_text_and_padding();
     ok &= test_text_controls_use_measured_line_height();
     ok &= test_combo_box_dropdown_does_not_change_layout_size();
+    ok &= test_late_added_child_inherits_text_measurement();
+    ok &= test_combo_box_arranges_relative_to_parent();
 
     if (!ok) {
         return 1;

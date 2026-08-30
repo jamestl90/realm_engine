@@ -189,6 +189,22 @@ bool test_equal_priority_uses_declaration_order() {
     );
 }
 
+bool test_lowest_priority_value_is_still_valid() {
+    const auto map = make_map(1);
+    const auto climate = make_climate(map);
+    procgen::GreaterRealmBiomeRuleSet rules;
+    rules.fallback_biome_id = 99;
+    rules.rules = {
+        make_rule(17, std::numeric_limits<std::int32_t>::min())
+    };
+
+    const auto biomes = procgen::generate_greater_realm_biomes(map, climate, rules);
+    return require(
+        biomes.cells[0].biome_id == 17,
+        "minimum integer priority remains a valid matching biome rule priority"
+    );
+}
+
 bool test_source_identity_and_regeneration_locality() {
     auto map = make_map(3);
     procgen::GreaterRealmClimateSettings climate_settings;
@@ -382,6 +398,7 @@ int main() {
     ok &= test_rule_validation();
     ok &= test_assignment_precedence_fallback_water_and_boundaries();
     ok &= test_equal_priority_uses_declaration_order();
+    ok &= test_lowest_priority_value_is_still_valid();
     ok &= test_source_identity_and_regeneration_locality();
     ok &= test_debug_view_uses_application_colours_and_rejects_stale_sources();
     ok &= test_sandbox_rules_produce_legible_representative_distribution();

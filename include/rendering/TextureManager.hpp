@@ -2,6 +2,7 @@
 
 #include "Texture.hpp"
 #include <SDL3/SDL.h>
+#include <SDL3/SDL_gpu.h>
 #include <cstdint>
 #include <memory>
 #include <span>
@@ -28,8 +29,12 @@ public:
     // Load texture from file
     [[nodiscard]] TextureID load(const char* path);
 
-    // Create texture from SDL texture
-    [[nodiscard]] TextureID create_from_texture(SDL_Texture* texture);
+    // Adopt an existing SDL GPU texture. TextureManager releases it on unload/clear.
+    [[nodiscard]] TextureID adopt_gpu_texture(
+        SDL_GPUTexture* texture,
+        std::uint32_t width,
+        std::uint32_t height
+    );
 
     // Get texture by ID
     [[nodiscard]] const Texture* get(TextureID id) const noexcept;

@@ -1,9 +1,11 @@
 #pragma once
 
-#include <vector>
+#include <cstddef>
 #include <cstdint>
-#include <optional>
 #include <functional>
+#include <optional>
+#include <utility>
+#include <vector>
 
 namespace pathfinding {
 

@@ -104,6 +104,10 @@ void FocusManager::clearFocus() {
     setFocus(nullptr);
 }
 
+void FocusManager::discardFocus() noexcept {
+    m_focused = nullptr;
+}
+
 void FocusManager::registerControl(FocusableControl* control) {
     if (!control) {
         return;

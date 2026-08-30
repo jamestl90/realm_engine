@@ -100,6 +100,8 @@ private:
 
     // Helper to find open ComboBoxes in the tree
     void findOpenComboBoxes(UIElement* element, std::vector<ComboBox*>& outComboBoxes) const;
+    [[nodiscard]] bool containsElement(const UIElement* root, const UIElement* target) const noexcept;
+    void validateTrackedElements() noexcept;
 
     SDL_Window* m_window{nullptr};
     rendering::FontManager* m_fontManager{nullptr};

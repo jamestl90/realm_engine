@@ -258,11 +258,13 @@ GreaterRealmBiomeMap generate_greater_realm_biomes(
     for (std::size_t cell_index = 0; cell_index < terrain.cells.size(); ++cell_index) {
         BiomeId selected = rules.fallback_biome_id.value_or(INVALID_BIOME_ID);
         std::int32_t selected_priority = std::numeric_limits<std::int32_t>::min();
+        bool selected_rule = false;
         for (const auto& rule : rules.rules) {
-            if (rule.priority > selected_priority
+            if ((!selected_rule || rule.priority > selected_priority)
                 && rule_matches(rule, terrain.cells[cell_index], climate.cells[cell_index])) {
                 selected = rule.biome_id;
                 selected_priority = rule.priority;
+                selected_rule = true;
             }
         }
         biomes.cells[cell_index].biome_id = selected;
