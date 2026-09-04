@@ -52,7 +52,11 @@
     },
     {
       "name": "debug-with-tests",
-      "configurePreset": "debug-with-tests"
+      "configurePreset": "debug-with-tests",
+      "targets": [
+        "realm_engine",
+        "realm_tests"
+      ]
     }
   ],
   "testPresets": [

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(realm_engine LANGUAGES CXX)
+project(realm_engine LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -15,12 +15,90 @@ if(MSVC)
     add_compile_options(/FS)
 endif()
 
-# External dependencies
-set(SDL3_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/external/include")
-set(SDL3_LIB_DIR "${CMAKE_SOURCE_DIR}/external/lib/SDL3/x64")
-set(SDL3_TTF_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/external/include/SDL3_ttf")
-set(SDL3_TTF_LIB_DIR "${CMAKE_SOURCE_DIR}/external/lib/SDL3_ttf/x64")
-set(RAPIDJSON_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/external/include/rapidjson") # Adjust path if needed
+# Fetch pinned third-party sources so a clean clone does not depend on a
+# manually populated external/ directory. The opt-out exists for offline
+# development and validates compatibility with the repository's former layout.
+option(REALM_FETCH_DEPENDENCIES "Download pinned third-party dependencies" ON)
+
+if(REALM_FETCH_DEPENDENCIES)
+    include(FetchContent)
+
+    set(SDL_SHARED ON CACHE BOOL "Build SDL as a shared library" FORCE)
+    set(SDL_STATIC OFF CACHE BOOL "Do not build a duplicate static SDL library" FORCE)
+    set(SDL_TEST_LIBRARY OFF CACHE BOOL "Do not build SDL's test library" FORCE)
+    set(SDL_TESTS OFF CACHE BOOL "Do not build SDL's tests" FORCE)
+    FetchContent_Declare(
+        SDL3
+        URL https://github.com/libsdl-org/SDL/releases/download/release-3.4.0/SDL3-3.4.0.tar.gz
+        URL_HASH SHA256=082cbf5f429e0d80820f68dc2b507a94d4cc1b4e70817b119bbb8ec6a69584b8
+        DOWNLOAD_EXTRACT_TIMESTAMP FALSE
+    )
+    FetchContent_MakeAvailable(SDL3)
+    set(SDL3_INCLUDE_DIR "${sdl3_SOURCE_DIR}/include")
+
+    set(BUILD_SHARED_LIBS ON CACHE BOOL "Build shared third-party libraries" FORCE)
+    set(SDLTTF_VENDORED ON CACHE BOOL "Build SDL_ttf dependencies from source" FORCE)
+    set(SDLTTF_SAMPLES OFF CACHE BOOL "Do not build SDL_ttf samples" FORCE)
+    set(SDLTTF_HARFBUZZ OFF CACHE BOOL "Text shaping is not required by realm_engine" FORCE)
+    set(SDLTTF_PLUTOSVG OFF CACHE BOOL "SVG color fonts are not required by realm_engine" FORCE)
+    FetchContent_Declare(
+        SDL3_ttf
+        URL https://github.com/libsdl-org/SDL_ttf/releases/download/release-3.2.2/SDL3_ttf-3.2.2.tar.gz
+        URL_HASH SHA256=63547d58d0185c833213885b635a2c0548201cc8f301e6587c0be1a67e1e045d
+        DOWNLOAD_EXTRACT_TIMESTAMP FALSE
+        SOURCE_SUBDIR cmake/realm-engine-no-subdirectory
+    )
+    # Populate SDL_ttf before placing FreeType inside its source tree. Otherwise
+    # SDL_ttf's extraction can replace the directory and remove FreeType.
+    FetchContent_MakeAvailable(SDL3_ttf)
+
+    # SDL_ttf's release source archive omits its vendored submodules. Populate
+    # the exact FreeType revision used by that release into the location its
+    # build expects, without adding it to our build a second time.
+    FetchContent_Declare(
+        SDL3_ttf_freetype
+        GIT_REPOSITORY https://github.com/libsdl-org/freetype.git
+        GIT_TAG 9973564cfa63763a3e4ac67c09147899539b1e07
+        GIT_SHALLOW FALSE
+        SOURCE_DIR "${FETCHCONTENT_BASE_DIR}/sdl3_ttf-src/external/freetype"
+        SOURCE_SUBDIR cmake/realm-engine-no-subdirectory
+    )
+    FetchContent_MakeAvailable(SDL3_ttf_freetype)
+    add_subdirectory("${sdl3_ttf_SOURCE_DIR}" "${sdl3_ttf_BINARY_DIR}")
+
+    FetchContent_Declare(
+        rapidjson
+        URL https://github.com/Tencent/rapidjson/archive/refs/tags/v1.1.0.tar.gz
+        URL_HASH SHA256=bf7ced29704a1e696fbccf2a2b4ea068e7774fa37f6d7dd4039d0787f8bed98e
+        DOWNLOAD_EXTRACT_TIMESTAMP FALSE
+        SOURCE_SUBDIR cmake/realm-engine-no-subdirectory
+    )
+    FetchContent_MakeAvailable(rapidjson)
+    set(RAPIDJSON_INCLUDE_DIR "${rapidjson_SOURCE_DIR}/include")
+else()
+    set(REALM_EXTERNAL_DIR "${CMAKE_SOURCE_DIR}/external")
+    set(SDL3_INCLUDE_DIR "${REALM_EXTERNAL_DIR}/include")
+    set(RAPIDJSON_INCLUDE_DIR "${REALM_EXTERNAL_DIR}/include")
+
+    add_library(SDL3::SDL3 SHARED IMPORTED GLOBAL)
+    set_target_properties(SDL3::SDL3 PROPERTIES
+        IMPORTED_IMPLIB "${REALM_EXTERNAL_DIR}/lib/SDL3/x64/SDL3.lib"
+        IMPORTED_LOCATION "${REALM_EXTERNAL_DIR}/lib/SDL3/x64/SDL3.dll"
+        INTERFACE_INCLUDE_DIRECTORIES "${SDL3_INCLUDE_DIR}"
+    )
+    add_library(SDL3_ttf::SDL3_ttf SHARED IMPORTED GLOBAL)
+    set_target_properties(SDL3_ttf::SDL3_ttf PROPERTIES
+        IMPORTED_IMPLIB "${REALM_EXTERNAL_DIR}/lib/SDL3_ttf/x64/SDL3_ttf.lib"
+        IMPORTED_LOCATION "${REALM_EXTERNAL_DIR}/lib/SDL3_ttf/x64/SDL3_ttf.dll"
+        INTERFACE_INCLUDE_DIRECTORIES "${SDL3_INCLUDE_DIR}"
+    )
+endif()
+
+add_library(realm_rapidjson INTERFACE)
+add_library(RapidJSON::rapidjson ALIAS realm_rapidjson)
+target_include_directories(realm_rapidjson SYSTEM INTERFACE
+    "${RAPIDJSON_INCLUDE_DIR}"
+)
 
 set(REALM_ASSET_SOURCE_DIR "${CMAKE_SOURCE_DIR}/assets")
 set(REALM_SHADER_ASSETS
@@ -78,17 +156,13 @@ endif()
 # Include directories
 target_include_directories(realm_engine PRIVATE
     ${CMAKE_SOURCE_DIR}/include
-    ${SDL3_INCLUDE_DIR}
-    ${SDL3_TTF_INCLUDE_DIR}
-    ${RAPIDJSON_INCLUDE_DIR}
 )
 
-# Link SDL3 libraries
-target_link_directories(realm_engine PRIVATE
-    ${SDL3_LIB_DIR}
-    ${SDL3_TTF_LIB_DIR}
+target_link_libraries(realm_engine PRIVATE
+    SDL3::SDL3
+    SDL3_ttf::SDL3_ttf
+    RapidJSON::rapidjson
 )
-target_link_libraries(realm_engine PRIVATE SDL3 SDL3_ttf)
 
 if(REALM_ENABLE_PROCGEN_DEBUG_VIEW)
     target_compile_definitions(realm_engine PRIVATE REALM_ENABLE_PROCGEN_DEBUG_VIEW=1)
@@ -104,8 +178,8 @@ add_custom_command(TARGET realm_engine POST_BUILD
         "$<TARGET_FILE_DIR:realm_engine>/assets/Shaders"
         "$<TARGET_FILE_DIR:realm_engine>/assets/Fonts"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${SDL3_LIB_DIR}/SDL3.dll"
-        "${SDL3_TTF_LIB_DIR}/SDL3_ttf.dll"
+        "$<TARGET_FILE:SDL3::SDL3>"
+        "$<TARGET_FILE:SDL3_ttf::SDL3_ttf>"
         $<TARGET_FILE_DIR:realm_engine>
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         ${REALM_SHADER_ASSETS}
@@ -428,4 +502,24 @@ if(REALM_BUILD_TESTS)
     target_compile_definitions(realm_terrain_mesh_tests PRIVATE REALM_TEST_BUILD=1)
 
     add_test(NAME rendering_terrain_mesh COMMAND realm_terrain_mesh_tests)
+
+    add_custom_target(realm_tests DEPENDS
+        realm_engine_tests
+        realm_climate_tests
+        realm_biome_tests
+        realm_procgen_regeneration_tests
+        realm_procgen_pipeline_tests
+        realm_procgen_paint_tests
+        realm_mountain_peak_tests
+        realm_procgen_representation_tests
+        realm_ecs_tests
+        realm_ecs_system_tests
+        realm_ecs_query_tests
+        realm_ui_tests
+        realm_ui_repeat_button_tests
+        realm_ui_slider_tests
+        realm_greater_realm_debug_panel_tests
+        realm_climate_weather_inspection_tests
+        realm_terrain_mesh_tests
+    )
 endif()

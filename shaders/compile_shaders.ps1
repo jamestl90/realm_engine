@@ -1,3 +1,9 @@
+[CmdletBinding()]
+param(
+    [switch]$Force
+)
+
+$ErrorActionPreference = "Stop"
 $sourceFolder = $PSScriptRoot
 $repositoryRoot = Split-Path -Parent $sourceFolder
 $outputFolder = Join-Path $repositoryRoot "assets\Shaders"
@@ -13,49 +19,83 @@ function Assert-CommandAvailable {
     }
 }
 
-# Make sure output folder exists
-if (-not (Test-Path $outputFolder)) {
+if (-not (Test-Path -LiteralPath $outputFolder)) {
     New-Item -ItemType Directory -Force -Path $outputFolder | Out-Null
 }
 
-# Helper function to compile HLSL to SPIR-V and reflect
-function Compile-And-Reflect($filePath, $stage) {
+function Test-ShaderNeedsBuild($filePath) {
     $fileName = [System.IO.Path]::GetFileNameWithoutExtension($filePath)
     $spvOutput = Join-Path $outputFolder "$fileName.spv"
     $reflectOutput = Join-Path $outputFolder "$fileName.reflect.json"
 
-    # Compile HLSL to SPIR-V
+    # Generated outputs are committed so normal builds do not require shader
+    # toolchains. Use -Force after intentionally editing an HLSL source.
+    return $Force -or
+        -not (Test-Path -LiteralPath $spvOutput) -or
+        -not (Test-Path -LiteralPath $reflectOutput)
+}
+
+$shaders = @(
+    Get-ChildItem -Path $sourceFolder -Filter "*.vert.hlsl" | ForEach-Object {
+        [pscustomobject]@{ FilePath = $_.FullName; Stage = "vert" }
+    }
+    Get-ChildItem -Path $sourceFolder -Filter "*.frag.hlsl" | ForEach-Object {
+        [pscustomobject]@{ FilePath = $_.FullName; Stage = "frag" }
+    }
+)
+$staleShaders = @($shaders | Where-Object { Test-ShaderNeedsBuild $_.FilePath })
+
+if ($staleShaders.Count -eq 0) {
+    Write-Host "Shaders are up to date."
+    exit 0
+}
+
+$dxc = Get-Command dxc -ErrorAction SilentlyContinue
+$spirvCross = Get-Command spirv-cross -ErrorAction SilentlyContinue
+if (-not $dxc) {
+    throw "dxc was not found on PATH. Install a DirectX Shader Compiler build with SPIR-V support."
+}
+if (-not $spirvCross) {
+    throw "spirv-cross was not found on PATH. Install SPIRV-Cross and add it to PATH."
+}
+
+function Compile-And-Reflect($filePath, $stage) {
+    $fileName = [System.IO.Path]::GetFileNameWithoutExtension($filePath)
+    $spvOutput = Join-Path $outputFolder "$fileName.spv"
+    $reflectOutput = Join-Path $outputFolder "$fileName.reflect.json"
+    $temporarySuffix = ".tmp-$([Guid]::NewGuid().ToString('N'))"
+    $temporarySpv = "$spvOutput$temporarySuffix"
+    $temporaryReflection = "$reflectOutput$temporarySuffix"
+
     switch ($stage) {
         "vert" { $target = "vs_6_6" }
         "frag" { $target = "ps_6_6" }
-        default { Write-Error "Unknown stage $stage"; return }
+        default { throw "Unknown shader stage: $stage" }
     }
 
-    Write-Host "Compiling $filePath -> $spvOutput"
-    dxc $filePath -T $target -E main -Fo $spvOutput -spirv
-    if ($LASTEXITCODE -ne 0) {
-        throw "Shader compilation failed for '$filePath'."
-    }
+    try {
+        Write-Host "Compiling $filePath -> $spvOutput"
+        & $dxc.Source $filePath -T $target -E main -Fo $temporarySpv -spirv
+        if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $temporarySpv)) {
+            throw "dxc failed to compile $filePath. Ensure this dxc build includes SPIR-V support."
+        }
 
-    # Generate reflection JSON
-    Write-Host "Reflecting $spvOutput -> $reflectOutput"
-    spirv-cross $spvOutput --reflect --output $reflectOutput
-    if ($LASTEXITCODE -ne 0) {
-        throw "Shader reflection failed for '$spvOutput'."
+        Write-Host "Reflecting $spvOutput -> $reflectOutput"
+        & $spirvCross.Source $temporarySpv --reflect --output $temporaryReflection
+        if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $temporaryReflection)) {
+            throw "spirv-cross failed to reflect $spvOutput."
+        }
+
+        Move-Item -LiteralPath $temporarySpv -Destination $spvOutput -Force
+        Move-Item -LiteralPath $temporaryReflection -Destination $reflectOutput -Force
+    } finally {
+        Remove-Item -LiteralPath $temporarySpv -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $temporaryReflection -Force -ErrorAction SilentlyContinue
     }
 }
 
-Assert-CommandAvailable "dxc"
-Assert-CommandAvailable "spirv-cross"
-
-# Compile vertex shaders
-Get-ChildItem -Path $sourceFolder -Filter "*.vert.hlsl" | ForEach-Object {
-    Compile-And-Reflect $_.FullName "vert"
+foreach ($shader in $staleShaders) {
+    Compile-And-Reflect $shader.FilePath $shader.Stage
 }
 
-# Compile fragment shaders
-Get-ChildItem -Path $sourceFolder -Filter "*.frag.hlsl" | ForEach-Object {
-    Compile-And-Reflect $_.FullName "frag"
-}
-
-Write-Host "All runtime shaders compiled and reflected into $outputFolder"
+Write-Host "$($staleShaders.Count) shader(s) compiled and reflected into $outputFolder"

@@ -1,0 +1,65 @@
+{
+    "entryPoints" : [
+        {
+            "name" : "main",
+            "mode" : "vert"
+        }
+    ],
+    "types" : {
+        "_9" : {
+            "name" : "type.ConstantBuffer.TerrainViewData",
+            "members" : [
+                {
+                    "name" : "viewProjection",
+                    "type" : "mat4",
+                    "offset" : 0,
+                    "matrix_stride" : 16,
+                    "row_major" : true
+                },
+                {
+                    "name" : "terrainParameters",
+                    "type" : "vec4",
+                    "offset" : 64
+                }
+            ]
+        }
+    },
+    "inputs" : [
+        {
+            "type" : "vec3",
+            "name" : "in.var.TEXCOORD0",
+            "location" : 0
+        },
+        {
+            "type" : "vec2",
+            "name" : "in.var.TEXCOORD1",
+            "location" : 1
+        },
+        {
+            "type" : "vec4",
+            "name" : "in.var.TEXCOORD2",
+            "location" : 2
+        }
+    ],
+    "outputs" : [
+        {
+            "type" : "vec3",
+            "name" : "out.var.TEXCOORD0",
+            "location" : 0
+        },
+        {
+            "type" : "vec4",
+            "name" : "out.var.TEXCOORD1",
+            "location" : 1
+        }
+    ],
+    "ubos" : [
+        {
+            "type" : "_9",
+            "name" : "type.ConstantBuffer.TerrainViewData",
+            "block_size" : 80,
+            "set" : 1,
+            "binding" : 0
+        }
+    ]
+}

@@ -1,0 +1,60 @@
+{
+    "entryPoints" : [
+        {
+            "name" : "main",
+            "mode" : "vert"
+        }
+    ],
+    "types" : {
+        "_8" : {
+            "name" : "type.ConstantBuffer.CameraData",
+            "members" : [
+                {
+                    "name" : "projection",
+                    "type" : "mat4",
+                    "offset" : 0,
+                    "matrix_stride" : 16,
+                    "row_major" : true
+                }
+            ]
+        }
+    },
+    "inputs" : [
+        {
+            "type" : "vec2",
+            "name" : "in.var.TEXCOORD0",
+            "location" : 0
+        },
+        {
+            "type" : "vec2",
+            "name" : "in.var.TEXCOORD1",
+            "location" : 1
+        },
+        {
+            "type" : "vec4",
+            "name" : "in.var.TEXCOORD2",
+            "location" : 2
+        }
+    ],
+    "outputs" : [
+        {
+            "type" : "vec2",
+            "name" : "out.var.TEXCOORD0",
+            "location" : 0
+        },
+        {
+            "type" : "vec4",
+            "name" : "out.var.TEXCOORD1",
+            "location" : 1
+        }
+    ],
+    "ubos" : [
+        {
+            "type" : "_8",
+            "name" : "type.ConstantBuffer.CameraData",
+            "block_size" : 64,
+            "set" : 1,
+            "binding" : 0
+        }
+    ]
+}
