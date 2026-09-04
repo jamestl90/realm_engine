@@ -46,7 +46,11 @@ if(REALM_FETCH_DEPENDENCIES)
         URL https://github.com/libsdl-org/SDL_ttf/releases/download/release-3.2.2/SDL3_ttf-3.2.2.tar.gz
         URL_HASH SHA256=63547d58d0185c833213885b635a2c0548201cc8f301e6587c0be1a67e1e045d
         DOWNLOAD_EXTRACT_TIMESTAMP FALSE
+        SOURCE_SUBDIR cmake/realm-engine-no-subdirectory
     )
+    # Populate SDL_ttf before placing FreeType inside its source tree. Otherwise
+    # SDL_ttf's extraction can replace the directory and remove FreeType.
+    FetchContent_MakeAvailable(SDL3_ttf)
 
     # SDL_ttf's release source archive omits its vendored submodules. Populate
     # the exact FreeType revision used by that release into the location its
@@ -60,7 +64,7 @@ if(REALM_FETCH_DEPENDENCIES)
         SOURCE_SUBDIR cmake/realm-engine-no-subdirectory
     )
     FetchContent_MakeAvailable(SDL3_ttf_freetype)
-    FetchContent_MakeAvailable(SDL3_ttf)
+    add_subdirectory("${sdl3_ttf_SOURCE_DIR}" "${sdl3_ttf_BINARY_DIR}")
 
     FetchContent_Declare(
         rapidjson
