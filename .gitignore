@@ -31,5 +31,18 @@ docs/.SDL3_gpu_reference.md
 docs/prompts.txt
 scripts/dev.ps1
 /assets/Tile sheets/test
+
+# Font source bundles can be large; keep only runtime fonts required by CMake.
+/assets/Fonts/*
+!/assets/Fonts/Inter-4.1/
+/assets/Fonts/Inter-4.1/*
+!/assets/Fonts/Inter-4.1/LICENSE.txt
+!/assets/Fonts/Inter-4.1/extras/
+/assets/Fonts/Inter-4.1/extras/*
+!/assets/Fonts/Inter-4.1/extras/ttf/
+/assets/Fonts/Inter-4.1/extras/ttf/*
+!/assets/Fonts/Inter-4.1/extras/ttf/Inter-Regular.ttf
+!/assets/Fonts/Inter-4.1/extras/ttf/Inter-SemiBold.ttf
+
 .DS_Store
 __MACOSX/
